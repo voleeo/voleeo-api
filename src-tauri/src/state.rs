@@ -12,6 +12,10 @@ use voleeo_storage::{
 const DEFAULT_THEME: &str = "dark";
 const DEFAULT_COLOR_MODE: &str = "dark";
 
+fn default_custom_title_bar() -> bool {
+    cfg!(target_os = "macos")
+}
+
 #[derive(serde::Serialize, serde::Deserialize)]
 struct PersistedSettings {
     active_theme_id: String,
@@ -19,6 +23,8 @@ struct PersistedSettings {
     mcp_enabled: bool,
     #[serde(default)]
     color_mode: Option<String>,
+    #[serde(default = "default_custom_title_bar")]
+    custom_title_bar: bool,
 }
 
 pub struct AppState {
@@ -39,6 +45,7 @@ pub struct AppState {
     pub app_data_dir: PathBuf,
     pub mcp_enabled: Arc<RwLock<bool>>,
     pub mcp_token: Arc<RwLock<Option<String>>>,
+    pub custom_title_bar: Arc<RwLock<bool>>,
     pub ws_settings_lock: Arc<Mutex<()>>,
 }
 
@@ -74,6 +81,10 @@ impl AppState {
             .and_then(|s| s.color_mode.clone())
             .unwrap_or_else(|| DEFAULT_COLOR_MODE.to_string());
         let mcp_enabled = settings.as_ref().map(|s| s.mcp_enabled).unwrap_or(false);
+        let custom_title_bar = settings
+            .as_ref()
+            .map(|s| s.custom_title_bar)
+            .unwrap_or_else(default_custom_title_bar);
         let mcp_token = secrets.get("mcp_token").map(str::to_string);
 
         let executor = voleeo_http::HttpExecutor::new()?;
@@ -97,6 +108,7 @@ impl AppState {
             app_data_dir,
             mcp_enabled: Arc::new(RwLock::new(mcp_enabled)),
             mcp_token: Arc::new(RwLock::new(mcp_token)),
+            custom_title_bar: Arc::new(RwLock::new(custom_title_bar)),
             ws_settings_lock: Arc::new(Mutex::new(())),
         })
     }
@@ -105,10 +117,12 @@ impl AppState {
         let active_theme_id = self.active_theme_id.read().await.clone();
         let color_mode = Some(self.color_mode.read().await.clone());
         let mcp_enabled = *self.mcp_enabled.read().await;
+        let custom_title_bar = *self.custom_title_bar.read().await;
         let settings = PersistedSettings {
             active_theme_id,
             mcp_enabled,
             color_mode,
+            custom_title_bar,
         };
         let json = match serde_json::to_string(&settings) {
             Ok(json) => json,

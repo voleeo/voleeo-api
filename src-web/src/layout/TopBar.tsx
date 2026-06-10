@@ -1,3 +1,5 @@
+import { getCurrentWindow } from "@tauri-apps/api/window"
+import { useEffect } from "react"
 import { Glyph } from "@/components/Glyph"
 import { formatKeyCombo, SHORTCUTS } from "@/config/shortcuts"
 import { useKeydown } from "@/hooks/useKeydown"
@@ -7,6 +9,7 @@ import { NewItemButton } from "@/layout/NewItemButton"
 import { PreferencesButton } from "@/layout/PreferencesButton"
 import { SourceControlMenu } from "@/layout/SourceControlMenu"
 import { WorkspaceSwitcher } from "@/layout/WorkspaceSwitcher"
+import { useChromeStore } from "@/store/chrome"
 import { useEnvironmentStore } from "@/store/environment"
 import {
   selectActiveConnection,
@@ -43,6 +46,7 @@ export function TopBar() {
     const env = s.environments.find((e) => e.id === s.activeEnvId)
     return env?.color ?? null
   })
+  const customTitleBar = useChromeStore((s) => s.customTitleBar)
 
   const activeWorkspace =
     workspaces.find((w) => w.id === activeWorkspaceId) ?? null
@@ -57,15 +61,22 @@ export function TopBar() {
         ? activeApiItemName
         : APP_NAME
 
+  useEffect(() => {
+    if (customTitleBar) return
+    getCurrentWindow()
+      .setTitle(centerLabel)
+      .catch(() => {})
+  }, [customTitleBar, centerLabel])
+
   return (
     <header
       className="relative flex items-center bg-surface border-b border-border select-none"
       style={{
         height: "var(--topbar-height)",
-        paddingLeft: "var(--traffic-lights-width)",
+        paddingLeft: customTitleBar ? "var(--traffic-lights-width)" : 12,
         paddingRight: 12,
       }}
-      data-tauri-drag-region
+      data-tauri-drag-region={customTitleBar ? "" : undefined}
     >
       {showSwitcher && activeEnvColor && (
         <div
@@ -89,11 +100,13 @@ export function TopBar() {
         )}
       </div>
 
-      <div className="absolute left-1/2 -translate-x-1/2 pointer-events-none">
-        <span className="font-sans text-[0.929rem] text-muted truncate max-w-[320px] block text-center">
-          {centerLabel}
-        </span>
-      </div>
+      {customTitleBar && (
+        <div className="absolute left-1/2 -translate-x-1/2 pointer-events-none">
+          <span className="font-sans text-[0.929rem] text-muted truncate max-w-[320px] block text-center">
+            {centerLabel}
+          </span>
+        </div>
+      )}
 
       <div className="flex-1" />
 

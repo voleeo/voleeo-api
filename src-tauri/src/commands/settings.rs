@@ -47,6 +47,28 @@ pub async fn settings_set_mcp_enabled(
 
 #[tauri::command]
 #[specta::specta]
+pub async fn settings_get_custom_title_bar(
+    state: State<'_, AppState>,
+) -> Result<bool, VoleeoError> {
+    Ok(*state.custom_title_bar.read().await)
+}
+
+// The macOS overlay title bar is set up once at window-open, so applying a change
+// means relaunching: persist the choice, then restart so the new chrome takes hold.
+#[tauri::command]
+#[specta::specta]
+pub async fn settings_set_custom_title_bar(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    enabled: bool,
+) -> Result<(), VoleeoError> {
+    *state.custom_title_bar.write().await = enabled;
+    state.save_settings().await;
+    app.restart();
+}
+
+#[tauri::command]
+#[specta::specta]
 pub async fn settings_regenerate_mcp_token(
     state: State<'_, AppState>,
 ) -> Result<String, VoleeoError> {

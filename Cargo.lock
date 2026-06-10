@@ -7448,6 +7448,7 @@ dependencies = [
  "cocoa",
  "objc",
  "rand 0.9.4",
+ "serde_json",
  "tauri",
 ]
 

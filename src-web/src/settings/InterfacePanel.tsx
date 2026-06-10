@@ -6,6 +6,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
+import { isMac } from "@/lib/platform"
 import { cn } from "@/lib/utils"
 import { useInterfaceStore, type WorkspaceBehavior } from "@/store/interface"
 import { commands } from "../../../packages/types/bindings"
@@ -73,6 +75,8 @@ export function InterfacePanel() {
       </p>
 
       <div className="flex flex-col gap-5">
+        {isMac && <CustomTitleBarRow />}
+
         <div>
           <label className="block text-[0.929rem] text-muted mb-1.5">
             Open workspace in
@@ -122,6 +126,46 @@ export function InterfacePanel() {
         />
       </div>
     </section>
+  )
+}
+
+/** macOS-only: toggles the overlay title bar. The native window chrome is set up
+ *  at launch, so flipping this relaunches the app (handled in the Rust command). */
+function CustomTitleBarRow() {
+  const [enabled, setEnabled] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    commands.settingsGetCustomTitleBar().then((res) => {
+      if (!cancelled && res.status === "ok") setEnabled(res.data)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const toggle = (next: boolean) => {
+    setEnabled(next)
+    commands.settingsSetCustomTitleBar(next)
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <div>
+        <label className="block text-[0.929rem] text-fg font-semibold">
+          Custom title bar
+        </label>
+        <p className="text-[0.857rem] text-muted mt-0.5">
+          Window controls in the toolbar instead of a native title bar.
+        </p>
+      </div>
+      <Switch
+        checked={enabled ?? false}
+        onCheckedChange={toggle}
+        disabled={enabled === null}
+        size="sm"
+      />
+    </div>
   )
 }
 

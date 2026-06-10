@@ -31,7 +31,6 @@ voleeo-ws = { path = "../crates/voleeo-ws" }
 voleeo-git = { path = "../crates/voleeo-git" }
 voleeo-mcp = { path = "../crates/voleeo-mcp" }
 voleeo-storage = { path = "../crates/voleeo-storage" }
-voleeo-mac-window = { path = "../crates-tauri/voleeo-mac-window" }
 chrono = { workspace = true }
 keyring = { workspace = true }
 rand = { workspace = true }
@@ -45,6 +44,10 @@ specta = { workspace = true }
 specta-typescript = { workspace = true }
 tauri-plugin-dialog = { workspace = true }
 font-kit = "0.14"
+
+# macOS-only: native titlebar via cocoa/objc. Not compiled on Linux/Windows.
+[target.'cfg(target_os = "macos")'.dependencies]
+voleeo-mac-window = { path = "../crates-tauri/voleeo-mac-window" }
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

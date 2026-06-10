@@ -8,6 +8,7 @@ import { MainLayout } from "@/layout/MainLayout"
 import { StartupParamsSchema } from "@/lib/schemas"
 import { loadAllSettings } from "@/lib/workspaceSettings"
 import { SettingsWindow } from "@/settings/SettingsWindow"
+import { useChromeStore } from "@/store/chrome"
 import { useThemeStore } from "@/store/theme"
 import { useUiStore } from "@/store/workspace"
 import { GitWindow } from "@/views/GitSync/GitWindow"
@@ -39,6 +40,7 @@ const { workspaceId: startWorkspaceId } = StartupParamsSchema.parse({
 export default function App() {
   const { initialize } = useThemeStore()
   const { openWorkspace } = useUiStore()
+  const initChrome = useChromeStore((s) => s.init)
 
   useMcpSync()
   useWsSync()
@@ -46,7 +48,8 @@ export default function App() {
 
   useEffect(() => {
     initialize()
-  }, [initialize])
+    if (windowLabel === "main") initChrome()
+  }, [initialize, initChrome])
 
   useEffect(() => {
     // Tell all other windows we just opened so they re-broadcast their workspace mappings

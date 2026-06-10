@@ -72,6 +72,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::settings::settings_get_mcp,
         commands::settings::settings_set_mcp_enabled,
         commands::settings::settings_regenerate_mcp_token,
+        commands::settings::settings_get_custom_title_bar,
+        commands::settings::settings_set_custom_title_bar,
         commands::theme::theme_get_active,
         commands::theme::theme_activate,
         commands::theme::theme_get_color_mode,
@@ -134,9 +136,13 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
 }
 
 pub fn run() {
-    tauri::Builder::default()
-        .plugin(voleeo_mac_window::init())
-        .plugin(tauri_plugin_dialog::init())
+    let builder = tauri::Builder::default().plugin(tauri_plugin_dialog::init());
+
+    // Native macOS titlebar plugin
+    #[cfg(target_os = "macos")]
+    let builder = builder.plugin(voleeo_mac_window::init());
+
+    builder
         .setup(|app| {
             let settings_item = MenuItemBuilder::with_id("settings", "Settings")
                 .accelerator("CmdOrCtrl+,")
@@ -292,6 +298,8 @@ pub fn run() {
             commands::settings::settings_get_mcp,
             commands::settings::settings_set_mcp_enabled,
             commands::settings::settings_regenerate_mcp_token,
+            commands::settings::settings_get_custom_title_bar,
+            commands::settings::settings_set_custom_title_bar,
             commands::theme::theme_get_active,
             commands::theme::theme_activate,
             commands::theme::theme_get_color_mode,

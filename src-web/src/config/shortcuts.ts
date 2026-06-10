@@ -1,4 +1,5 @@
 import type { KeyCombo } from "@/hooks/useKeydown"
+import { isMac } from "@/lib/platform"
 
 /**
  * Central registry of all keyboard shortcuts.
@@ -149,9 +150,6 @@ export const SHORTCUT_HELP: {
   },
 ]
 
-const IS_MAC =
-  typeof navigator !== "undefined" && /mac/i.test(navigator.userAgent)
-
 /**
  * Renders a KeyCombo for the current platform. `meta` is the primary modifier:
  * ⌘ on macOS, Ctrl on Windows/Linux — matching the native `CmdOrCtrl`
@@ -179,14 +177,14 @@ function symbolize(key: string): string {
 
 export function formatKeyCombo(combo: KeyCombo): string {
   const key = symbolize(combo.key)
-  if (IS_MAC) {
+  if (isMac) {
     const parts: string[] = []
     if (combo.ctrl) parts.push("⌃")
     if (combo.alt) parts.push("⌥")
     if (combo.shift) parts.push("⇧")
     if (combo.meta) parts.push("⌘")
     parts.push(key)
-    // Joined tight — render sites add letter-spacing for separation.
+
     return parts.join("")
   }
   const parts: string[] = []
