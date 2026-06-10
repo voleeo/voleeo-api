@@ -3,6 +3,7 @@ import {
   WebviewWindow,
 } from "@tauri-apps/api/webviewWindow"
 import { useState } from "react"
+import { useShallow } from "zustand/react/shallow"
 import { useInterfaceStore } from "@/store/interface"
 import { useUiStore, type Workspace } from "@/store/workspace"
 
@@ -31,8 +32,14 @@ export function useWorkspaceSwitcher() {
   const [pendingWorkspace, setPendingWorkspace] = useState<Workspace | null>(
     null,
   )
-  const { activeWorkspaceId, openWorkspace, workspaceWindowMap } = useUiStore()
-  const { workspaceBehavior } = useInterfaceStore()
+  const { activeWorkspaceId, openWorkspace, workspaceWindowMap } = useUiStore(
+    useShallow((s) => ({
+      activeWorkspaceId: s.activeWorkspaceId,
+      openWorkspace: s.openWorkspace,
+      workspaceWindowMap: s.workspaceWindowMap,
+    })),
+  )
+  const workspaceBehavior = useInterfaceStore((s) => s.workspaceBehavior)
 
   async function handleSwitch(w: Workspace) {
     if (w.id === activeWorkspaceId) return

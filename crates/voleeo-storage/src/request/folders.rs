@@ -8,10 +8,13 @@ use voleeo_core::{
 };
 
 impl RequestStore {
-    fn folder_path(&self, workspace_id: &str, id: &str) -> PathBuf {
-        self.workspaces_dir
+    fn folder_path(&self, workspace_id: &str, id: &str) -> Result<PathBuf, VoleeoError> {
+        crate::validate_id(workspace_id)?;
+        crate::validate_id(id)?;
+        Ok(self
+            .workspaces_dir
             .join(workspace_id)
-            .join(format!("folder_{id}.yaml"))
+            .join(format!("folder_{id}.yaml")))
     }
 
     pub fn list_folders(&self, workspace_id: &str) -> Result<Vec<ApiFolder>, VoleeoError> {
@@ -68,13 +71,13 @@ impl RequestStore {
         };
         let content =
             serde_yaml::to_string(&folder).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-        std::fs::write(self.folder_path(&workspace_id, &id), content)
+        std::fs::write(self.folder_path(&workspace_id, &id)?, content)
             .map_err(|e| VoleeoError::Storage(e.to_string()))?;
         Ok(folder)
     }
 
     pub fn get_folder(&self, workspace_id: &str, id: &str) -> Result<ApiFolder, VoleeoError> {
-        let path = self.folder_path(workspace_id, id);
+        let path = self.folder_path(workspace_id, id)?;
         if !path.exists() {
             return Err(VoleeoError::NotFound(format!("folder {id}")));
         }
@@ -112,7 +115,7 @@ impl RequestStore {
         };
         let content =
             serde_yaml::to_string(&folder).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-        std::fs::write(self.folder_path(&folder.workspace_id, &id), content)
+        std::fs::write(self.folder_path(&folder.workspace_id, &id)?, content)
             .map_err(|e| VoleeoError::Storage(e.to_string()))?;
         Ok(folder)
     }
@@ -161,7 +164,7 @@ impl RequestStore {
         id: &str,
         name: String,
     ) -> Result<(), VoleeoError> {
-        let path = self.folder_path(workspace_id, id);
+        let path = self.folder_path(workspace_id, id)?;
         let content =
             std::fs::read_to_string(&path).map_err(|e| VoleeoError::Storage(e.to_string()))?;
         let folder: ApiFolder =
@@ -178,7 +181,7 @@ impl RequestStore {
         headers: Vec<RequestParameter>,
         auth: AuthConfig,
     ) -> Result<(), VoleeoError> {
-        let path = self.folder_path(workspace_id, id);
+        let path = self.folder_path(workspace_id, id)?;
         let content =
             std::fs::read_to_string(&path).map_err(|e| VoleeoError::Storage(e.to_string()))?;
         let folder: ApiFolder =
@@ -195,7 +198,7 @@ impl RequestStore {
         id: &str,
         variables: Vec<EnvironmentVariable>,
     ) -> Result<(), VoleeoError> {
-        let path = self.folder_path(workspace_id, id);
+        let path = self.folder_path(workspace_id, id)?;
         let content =
             std::fs::read_to_string(&path).map_err(|e| VoleeoError::Storage(e.to_string()))?;
         let folder: ApiFolder =
@@ -211,7 +214,7 @@ impl RequestStore {
         id: &str,
         color: Option<String>,
     ) -> Result<(), VoleeoError> {
-        let path = self.folder_path(workspace_id, id);
+        let path = self.folder_path(workspace_id, id)?;
         let content =
             std::fs::read_to_string(&path).map_err(|e| VoleeoError::Storage(e.to_string()))?;
         let folder: ApiFolder =
@@ -222,7 +225,7 @@ impl RequestStore {
     }
 
     pub fn delete_folder(&self, workspace_id: &str, id: &str) -> Result<(), VoleeoError> {
-        let path = self.folder_path(workspace_id, id);
+        let path = self.folder_path(workspace_id, id)?;
         if path.exists() {
             std::fs::remove_file(path).map_err(|e| VoleeoError::Storage(e.to_string()))?;
         }
@@ -254,7 +257,7 @@ impl RequestStore {
         folder_id: Option<String>,
         order: f64,
     ) -> Result<(), VoleeoError> {
-        let path = self.folder_path(workspace_id, id);
+        let path = self.folder_path(workspace_id, id)?;
         let content =
             std::fs::read_to_string(&path).map_err(|e| VoleeoError::Storage(e.to_string()))?;
         let folder: ApiFolder =

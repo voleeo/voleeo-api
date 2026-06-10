@@ -21,7 +21,7 @@ function queueRenameFor(id: string | undefined) {
 export function NewItemButton() {
   const [open, setOpen] = useState(false)
   const wrapperRef = useRef<HTMLDivElement>(null)
-  const { activeWorkspaceId } = useUiStore()
+  const activeWorkspaceId = useUiStore((s) => s.activeWorkspaceId)
   const { createRequest, createFolder, createConnection } = useRequestStore(
     useShallow((s) => ({
       createRequest: s.createRequest,

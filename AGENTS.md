@@ -51,7 +51,7 @@ Several below are distilled from confirmed 100%+ CPU bugs in this codebase. Trea
 
 **5. `useRef` for non-rendering values** — flags, previous-value trackers, DOM refs, timer IDs. Every `setState` schedules a render.
 
-**6. `useCallback` for handlers passed to `React.memo` children** — list items in particular (`QueryParamRow`, `PathParamRow`).
+**6. `useCallback` for handlers passed to `React.memo` children** — list items in particular (`VarRow`, `FolderRunRow`).
 
 ### Zustand subscriptions
 
@@ -106,7 +106,7 @@ Several below are distilled from confirmed 100%+ CPU bugs in this codebase. Trea
 - [ ] No `unwrap`/`panic` in Rust command handlers
 - [ ] No blocking I/O in `async fn` without `spawn_blocking`
 - [ ] Comments earn their keep
-- [ ] `bun run typecheck`, `bun run lint`, `bun run build` all pass (production target ES2020)
+- [ ] `bun run typecheck`, `bun run lint`, `bun run test`, `bun run build` all pass (production target ES2020)
 
 ## Commands
 
@@ -115,6 +115,7 @@ bun run dev          # Tauri + Vite HMR
 bun run build        # production build
 bun run codegen      # regenerate packages/types/bindings.ts
 bun run typecheck
+bun run test         # bun:test — colocated *.test.ts in src-web/src/lib/; runs in CI
 bun run lint         # biome; lint:fix for auto-fix (pre-commit hook runs this)
 bun run format
 cargo check --workspace
@@ -196,7 +197,7 @@ Request fields support `{{ EXPR }}` tokens resolved at send time. Stored as lite
 | No-arg fn | `{{ uuid.v4() }}` |
 | Fn with args | `{{ uuid.v3(name="foo", namespace="…") }}` |
 
-Key files: `lib/template.ts` (tokenize/serialize/toHtml/resolveTemplate — pure), `lib/caret.ts` (caret utilities), `components/TemplateInput/` (chip-rendering input + autocomplete), `components/EncryptedInput/` (sensitive-value field), `views/ApiWorkspace/UrlInput.tsx` (URL bar extends with `:param` segments).
+Key files: `lib/template.ts` (tokenize/serialize/toHtml/resolveTemplate — pure), `lib/caret.ts` (caret utilities), `hooks/useChipEditableHandlers.ts` (shared chip-editor core: undo/redo, chip deletion, caret snap), `components/TemplateInput/` (chip-rendering input + autocomplete), `components/EncryptedInput/` (sensitive-value field), `views/ApiWorkspace/UrlInput/` (URL bar extends with `:param` segments). The two editors compose the shared hook — fix chip behavior there, not in the wrappers.
 
 **Critical:** Never read `el.textContent` to recover the stored value — chip display text differs. Always `extractStoredValue(el)`. Map caret offsets via `displayToStoredOffset`; chip ranges via `getChipRanges`.
 
@@ -236,7 +237,7 @@ Voleeo is an MCP **server**: AI clients connect over the bridge (stdio ↔ Unix 
     req_{request_id}.yaml        ring buffer of last 20 HttpResponses (newest first)
 ```
 
-`syncDir` is **never** in `workspace.yaml` — it's machine-local; `workspaces/{id}/` becomes a symlink. `derive_sync_dir()` reads `read_link` at runtime.
+`syncDir` is **never** in `workspace.yaml` — it's machine-local; `workspaces/{id}/` becomes a symlink. `derive_sync_dir()` reads `read_link` at runtime. Caller-supplied ids pass `validate_id` (`[A-Za-z0-9_-]`, ≤128) before any path construction — new storage paths must do the same.
 
 **Encryption** (`voleeo-crypto`): per-workspace AES-256-GCM. Key stored in OS keychain and `{app_data_dir}/keys/{workspace_id}.key` as fallback. Display: 32 bytes as 8 dash-separated groups of 8 uppercase hex. `keyCheck` token in `workspace.yaml` verifies imported keys. Secrets travel plaintext over IPC; the backend encrypts at rest via `transform_secrets` (env) / `transform_auth_secrets` (request) in `src-tauri/src/commands/`. Encrypted workspaces also write ciphertext into the YAML.
 

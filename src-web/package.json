@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome check src",
     "lint:fix": "biome check --write src",
-    "format": "biome format --write src"
+    "format": "biome format --write src",
+    "test": "bun test"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.0",

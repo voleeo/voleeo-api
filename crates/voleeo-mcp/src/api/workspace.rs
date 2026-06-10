@@ -3,11 +3,13 @@ use crate::protocol::ToolResult;
 use serde_json::Value;
 
 impl ApiBackend {
-    pub(super) fn workspace_list(&self) -> ToolResult {
-        match self.workspaces.list() {
+    pub(super) async fn workspace_list(&self) -> ToolResult {
+        let workspaces = self.workspaces.clone();
+        super::run_blocking(move || match workspaces.list() {
             Ok(ws) => ToolResult::json(&ws),
             Err(e) => ToolResult::error(e.to_string()),
-        }
+        })
+        .await
     }
 
     pub(super) fn workspace_create(&self, args: &Value) -> ToolResult {

@@ -41,19 +41,23 @@ impl WsStore {
     }
 
     fn workspace_dir(&self, workspace_id: &str) -> Result<PathBuf, VoleeoError> {
+        crate::validate_id(workspace_id)?;
         let dir = self.workspaces_dir.join(workspace_id);
         std::fs::create_dir_all(&dir).map_err(|e| VoleeoError::Storage(e.to_string()))?;
         Ok(dir)
     }
 
-    fn ws_path(&self, workspace_id: &str, id: &str) -> PathBuf {
-        self.workspaces_dir
+    fn ws_path(&self, workspace_id: &str, id: &str) -> Result<PathBuf, VoleeoError> {
+        crate::validate_id(workspace_id)?;
+        crate::validate_id(id)?;
+        Ok(self
+            .workspaces_dir
             .join(workspace_id)
-            .join(format!("ws_{id}.yaml"))
+            .join(format!("ws_{id}.yaml")))
     }
 
     pub fn get(&self, workspace_id: &str, id: &str) -> Result<WsConnection, VoleeoError> {
-        let path = self.ws_path(workspace_id, id);
+        let path = self.ws_path(workspace_id, id)?;
         if !path.exists() {
             return Err(VoleeoError::NotFound(format!("connection {id}")));
         }
@@ -124,7 +128,7 @@ impl WsStore {
         };
         let content =
             serde_yaml::to_string(&conn).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-        std::fs::write(self.ws_path(&workspace_id, &id), content)
+        std::fs::write(self.ws_path(&workspace_id, &id)?, content)
             .map_err(|e| VoleeoError::Storage(e.to_string()))?;
         Ok(conn)
     }
@@ -162,7 +166,7 @@ impl WsStore {
         };
         let content =
             serde_yaml::to_string(&conn).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-        std::fs::write(self.ws_path(workspace_id, &new), content)
+        std::fs::write(self.ws_path(workspace_id, &new)?, content)
             .map_err(|e| VoleeoError::Storage(e.to_string()))?;
         Ok(conn)
     }
@@ -173,7 +177,7 @@ impl WsStore {
             name,
             ..current.clone()
         };
-        save_if_changed(&self.ws_path(workspace_id, id), &current, next)
+        save_if_changed(&self.ws_path(workspace_id, id)?, &current, next)
     }
 
     pub fn update(
@@ -193,11 +197,11 @@ impl WsStore {
             auth,
             ..current.clone()
         };
-        save_if_changed(&self.ws_path(workspace_id, id), &current, next)
+        save_if_changed(&self.ws_path(workspace_id, id)?, &current, next)
     }
 
     pub fn delete(&self, workspace_id: &str, id: &str) -> Result<(), VoleeoError> {
-        let path = self.ws_path(workspace_id, id);
+        let path = self.ws_path(workspace_id, id)?;
         if path.exists() {
             std::fs::remove_file(path).map_err(|e| VoleeoError::Storage(e.to_string()))?;
         }
@@ -217,7 +221,7 @@ impl WsStore {
             order,
             ..current.clone()
         };
-        save_if_changed(&self.ws_path(workspace_id, id), &current, next)
+        save_if_changed(&self.ws_path(workspace_id, id)?, &current, next)
     }
 }
 

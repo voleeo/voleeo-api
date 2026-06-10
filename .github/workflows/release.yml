@@ -1,10 +1,5 @@
 name: Release
 
-# Fully automatic releases: on every push to main, derive the next semver from
-# conventional commits (git-cliff), build, and publish a GitHub release whose
-# notes are generated from the commit messages. The version lives in git tags
-# only — CI injects it into tauri.conf.json at build time, never commits it.
-
 on:
   push:
     branches: [main]
@@ -94,15 +89,6 @@ jobs:
           - platform: macos-latest
             target: x86_64-apple-darwin
             args: --target x86_64-apple-darwin
-          - platform: ubuntu-22.04
-            target: ""
-            args: ""
-          - platform: ubuntu-22.04-arm
-            target: ""
-            args: ""
-          - platform: windows-latest
-            target: x86_64-pc-windows-msvc
-            args: --target x86_64-pc-windows-msvc
 
     runs-on: ${{ matrix.platform }}
     steps:

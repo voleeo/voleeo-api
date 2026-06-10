@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useEnvironmentStore } from "@/store/environment"
 
-const DEFAULT_NEW_ENV_COLOR = "#9ca3af"
+const DEFAULT_NEW_ENV_COLOR = "var(--base04)"
 
 interface Props {
   workspaceId: string
@@ -11,7 +11,7 @@ interface Props {
 
 export function InlineNewEnvItem({ workspaceId, onCreated, onCancel }: Props) {
   const [name, setName] = useState("")
-  const { create } = useEnvironmentStore()
+  const create = useEnvironmentStore((s) => s.create)
 
   async function handleCommit() {
     const trimmed = name.trim()

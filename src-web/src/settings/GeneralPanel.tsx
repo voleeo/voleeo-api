@@ -1,8 +1,11 @@
 import { useEffect } from "react"
+import { useShallow } from "zustand/react/shallow"
 import { useAppStore } from "@/store/app"
 
 export function GeneralPanel() {
-  const { info, fetchInfo } = useAppStore()
+  const { info, fetchInfo } = useAppStore(
+    useShallow((s) => ({ info: s.info, fetchInfo: s.fetchInfo })),
+  )
 
   useEffect(() => {
     fetchInfo()

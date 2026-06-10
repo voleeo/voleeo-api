@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { loadRequest, resolveValue } from "@/builtins/request"
+import { FunctionModalShell } from "@/components/FunctionModalShell"
 import { FunctionPreviewPane } from "@/components/FunctionPreviewPane"
-import { Glyph } from "@/components/Glyph"
 import { RequestFunctionForm } from "@/components/RequestFunctionForm"
 import { RequestPicker } from "@/components/RequestPicker"
 import { extractBody, extractHeader } from "@/lib/extract"
@@ -139,86 +139,39 @@ export function RequestFunctionModal({
     Boolean(requestId) && (fnName === "request.body" || Boolean(name))
 
   return (
-    <div
-      className="fixed inset-0 z-300 bg-black/50 flex items-center justify-center"
-      onClick={onClose}
+    <FunctionModalShell
+      fnName={fnName}
+      description={DESCRIPTIONS[fnName]}
+      canInsert={canInsert}
+      onInsert={handleInsert}
+      onClose={onClose}
     >
-      <div
-        className="bg-surface border border-border rounded-xl shadow-[0_12px_48px_rgba(0,0,0,0.6)] w-[460px] max-w-[96vw] flex flex-col overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="px-4 py-3 border-b border-border flex items-center gap-2 shrink-0">
-          <span
-            className="font-mono text-[0.714rem] font-bold w-5 h-5 flex items-center justify-center rounded-[4px] shrink-0"
-            style={{
-              background: "color-mix(in srgb,var(--base0D) 15%,transparent)",
-              color: "var(--base0D)",
-            }}
-          >
-            f
-          </span>
-          <div className="flex flex-col flex-1 min-w-0">
-            <span className="font-mono text-[0.857rem] text-fg font-semibold truncate">
-              {fnName}
-            </span>
-            <span className="font-sans text-[0.786rem] text-muted truncate">
-              {DESCRIPTIONS[fnName]}
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1 rounded-[3px] cursor-pointer hover:bg-subtle bg-transparent border-0 outline-none shrink-0"
-          >
-            <Glyph kind="x" size={13} color="var(--base04)" />
-          </button>
+      <div className="px-4 py-4 flex flex-col gap-3 border-b border-border">
+        <div className="flex flex-col gap-1.5">
+          <label className="font-sans text-[0.786rem] text-muted font-medium">
+            Source request <span className="text-error">*</span>
+          </label>
+          <RequestPicker value={requestId} onChange={handlePickerChange} />
         </div>
 
-        <div className="px-4 py-4 flex flex-col gap-3 border-b border-border">
-          <div className="flex flex-col gap-1.5">
-            <label className="font-sans text-[0.786rem] text-muted font-medium">
-              Source request <span className="text-error">*</span>
-            </label>
-            <RequestPicker value={requestId} onChange={handlePickerChange} />
-          </div>
-
-          <RequestFunctionForm
-            fnName={fnName}
-            name={name}
-            setName={setName}
-            selector={selector}
-            setSelector={setSelector}
-            hasSourceReq={Boolean(sourceReq)}
-            availableNames={availableNames}
-            onAnyChange={() => setResult(null)}
-          />
-        </div>
-
-        <FunctionPreviewPane
-          result={result}
-          previewing={previewing}
-          disabled={!requestId}
-          onRerun={() => void preview()}
+        <RequestFunctionForm
+          fnName={fnName}
+          name={name}
+          setName={setName}
+          selector={selector}
+          setSelector={setSelector}
+          hasSourceReq={Boolean(sourceReq)}
+          availableNames={availableNames}
+          onAnyChange={() => setResult(null)}
         />
-
-        <div className="px-4 py-3 flex items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-3 py-1.5 rounded-[5px] font-sans text-[0.857rem] text-muted border border-border bg-transparent hover:bg-subtle cursor-pointer outline-none transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleInsert}
-            disabled={!canInsert}
-            className="px-3 py-1.5 rounded-[5px] font-sans text-[0.857rem] font-medium border border-accent/40 bg-accent/10 text-accent hover:bg-accent/20 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed outline-none transition-colors"
-          >
-            Insert
-          </button>
-        </div>
       </div>
-    </div>
+
+      <FunctionPreviewPane
+        result={result}
+        previewing={previewing}
+        disabled={!requestId}
+        onRerun={() => void preview()}
+      />
+    </FunctionModalShell>
   )
 }

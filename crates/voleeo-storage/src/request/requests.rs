@@ -6,14 +6,17 @@ use std::path::PathBuf;
 use voleeo_core::{new_id, AuthConfig, HttpRequest, RequestBody, RequestParameter, VoleeoError};
 
 impl RequestStore {
-    fn req_path(&self, workspace_id: &str, id: &str) -> PathBuf {
-        self.workspaces_dir
+    fn req_path(&self, workspace_id: &str, id: &str) -> Result<PathBuf, VoleeoError> {
+        crate::validate_id(workspace_id)?;
+        crate::validate_id(id)?;
+        Ok(self
+            .workspaces_dir
             .join(workspace_id)
-            .join(format!("req_{id}.yaml"))
+            .join(format!("req_{id}.yaml")))
     }
 
     pub fn get_request(&self, workspace_id: &str, id: &str) -> Result<HttpRequest, VoleeoError> {
-        let path = self.req_path(workspace_id, id);
+        let path = self.req_path(workspace_id, id)?;
         if !path.exists() {
             return Err(VoleeoError::NotFound(format!("request {id}")));
         }
@@ -88,7 +91,7 @@ impl RequestStore {
         };
         let content =
             serde_yaml::to_string(&req).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-        std::fs::write(self.req_path(&workspace_id, &id), content)
+        std::fs::write(self.req_path(&workspace_id, &id)?, content)
             .map_err(|e| VoleeoError::Storage(e.to_string()))?;
         Ok(req)
     }
@@ -123,7 +126,7 @@ impl RequestStore {
         };
         let content =
             serde_yaml::to_string(&req).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-        std::fs::write(self.req_path(&req.workspace_id, &id), content)
+        std::fs::write(self.req_path(&req.workspace_id, &id)?, content)
             .map_err(|e| VoleeoError::Storage(e.to_string()))?;
         Ok(req)
     }
@@ -151,7 +154,7 @@ impl RequestStore {
         id: &str,
         name: String,
     ) -> Result<(), VoleeoError> {
-        let path = self.req_path(workspace_id, id);
+        let path = self.req_path(workspace_id, id)?;
         let content =
             std::fs::read_to_string(&path).map_err(|e| VoleeoError::Storage(e.to_string()))?;
         let req: HttpRequest =
@@ -172,7 +175,7 @@ impl RequestStore {
         body: Option<RequestBody>,
         auth: AuthConfig,
     ) -> Result<(), VoleeoError> {
-        let path = self.req_path(workspace_id, id);
+        let path = self.req_path(workspace_id, id)?;
         let content =
             std::fs::read_to_string(&path).map_err(|e| VoleeoError::Storage(e.to_string()))?;
         let req: HttpRequest =
@@ -188,7 +191,7 @@ impl RequestStore {
     }
 
     pub fn delete_request(&self, workspace_id: &str, id: &str) -> Result<(), VoleeoError> {
-        let path = self.req_path(workspace_id, id);
+        let path = self.req_path(workspace_id, id)?;
         if path.exists() {
             std::fs::remove_file(path).map_err(|e| VoleeoError::Storage(e.to_string()))?;
         }
@@ -202,7 +205,7 @@ impl RequestStore {
         folder_id: Option<String>,
         order: f64,
     ) -> Result<(), VoleeoError> {
-        let path = self.req_path(workspace_id, id);
+        let path = self.req_path(workspace_id, id)?;
         let content =
             std::fs::read_to_string(&path).map_err(|e| VoleeoError::Storage(e.to_string()))?;
         let req: HttpRequest =

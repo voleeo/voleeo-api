@@ -5,6 +5,7 @@ import { KeyDisplayCard } from "@/components/KeyDisplayCard"
 import { MonoLabel } from "@/components/Primitives"
 import { Switch } from "@/components/ui/switch"
 import { errorMessage } from "@/lib/error"
+import { cn } from "@/lib/utils"
 import { useUiStore } from "@/store/workspace"
 import { commands } from "../../../../packages/types/bindings"
 import { FlowBtn } from "./FlowBtn"
@@ -160,7 +161,10 @@ function StepIndicator({
       {Array.from({ length: total }, (_, i) => i + 1).map((step) => (
         <div
           key={step}
-          className={`h-1 w-6 rounded-full ${step <= current ? "bg-accent" : "bg-border"}`}
+          className={cn(
+            "h-1 w-6 rounded-full",
+            step <= current ? "bg-accent" : "bg-border",
+          )}
         />
       ))}
       <span className="text-[0.714rem] text-muted">

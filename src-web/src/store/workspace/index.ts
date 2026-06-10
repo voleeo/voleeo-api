@@ -1,27 +1,31 @@
 import { invoke } from "@tauri-apps/api/core"
-import { emit, listen } from "@tauri-apps/api/event"
+import { emit } from "@tauri-apps/api/event"
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow"
-import {
-  currentMonitor,
-  LogicalPosition,
-  LogicalSize,
-} from "@tauri-apps/api/window"
 import { create } from "zustand"
 import { WorkspaceListSchema } from "@/lib/schemas"
-import type {
-  AuthConfig,
-  DnsOverride,
-  RequestParameter,
-} from "../../../packages/types/bindings"
-import { commands } from "../../../packages/types/bindings"
-
-export type { AuthConfig, DnsOverride, RequestParameter }
-
 import {
   getCachedSettings,
   loadAllSettings,
   patchSettings,
 } from "@/lib/workspaceSettings"
+import type {
+  AuthConfig,
+  DnsOverride,
+  RequestParameter,
+} from "../../../../packages/types/bindings"
+import { commands } from "../../../../packages/types/bindings"
+import {
+  applyWindowSize,
+  attachResizeListener,
+  DEFAULT_WORKSPACE_HEIGHT,
+  DEFAULT_WORKSPACE_WIDTH,
+  WELCOME_HEIGHT,
+  WELCOME_WIDTH,
+} from "./windowSize"
+
+export { initWorkspaceListeners } from "./listeners"
+export { applyWelcomeWindowSize } from "./windowSize"
+export type { AuthConfig, DnsOverride, RequestParameter }
 
 export type Tool = "welcome" | "api" | "git"
 export type PanelLayout = "columns" | "rows"
@@ -46,11 +50,6 @@ export interface Workspace {
   updatedAt: string
 }
 
-const WELCOME_WIDTH = 900
-const WELCOME_HEIGHT = 680
-const DEFAULT_WORKSPACE_WIDTH = 1000
-const DEFAULT_WORKSPACE_HEIGHT = 800
-
 function getLayout(wsId: string): PanelLayout {
   const l = getCachedSettings(wsId).panelLayout
   return l === "rows" ? "rows" : "columns"
@@ -58,45 +57,6 @@ function getLayout(wsId: string): PanelLayout {
 
 function getTreeVisible(wsId: string): boolean {
   return getCachedSettings(wsId).treeVisible ?? true
-}
-
-let ignoringResizeCount = 0
-
-async function applyWindowSize(
-  width: number,
-  height: number,
-  resizable = true,
-) {
-  try {
-    const win = getCurrentWebviewWindow()
-    const monitor = await currentMonitor()
-    ignoringResizeCount += 1
-    await win.setResizable(resizable)
-    await win.setSize(new LogicalSize(width, height))
-    if (monitor) {
-      const sf = monitor.scaleFactor
-      const mw = monitor.size.width / sf
-      const mh = monitor.size.height / sf
-      const mx = monitor.position.x / sf
-      const my = monitor.position.y / sf
-      await win.setPosition(
-        new LogicalPosition(
-          Math.round(mx + (mw - width) / 2),
-          Math.round(my + (mh - height) / 2),
-        ),
-      )
-    }
-  } catch {
-  } finally {
-    setTimeout(() => {
-      ignoringResizeCount -= 1
-    }, 600)
-  }
-}
-
-/** Resize + centre the window to the welcome-screen dimensions. */
-export function applyWelcomeWindowSize() {
-  return applyWindowSize(WELCOME_WIDTH, WELCOME_HEIGHT, false)
 }
 
 interface UiStore {
@@ -185,17 +145,17 @@ export const useUiStore = create<UiStore>((set, get) => ({
       panelLayout: getLayout(id),
       treeVisible: getTreeVisible(id),
     })
-    import("./environment")
+    import("../environment")
       .then(({ useEnvironmentStore }) => {
         useEnvironmentStore.getState().load(id)
       })
       .catch(() => {})
-    import("./git")
+    import("../git")
       .then(({ useGitStore }) => {
         useGitStore.getState().load(id)
       })
       .catch(() => {})
-    import("./cookies")
+    import("../cookies")
       .then(({ useCookiesStore }) => {
         useCookiesStore.getState().load(id)
       })
@@ -260,69 +220,4 @@ export const useUiStore = create<UiStore>((set, get) => ({
   },
 }))
 
-let resizeTimer: ReturnType<typeof setTimeout> | null = null
-getCurrentWebviewWindow()
-  .onResized(async ({ payload: size }) => {
-    if (ignoringResizeCount > 0) return
-    const { activeWorkspaceId } = useUiStore.getState()
-    if (!activeWorkspaceId) return
-    if (resizeTimer) clearTimeout(resizeTimer)
-    resizeTimer = setTimeout(async () => {
-      try {
-        // onResized delivers physical pixels — convert to logical before saving
-        const monitor = await currentMonitor()
-        const sf = monitor?.scaleFactor ?? 1
-        patchSettings(activeWorkspaceId, {
-          windowSize: {
-            width: Math.round(size.width / sf),
-            height: Math.round(size.height / sf),
-          },
-        })
-      } catch {}
-    }, 500)
-  })
-  .catch(() => {})
-
-listen<{ workspaceId: string; windowLabel: string }>(
-  "workspace:window:registered",
-  (e) => {
-    useUiStore.setState((s) => ({
-      workspaceWindowMap: {
-        ...s.workspaceWindowMap,
-        [e.payload.workspaceId]: e.payload.windowLabel,
-      },
-    }))
-  },
-).catch(() => {})
-
-listen("workspace:window:announce", () => {
-  const { activeWorkspaceId } = useUiStore.getState()
-  if (!activeWorkspaceId) return
-  try {
-    const label = getCurrentWebviewWindow().label
-    emit("workspace:window:registered", {
-      workspaceId: activeWorkspaceId,
-      windowLabel: label,
-    }).catch(() => {})
-  } catch {}
-}).catch(() => {})
-
-listen("workspace:close", () => {
-  useUiStore.setState({ activeTool: "welcome", activeWorkspaceId: null })
-  applyWindowSize(WELCOME_WIDTH, WELCOME_HEIGHT, false)
-  import("./environment")
-    .then(({ useEnvironmentStore }) => {
-      useEnvironmentStore.getState().reset()
-    })
-    .catch(() => {})
-  import("./cookies")
-    .then(({ useCookiesStore }) => {
-      useCookiesStore.getState().reset()
-    })
-    .catch(() => {})
-  import("./git")
-    .then(({ useGitStore }) => {
-      useGitStore.getState().reset()
-    })
-    .catch(() => {})
-}).catch(() => {})
+attachResizeListener(() => useUiStore.getState().activeWorkspaceId)

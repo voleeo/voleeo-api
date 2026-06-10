@@ -1,17 +1,12 @@
-import { useCallback, useEffect, useLayoutEffect, useRef } from "react"
+import { useCallback, useLayoutEffect, useRef } from "react"
 import { createPortal } from "react-dom"
 import { EnableEncryptionDialog } from "@/components/EnableEncryptionDialog"
 import { TemplateFunctionModal } from "@/components/TemplateFunctionModal"
 import { useTemplateInputData } from "@/components/TemplateInput/useTemplateInputData"
 import {
-  attachAtomSnapListener,
   ensureTrailingTextNode,
-  getAnchorOffset,
   getCaretOffset,
-  getChipRanges,
-  getFocusOffset,
   setCaretOffset,
-  setSelectionExtended,
 } from "@/lib/caret"
 import type { CommandImportResult } from "@/lib/commandImport"
 import { cn } from "@/lib/utils"
@@ -19,6 +14,7 @@ import { toHtml } from "./urlTokenizer"
 import { Autocomplete, useUrlAutocomplete } from "./useUrlAutocomplete"
 import { useUrlFuncModal } from "./useUrlFuncModal"
 import { useUrlInputHandlers } from "./useUrlInputHandlers"
+import { useUrlMouseHandlers } from "./useUrlMouseHandlers"
 
 interface Props {
   value: string
@@ -51,11 +47,6 @@ export function UrlInput({
 }: Props) {
   const divRef = useRef<HTMLDivElement>(null)
   const skipSyncRef = useRef(false)
-  // Tracks an active pointer drag so the atom-snap listener knows to prefer
-  // snapping before a chip (enabling right-drag to include the chip).
-  const isDragging = useRef(false)
-  // Tracks the mousedown position so handleClick can detect drag vs. pure click.
-  const mouseDownPos = useRef<{ x: number; y: number } | null>(null)
 
   const {
     activeVars,
@@ -143,27 +134,27 @@ export function UrlInput({
     selectUrlItem,
   })
 
-  // Atom-snap listener (treats chips as single characters for selection).
-  // Native mousedown/mouseup listeners set isDragging before selectionchange
-  // fires so the snap can prefer "before chip" during a drag.
-  useEffect(() => {
-    const el = divRef.current
-    if (!el) return
-    const onDown = () => {
-      isDragging.current = true
-    }
-    const onUp = () => {
-      isDragging.current = false
-    }
-    el.addEventListener("mousedown", onDown)
-    document.addEventListener("mouseup", onUp)
-    const cleanup = attachAtomSnapListener(el, { isDragging })
-    return () => {
-      el.removeEventListener("mousedown", onDown)
-      document.removeEventListener("mouseup", onUp)
-      cleanup()
-    }
-  }, [])
+  const { handleMouseDown, handleMouseMove, handleClick } = useUrlMouseHandlers(
+    {
+      divRef,
+      onChipClick: useCallback(
+        (target: HTMLElement) => {
+          if (target.dataset.param === "true") {
+            const name = (target.textContent ?? "").replace(/^:/, "")
+            if (name) onParamClick?.(name)
+            return
+          }
+          if (target.dataset.tpl === "var") {
+            const varName = target.dataset.var
+            if (varName) onVarClick?.(varName)
+            return
+          }
+          if (target.dataset.tpl === "func") handleChipClick(target)
+        },
+        [onParamClick, onVarClick, handleChipClick],
+      ),
+    },
+  )
 
   // Sync innerHTML from the value prop (skipped on internal edits via skipSyncRef).
   useLayoutEffect(() => {
@@ -188,57 +179,6 @@ export function UrlInput({
       ensureTrailingTextNode(el)
     }
   }, [value, buildHtml])
-
-  function handleMouseDown(e: React.MouseEvent<HTMLDivElement>) {
-    mouseDownPos.current = { x: e.clientX, y: e.clientY }
-  }
-
-  // Snap a drag-selection to whole chip boundaries (mirrors CodeMirror atomicRanges).
-  function handleMouseMove(e: React.MouseEvent<HTMLDivElement>) {
-    if (!(e.buttons & 1) || !divRef.current) return
-    const sel = window.getSelection()
-    if (!sel || sel.isCollapsed) return
-    const el = divRef.current
-    const anchor = getAnchorOffset(el)
-    const focus = getFocusOffset(el)
-    const chips = getChipRanges(el)
-    for (const chip of chips) {
-      // Focus is inside chip while dragging rightward — snap past it.
-      if (anchor <= chip.start && focus > chip.start && focus < chip.end) {
-        setSelectionExtended(el, anchor, chip.end)
-        return
-      }
-      // Focus is inside chip while dragging leftward — snap before it.
-      if (anchor >= chip.end && focus > chip.start && focus < chip.end) {
-        setSelectionExtended(el, anchor, chip.start)
-        return
-      }
-    }
-  }
-
-  function handleClick(e: React.MouseEvent<HTMLDivElement>) {
-    const target = e.target as HTMLElement
-    if (target.tagName !== "SPAN") return
-    // If the mouse moved more than 4 px between mousedown and click, the user
-    // was drag-selecting — preserve the selection and don't open any modal.
-    const down = mouseDownPos.current
-    if (down) {
-      const dx = e.clientX - down.x
-      const dy = e.clientY - down.y
-      if (dx * dx + dy * dy > 16) return
-    }
-    if (target.dataset.param === "true") {
-      const name = (target.textContent ?? "").replace(/^:/, "")
-      if (name) onParamClick?.(name)
-      return
-    }
-    if (target.dataset.tpl === "var") {
-      const varName = target.dataset.var
-      if (varName) onVarClick?.(varName)
-      return
-    }
-    if (target.dataset.tpl === "func") handleChipClick(target)
-  }
 
   return (
     <>

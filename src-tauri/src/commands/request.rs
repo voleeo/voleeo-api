@@ -38,7 +38,7 @@ impl Stores {
 /// Bridge sync work into the tokio runtime. Any closure that touches YAML, the
 /// keyring, or AES round-trips goes through here so we never block the async
 /// executor (CLAUDE.md rule #17).
-async fn run_blocking<T: Send + 'static>(
+pub(crate) async fn run_blocking<T: Send + 'static>(
     f: impl FnOnce() -> Result<T, VoleeoError> + Send + 'static,
 ) -> Result<T, VoleeoError> {
     tokio::task::spawn_blocking(f)

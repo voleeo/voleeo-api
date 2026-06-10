@@ -2,7 +2,14 @@ import { useState } from "react"
 import { Glyph } from "@/components/Glyph"
 import { ManagementModal } from "@/components/ManagementModal"
 import { Button } from "@/components/ui/button"
+import { errorMessage } from "@/lib/error"
 import { createGitBranch, renameGitBranch } from "@/store/gitBranches"
+import type { VoleeoError } from "../../../packages/types/bindings"
+
+function branchError(e: unknown): string {
+  if (e instanceof Error) return e.message
+  return errorMessage(e as VoleeoError)
+}
 
 /** Presentational shell shared by the branch name-entry modals. */
 function BranchModalForm({
@@ -94,7 +101,7 @@ export function NewBranchModal({
       await createGitBranch(workspaceId, n)
       onClose()
     } catch (e) {
-      setError((e as Error).message)
+      setError(branchError(e))
       setSaving(false)
     }
   }
@@ -142,7 +149,7 @@ export function RenameBranchModal({
       await renameGitBranch(workspaceId, current, n)
       onClose()
     } catch (e) {
-      setError((e as Error).message)
+      setError(branchError(e))
       setSaving(false)
     }
   }

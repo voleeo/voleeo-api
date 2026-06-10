@@ -1,16 +1,11 @@
 import type React from "react"
 import type { RefObject } from "react"
-import { useRef } from "react"
+import { useChipEditableHandlers } from "@/hooks/useChipEditableHandlers"
 import {
   displayToStoredOffset,
   ensureTrailingTextNode,
-  extractStoredValue,
-  getAnchorOffset,
   getCaretOffset,
-  getChipRanges,
-  getFocusOffset,
   setCaretOffset,
-  setSelectionExtended,
 } from "@/lib/caret"
 import { type CommandImportResult, tryParseCommand } from "@/lib/commandImport"
 import { parseQueryString } from "../paramUtils"
@@ -54,33 +49,30 @@ export function useUrlInputHandlers({
   closeAutocomplete,
   selectUrlItem,
 }: UseUrlInputHandlersOptions) {
-  const undoStack = useRef<Array<{ value: string; caret: number }>>([])
-  const redoStack = useRef<Array<{ value: string; caret: number }>>([])
-
-  function pushUndo(el: HTMLElement) {
-    const value = extractStoredValue(el)
-    const caret = getCaretOffset(el)
-    const last = undoStack.current[undoStack.current.length - 1]
-    if (last?.value === value) return
-    undoStack.current.push({ value, caret })
-    if (undoStack.current.length > 100) undoStack.current.shift()
-    redoStack.current = []
-  }
-
-  function handleBeforeInput(e: React.FormEvent<HTMLDivElement>) {
-    const inputEvent = e.nativeEvent as InputEvent
-    // Don't capture undo/redo browser events — we handle those ourselves.
-    if (
-      inputEvent.inputType === "historyUndo" ||
-      inputEvent.inputType === "historyRedo"
-    )
-      return
-    pushUndo(e.currentTarget as HTMLElement)
-  }
+  const {
+    read,
+    pushUndo,
+    handleBeforeInput,
+    handleCopy,
+    handleCut,
+    handleSharedKeyDown,
+  } = useChipEditableHandlers({
+    buildHtml,
+    skipSyncRef,
+    onChange,
+    acOpen,
+    acItemCount: acItems.length,
+    setAcIdx,
+    selectActiveItem: () => {
+      const item = acItems[acIdx]
+      if (item) selectUrlItem(item)
+    },
+    closeAutocomplete,
+  })
 
   function handleInput(e: React.SyntheticEvent<HTMLDivElement>) {
     const el = e.currentTarget
-    const stored = extractStoredValue(el)
+    const stored = read(el)
 
     // If the user typed `?`, extract query params and strip them from the URL bar.
     const qDisplayIdx = (el.textContent ?? "").indexOf("?")
@@ -121,40 +113,6 @@ export function useUrlInputHandlers({
     }
   }
 
-  /** Copies the *stored* form of the selection (e.g. `{{ HOST }}`) so a
-   *  subsequent paste re-creates chips rather than pasting display text. */
-  function handleCopy(e: React.ClipboardEvent<HTMLDivElement>) {
-    const el = e.currentTarget
-    const sel = window.getSelection()
-    if (!sel || sel.isCollapsed) return
-    const stored = extractStoredValue(el)
-    const selStart = Math.min(getAnchorOffset(el), getFocusOffset(el))
-    const selEnd = Math.max(getAnchorOffset(el), getFocusOffset(el))
-    const storedStart = displayToStoredOffset(el, selStart)
-    const storedEnd = displayToStoredOffset(el, selEnd)
-    e.preventDefault()
-    e.clipboardData.setData("text/plain", stored.slice(storedStart, storedEnd))
-  }
-
-  /** Same as handleCopy but also removes the selected content.
-   *  Uses execCommand('delete') so the deletion is tracked in the undo stack. */
-  function handleCut(e: React.ClipboardEvent<HTMLDivElement>) {
-    const el = e.currentTarget
-    const sel = window.getSelection()
-    if (!sel || sel.isCollapsed) return
-    const stored = extractStoredValue(el)
-    const selStart = Math.min(getAnchorOffset(el), getFocusOffset(el))
-    const selEnd = Math.max(getAnchorOffset(el), getFocusOffset(el))
-    const storedStart = displayToStoredOffset(el, selStart)
-    const storedEnd = displayToStoredOffset(el, selEnd)
-    e.preventDefault()
-    e.clipboardData.setData("text/plain", stored.slice(storedStart, storedEnd))
-    pushUndo(el)
-    // execCommand records the deletion in the browser undo stack;
-    // handleInput fires automatically and updates React state.
-    document.execCommand("delete")
-  }
-
   function handlePaste(e: React.ClipboardEvent<HTMLDivElement>) {
     e.preventDefault()
     const el = e.currentTarget
@@ -163,7 +121,7 @@ export function useUrlInputHandlers({
     // When the input is empty and the paste looks like a curl/httpie command,
     // hand it up to the parent for full request import instead of inserting
     // it as plain text. Disabled commands (no onImportCommand) fall through.
-    if (onImportCommand && extractStoredValue(el) === "") {
+    if (onImportCommand && read(el) === "") {
       const result = tryParseCommand(text)
       if (result) {
         onImportCommand(result)
@@ -176,88 +134,6 @@ export function useUrlInputHandlers({
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
     const el = e.currentTarget
-
-    if ((e.metaKey || e.ctrlKey) && e.key === "z" && !e.shiftKey) {
-      e.preventDefault()
-      const state = undoStack.current.pop()
-      if (!state) return
-      redoStack.current.push({
-        value: extractStoredValue(el),
-        caret: getCaretOffset(el),
-      })
-      el.innerHTML = buildHtml(state.value)
-      ensureTrailingTextNode(el)
-      setCaretOffset(el, state.caret)
-      skipSyncRef.current = true
-      onChange(state.value)
-      closeAutocomplete()
-      return
-    }
-
-    if ((e.metaKey || e.ctrlKey) && e.key === "z" && e.shiftKey) {
-      e.preventDefault()
-      const state = redoStack.current.pop()
-      if (!state) return
-      undoStack.current.push({
-        value: extractStoredValue(el),
-        caret: getCaretOffset(el),
-      })
-      el.innerHTML = buildHtml(state.value)
-      ensureTrailingTextNode(el)
-      setCaretOffset(el, state.caret)
-      skipSyncRef.current = true
-      onChange(state.value)
-      closeAutocomplete()
-      return
-    }
-
-    // Backspace: delete chip atomically when caret is inside or at its end.
-    // WebKit doesn't reliably backspace into a `contenteditable="false"` span
-    // when there is no text node between two adjacent chips.
-    if (e.key === "Backspace" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
-      const caret = getCaretOffset(el)
-      const chips = getChipRanges(el)
-      for (const chip of chips) {
-        if (caret > chip.start && caret <= chip.end) {
-          e.preventDefault()
-          pushUndo(el)
-          const stored = extractStoredValue(el)
-          const newStored =
-            stored.slice(0, displayToStoredOffset(el, chip.start)) +
-            stored.slice(displayToStoredOffset(el, chip.end))
-          el.innerHTML = buildHtml(newStored)
-          ensureTrailingTextNode(el)
-          setCaretOffset(el, chip.start)
-          skipSyncRef.current = true
-          onChange(newStored)
-          closeAutocomplete()
-          return
-        }
-      }
-    }
-
-    // Delete (forward): same but triggered when caret is at chip start.
-    if (e.key === "Delete" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
-      const caret = getCaretOffset(el)
-      const chips = getChipRanges(el)
-      for (const chip of chips) {
-        if (caret >= chip.start && caret < chip.end) {
-          e.preventDefault()
-          pushUndo(el)
-          const stored = extractStoredValue(el)
-          const newStored =
-            stored.slice(0, displayToStoredOffset(el, chip.start)) +
-            stored.slice(displayToStoredOffset(el, chip.end))
-          el.innerHTML = buildHtml(newStored)
-          ensureTrailingTextNode(el)
-          setCaretOffset(el, chip.start)
-          skipSyncRef.current = true
-          onChange(newStored)
-          closeAutocomplete()
-          return
-        }
-      }
-    }
 
     if (e.key === "Enter" && !acOpen) {
       e.preventDefault()
@@ -277,104 +153,7 @@ export function useUrlInputHandlers({
       return
     }
 
-    if (acOpen) {
-      if (e.key === "ArrowDown") {
-        e.preventDefault()
-        e.stopPropagation()
-        setAcIdx((i) => Math.min(i + 1, acItems.length - 1))
-        return
-      }
-      if (e.key === "ArrowUp") {
-        e.preventDefault()
-        e.stopPropagation()
-        setAcIdx((i) => Math.max(i - 1, 0))
-        return
-      }
-      if (e.key === "Enter" || e.key === "Tab") {
-        e.preventDefault()
-        e.stopPropagation()
-        const item = acItems[acIdx]
-        if (item) selectUrlItem(item)
-        return
-      }
-      if (e.key === "Escape") {
-        e.preventDefault()
-        e.stopPropagation()
-        closeAutocomplete()
-        return
-      }
-      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-        closeAutocomplete() // fall through to atom-snap below
-      }
-    }
-
-    // Arrow-key atom snap: treat each chip as a single character.
-    if (
-      (e.key === "ArrowLeft" || e.key === "ArrowRight") &&
-      !e.shiftKey &&
-      !e.ctrlKey &&
-      !e.metaKey
-    ) {
-      const caret = getCaretOffset(el)
-      const chips = getChipRanges(el)
-
-      if (e.key === "ArrowLeft" && caret > 0) {
-        for (const chip of chips) {
-          if (caret > chip.start && caret <= chip.end) {
-            e.preventDefault()
-            setCaretOffset(el, chip.start)
-            return
-          }
-        }
-      }
-      if (e.key === "ArrowRight" && caret < (el.textContent ?? "").length) {
-        for (const chip of chips) {
-          if (caret >= chip.start && caret < chip.end) {
-            e.preventDefault()
-            setCaretOffset(el, chip.end)
-            return
-          }
-        }
-      }
-    }
-
-    // Shift+Arrow selection snap: extend selection treating each chip as atomic.
-    if (
-      (e.key === "ArrowLeft" || e.key === "ArrowRight") &&
-      e.shiftKey &&
-      !e.ctrlKey &&
-      !e.metaKey
-    ) {
-      const focus = getFocusOffset(el)
-      const anchor = getAnchorOffset(el)
-      const chips = getChipRanges(el)
-      const totalLen = (el.textContent ?? "").length
-
-      if (e.key === "ArrowRight" && focus < totalLen) {
-        let newFocus = focus + 1
-        for (const chip of chips) {
-          if (newFocus >= chip.start && newFocus < chip.end) {
-            newFocus = chip.end
-            break
-          }
-        }
-        e.preventDefault()
-        setSelectionExtended(el, anchor, newFocus)
-        return
-      }
-      if (e.key === "ArrowLeft" && focus > 0) {
-        let newFocus = focus - 1
-        for (const chip of chips) {
-          if (newFocus > chip.start && newFocus <= chip.end) {
-            newFocus = chip.start
-            break
-          }
-        }
-        e.preventDefault()
-        setSelectionExtended(el, anchor, newFocus)
-        return
-      }
-    }
+    handleSharedKeyDown(e)
   }
 
   return {

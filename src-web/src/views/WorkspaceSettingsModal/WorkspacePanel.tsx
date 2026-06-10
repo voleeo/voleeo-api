@@ -29,7 +29,8 @@ function DeleteConfirmDialog({
   workspaceId: string
   onCancel: () => void
 }) {
-  const { loadWorkspaces, setActiveTool } = useUiStore()
+  const loadWorkspaces = useUiStore((s) => s.loadWorkspaces)
+  const setActiveTool = useUiStore((s) => s.setActiveTool)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [workspacePath, setWorkspacePath] = useState<string | null>(null)

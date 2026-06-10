@@ -1,15 +1,8 @@
-import { useEffect, useState } from "react"
 import { Glyph } from "@/components/Glyph"
-import { commands } from "../../../../packages/types/bindings"
+import { useMcpEnabled } from "./useMcpEnabled"
 
 export function McpStatusItem({ onOpen }: { onOpen: () => void }) {
-  const [enabled, setEnabled] = useState(false)
-
-  useEffect(() => {
-    commands.settingsGetMcp().then((res) => {
-      if (res.status === "ok") setEnabled(res.data.enabled)
-    })
-  }, [])
+  const enabled = useMcpEnabled() ?? false
 
   return (
     <button

@@ -64,25 +64,31 @@ fn ingest_captured_blocking(
 }
 
 impl ApiBackend {
-    pub(super) fn request_list(&self, args: &Value) -> ToolResult {
+    pub(super) async fn request_list(&self, args: &Value) -> ToolResult {
         let ws_id = require!(args, "workspaceId");
-        let requests = self.requests.list_requests(&ws_id);
-        let folders = self.requests.list_folders(&ws_id);
-        match (requests, folders) {
-            (Ok(reqs), Ok(folders)) => {
-                ToolResult::json(&serde_json::json!({ "requests": reqs, "folders": folders }))
+        let requests = self.requests.clone();
+        super::run_blocking(move || {
+            let reqs = requests.list_requests(&ws_id);
+            let folders = requests.list_folders(&ws_id);
+            match (reqs, folders) {
+                (Ok(reqs), Ok(folders)) => {
+                    ToolResult::json(&serde_json::json!({ "requests": reqs, "folders": folders }))
+                }
+                (Err(e), _) | (_, Err(e)) => ToolResult::error(e.to_string()),
             }
-            (Err(e), _) | (_, Err(e)) => ToolResult::error(e.to_string()),
-        }
+        })
+        .await
     }
 
-    pub(super) fn request_get(&self, args: &Value) -> ToolResult {
+    pub(super) async fn request_get(&self, args: &Value) -> ToolResult {
         let ws_id = require!(args, "workspaceId");
         let req_id = require!(args, "requestId");
-        match self.requests.get_request(&ws_id, &req_id) {
+        let requests = self.requests.clone();
+        super::run_blocking(move || match requests.get_request(&ws_id, &req_id) {
             Ok(req) => ToolResult::json(&req),
             Err(e) => ToolResult::error(e.to_string()),
-        }
+        })
+        .await
     }
 
     pub(super) fn request_create(&self, args: &Value) -> ToolResult {

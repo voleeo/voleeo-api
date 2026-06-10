@@ -1,5 +1,6 @@
 import { open } from "@tauri-apps/plugin-dialog"
 import { useEffect, useState } from "react"
+import { useShallow } from "zustand/react/shallow"
 import { Glyph } from "@/components/Glyph"
 import {
   DropdownMenu,
@@ -34,7 +35,17 @@ export function WorkspaceSwitcher({
     pendingSettingsSection,
     pendingSettingsFocusKey,
     clearPendingSettings,
-  } = useUiStore()
+  } = useUiStore(
+    useShallow((s) => ({
+      workspaces: s.workspaces,
+      loadWorkspaces: s.loadWorkspaces,
+      openWorkspace: s.openWorkspace,
+      setActiveTool: s.setActiveTool,
+      pendingSettingsSection: s.pendingSettingsSection,
+      pendingSettingsFocusKey: s.pendingSettingsFocusKey,
+      clearPendingSettings: s.clearPendingSettings,
+    })),
+  )
   const {
     handleSwitch,
     pendingWorkspace,

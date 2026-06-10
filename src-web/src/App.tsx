@@ -38,8 +38,8 @@ const { workspaceId: startWorkspaceId } = StartupParamsSchema.parse({
 })
 
 export default function App() {
-  const { initialize } = useThemeStore()
-  const { openWorkspace } = useUiStore()
+  const initialize = useThemeStore((s) => s.initialize)
+  const openWorkspace = useUiStore((s) => s.openWorkspace)
   const initChrome = useChromeStore((s) => s.init)
 
   useMcpSync()

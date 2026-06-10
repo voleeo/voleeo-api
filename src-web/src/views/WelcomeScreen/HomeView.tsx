@@ -1,17 +1,13 @@
+import { getVersion } from "@tauri-apps/api/app"
 import { useEffect, useState } from "react"
 import { MonoLabel } from "@/components/Primitives"
 import { McpModal } from "@/layout/McpBridge/McpModal"
-import { commands } from "../../../../packages/types/bindings"
+import { useMcpEnabled } from "@/layout/McpBridge/useMcpEnabled"
 import { RecentWorkspaces } from "./RecentWorkspaces"
 import { WorkspaceTypeCard } from "./WorkspaceTypeCard"
 
 function McpStatusBadge({ onOpen }: { onOpen: () => void }) {
-  const [enabled, setEnabled] = useState<boolean | null>(null)
-  useEffect(() => {
-    commands.settingsGetMcp().then((res) => {
-      if (res.status === "ok") setEnabled(res.data.enabled)
-    })
-  }, [])
+  const enabled = useMcpEnabled()
   if (enabled === null) return null
   return (
     <button
@@ -33,9 +29,6 @@ function McpStatusBadge({ onOpen }: { onOpen: () => void }) {
   )
 }
 
-// TODO take from release
-const APP_VERSION = "0.0.0"
-
 type Mode = "api" | "import"
 
 interface HomeViewProps {
@@ -44,6 +37,14 @@ interface HomeViewProps {
 
 export function HomeView({ onSelect }: HomeViewProps) {
   const [showMcp, setShowMcp] = useState(false)
+  const [appVersion, setAppVersion] = useState("")
+
+  useEffect(() => {
+    getVersion()
+      .then(setAppVersion)
+      .catch(() => {})
+  }, [])
+
   return (
     <div className="relative flex-1 flex flex-col items-center justify-center overflow-hidden py-16 px-6">
       <div className="w-full max-w-[680px] flex flex-col gap-8">
@@ -88,7 +89,7 @@ export function HomeView({ onSelect }: HomeViewProps) {
       <div className="absolute bottom-4 left-0 right-0 flex flex-col items-center gap-2">
         <McpStatusBadge onOpen={() => setShowMcp(true)} />
         <span className="pointer-events-none">
-          <MonoLabel size={10}>{APP_VERSION}</MonoLabel>
+          <MonoLabel size={10}>{appVersion}</MonoLabel>
         </span>
       </div>
       {showMcp && <McpModal onClose={() => setShowMcp(false)} />}

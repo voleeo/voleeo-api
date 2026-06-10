@@ -2,6 +2,7 @@ import type React from "react"
 import { useContext } from "react"
 import { Ctx, DropLine } from "@/components/ApiRequestTree/types"
 import { gitChangeColor } from "@/components/tokens"
+import { cn } from "@/lib/utils"
 import { dragAttrs, RenameInput, type RowKind } from "./shared"
 
 interface Props {
@@ -79,7 +80,10 @@ export function LeafRow({
           <RenameInput id={id} kind={kind} defaultValue={name} />
         ) : (
           <span
-            className={`font-sans text-[0.857rem] text-fg truncate ${active ? "font-medium" : ""}`}
+            className={cn(
+              "font-sans text-[0.857rem] text-fg truncate",
+              active && "font-medium",
+            )}
             style={gitChange ? { color: gitChangeColor(gitChange) } : undefined}
           >
             {name}

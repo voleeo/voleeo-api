@@ -28,15 +28,19 @@ impl CookieJarStore {
     }
 
     fn dir(&self, workspace_id: &str) -> Result<PathBuf, VoleeoError> {
+        crate::validate_id(workspace_id)?;
         let dir = self.workspaces_dir.join(workspace_id);
         std::fs::create_dir_all(&dir).map_err(|e| VoleeoError::Storage(e.to_string()))?;
         Ok(dir)
     }
 
-    fn path(&self, workspace_id: &str, jar_id: &str) -> PathBuf {
-        self.workspaces_dir
+    fn path(&self, workspace_id: &str, jar_id: &str) -> Result<PathBuf, VoleeoError> {
+        crate::validate_id(workspace_id)?;
+        crate::validate_id(jar_id)?;
+        Ok(self
+            .workspaces_dir
             .join(workspace_id)
-            .join(format!("jar_{jar_id}.yaml"))
+            .join(format!("jar_{jar_id}.yaml")))
     }
 
     /// List all jars for a workspace, sorted by created_at. Returns at least
@@ -73,7 +77,7 @@ impl CookieJarStore {
     }
 
     pub fn get(&self, workspace_id: &str, jar_id: &str) -> Result<CookieJar, VoleeoError> {
-        let path = self.path(workspace_id, jar_id);
+        let path = self.path(workspace_id, jar_id)?;
         if !path.exists() {
             if jar_id == DEFAULT_JAR_ID {
                 return self.ensure_default(workspace_id);
@@ -87,7 +91,7 @@ impl CookieJarStore {
 
     pub fn save(&self, jar: &CookieJar) -> Result<(), VoleeoError> {
         self.dir(&jar.workspace_id)?;
-        let path = self.path(&jar.workspace_id, &jar.id);
+        let path = self.path(&jar.workspace_id, &jar.id)?;
         let content =
             serde_yaml::to_string(jar).map_err(|e| VoleeoError::Storage(e.to_string()))?;
         std::fs::write(&path, content).map_err(|e| VoleeoError::Storage(e.to_string()))
@@ -107,7 +111,7 @@ impl CookieJarStore {
                 "Workspace must keep at least one cookie jar".to_string(),
             ));
         }
-        let path = self.path(workspace_id, jar_id);
+        let path = self.path(workspace_id, jar_id)?;
         if path.exists() {
             std::fs::remove_file(&path).map_err(|e| VoleeoError::Storage(e.to_string()))?;
         }
@@ -116,7 +120,7 @@ impl CookieJarStore {
 
     /// Ensure the default jar exists for the workspace. Idempotent.
     pub fn ensure_default(&self, workspace_id: &str) -> Result<CookieJar, VoleeoError> {
-        let path = self.path(workspace_id, DEFAULT_JAR_ID);
+        let path = self.path(workspace_id, DEFAULT_JAR_ID)?;
         if path.exists() {
             let content =
                 std::fs::read_to_string(&path).map_err(|e| VoleeoError::Storage(e.to_string()))?;

@@ -9,6 +9,7 @@ import CodeMirror, {
 } from "@uiw/react-codemirror"
 import { useMemo, useRef, useState } from "react"
 import { Glyph } from "@/components/Glyph"
+import { cn } from "@/lib/utils"
 import { useThemeStore } from "@/store/theme"
 import { cmEditorTheme } from "../cmEditorTheme"
 import { foldingExtension } from "../cmFolding"
@@ -85,7 +86,10 @@ export function CodeBody({
     <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
       {filterOpen && (
         <div
-          className={`shrink-0 flex items-center gap-2 px-3 py-1.5 border-b bg-surface ${filterResult.error ? "border-error/60" : "border-border"}`}
+          className={cn(
+            "shrink-0 flex items-center gap-2 px-3 py-1.5 border-b bg-surface",
+            filterResult.error ? "border-error/60" : "border-border",
+          )}
         >
           <Glyph
             kind="filter"
@@ -104,7 +108,10 @@ export function CodeBody({
           />
           {filterQuery.trim() && (
             <span
-              className={`font-mono text-[0.714rem] shrink-0 ${filterResult.error ? "text-error" : "text-muted"}`}
+              className={cn(
+                "font-mono text-[0.714rem] shrink-0",
+                filterResult.error ? "text-error" : "text-muted",
+              )}
             >
               {filterResult.error
                 ? filterResult.error

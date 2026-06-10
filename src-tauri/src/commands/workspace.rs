@@ -1,4 +1,4 @@
-use crate::commands::request::{transform_auth_secrets, Direction, Stores};
+use crate::commands::request::{run_blocking, transform_auth_secrets, Direction, Stores};
 use crate::state::AppState;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -63,20 +63,25 @@ pub(crate) fn resolve_workspace_path(app_data_dir: &Path, workspace_id: &str) ->
 #[tauri::command]
 #[specta::specta]
 pub async fn list_workspaces(state: State<'_, AppState>) -> Result<Vec<Workspace>, VoleeoError> {
-    let mut workspaces = state.workspaces.list().map_err(VoleeoError::from)?;
-    // Recover any workspace hidden by an unfinished merge, then re-list.
-    if heal_unfinished_merges(&state.app_data_dir, &workspaces) {
-        workspaces = state.workspaces.list().map_err(VoleeoError::from)?;
-    }
     let stores = Stores::from(&state);
-    for ws in &mut workspaces {
-        // sync_dir is derived from the symlink, not stored in YAML.
-        ws.sync_dir = derive_sync_dir(&state.app_data_dir, &ws.id);
-        // Auth secrets travel plaintext over IPC; ciphertext on disk.
-        let id = ws.id.clone();
-        transform_auth_secrets(&mut ws.auth, &id, &stores, Direction::Decrypt)?;
-    }
-    Ok(workspaces)
+    let app_data_dir = state.app_data_dir.clone();
+    // read_dir + git2 heal + YAML reads all block; keep them off the runtime.
+    run_blocking(move || {
+        let mut workspaces = stores.workspaces.list()?;
+        // Recover any workspace hidden by an unfinished merge, then re-list.
+        if heal_unfinished_merges(&app_data_dir, &workspaces) {
+            workspaces = stores.workspaces.list()?;
+        }
+        for ws in &mut workspaces {
+            // sync_dir is derived from the symlink, not stored in YAML.
+            ws.sync_dir = derive_sync_dir(&app_data_dir, &ws.id);
+            // Auth secrets travel plaintext over IPC; ciphertext on disk.
+            let id = ws.id.clone();
+            transform_auth_secrets(&mut ws.auth, &id, &stores, Direction::Decrypt)?;
+        }
+        Ok(workspaces)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -86,7 +91,8 @@ pub async fn update_workspace_headers(
     workspace_id: String,
     headers: Vec<RequestParameter>,
 ) -> Result<(), VoleeoError> {
-    state.workspaces.update_headers(&workspace_id, headers)
+    let workspaces = state.workspaces.clone();
+    run_blocking(move || workspaces.update_headers(&workspace_id, headers)).await
 }
 
 #[tauri::command]
@@ -97,8 +103,11 @@ pub async fn update_workspace_auth(
     mut auth: AuthConfig,
 ) -> Result<(), VoleeoError> {
     let stores = Stores::from(&state);
-    transform_auth_secrets(&mut auth, &workspace_id, &stores, Direction::Encrypt)?;
-    state.workspaces.update_auth(&workspace_id, auth)
+    run_blocking(move || {
+        transform_auth_secrets(&mut auth, &workspace_id, &stores, Direction::Encrypt)?;
+        stores.workspaces.update_auth(&workspace_id, auth)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -108,9 +117,8 @@ pub async fn update_workspace_dns_overrides(
     workspace_id: String,
     overrides: Vec<voleeo_core::DnsOverride>,
 ) -> Result<(), VoleeoError> {
-    state
-        .workspaces
-        .update_dns_overrides(&workspace_id, overrides)
+    let workspaces = state.workspaces.clone();
+    run_blocking(move || workspaces.update_dns_overrides(&workspace_id, overrides)).await
 }
 
 #[tauri::command]
@@ -121,12 +129,18 @@ pub async fn create_workspace(
     encrypted: Option<bool>,
 ) -> Result<Workspace, VoleeoError> {
     let enc = encrypted.unwrap_or(false);
-    let ws = state.workspaces.create(name, enc)?;
-    if enc {
-        let key = workspace_key::generate_key();
-        workspace_key::save_key(&ws.id, &key, &state.app_data_dir)?;
-    }
-    Ok(ws)
+    let workspaces = state.workspaces.clone();
+    let app_data_dir = state.app_data_dir.clone();
+    // create() writes YAML; save_key touches the OS keychain — both block.
+    run_blocking(move || {
+        let ws = workspaces.create(name, enc)?;
+        if enc {
+            let key = workspace_key::generate_key();
+            workspace_key::save_key(&ws.id, &key, &app_data_dir)?;
+        }
+        Ok(ws)
+    })
+    .await
 }
 
 /// Returns the 8×8 hex backup key for display to the user.
@@ -137,8 +151,12 @@ pub async fn workspace_get_key_display(
     state: State<'_, AppState>,
     workspace_id: String,
 ) -> Result<String, VoleeoError> {
-    let key = workspace_key::load_key(&workspace_id, &state.app_data_dir)?;
-    Ok(workspace_key::encode_key_display(&key))
+    let app_data_dir = state.app_data_dir.clone();
+    run_blocking(move || {
+        let key = workspace_key::load_key(&workspace_id, &app_data_dir)?;
+        Ok(workspace_key::encode_key_display(&key))
+    })
+    .await
 }
 
 /// Enable encryption on an existing workspace: generate + store a key,
@@ -150,27 +168,35 @@ pub async fn workspace_enable_encryption(
     state: State<'_, AppState>,
     workspace_id: String,
 ) -> Result<String, VoleeoError> {
-    let key = workspace_key::generate_key();
-    workspace_key::save_key(&workspace_id, &key, &state.app_data_dir)?;
+    let workspaces = state.workspaces.clone();
+    let app_data_dir = state.app_data_dir.clone();
+    let secrets = state.secrets.clone();
+    // Keychain save, secret re-encrypt+persist, and YAML save all block; the
+    // secrets guard is taken via blocking_write so it never crosses an .await.
+    run_blocking(move || {
+        let key = workspace_key::generate_key();
+        workspace_key::save_key(&workspace_id, &key, &app_data_dir)?;
 
-    // Re-encrypt any existing plaintext secret for this workspace.
-    {
-        let mut secrets = state.secrets.write().await;
-        if let Some(plain) = secrets.get(&workspace_id).map(|s| s.to_owned()) {
-            if !workspace_key::is_encrypted(&plain) {
-                secrets.set_encrypted(workspace_id.clone(), &plain, &key)?;
+        // Re-encrypt any existing plaintext secret for this workspace.
+        {
+            let mut secrets = secrets.blocking_write();
+            if let Some(plain) = secrets.get(&workspace_id).map(|s| s.to_owned()) {
+                if !workspace_key::is_encrypted(&plain) {
+                    secrets.set_encrypted(workspace_id.clone(), &plain, &key)?;
+                }
             }
         }
-    }
 
-    // Persist workspace.encrypted = true + a key-verification token.
-    let key_check = workspace_key::encrypt(&workspace_id, &key)?;
-    let mut ws = state.workspaces.get(&workspace_id)?;
-    ws.encrypted = true;
-    ws.key_check = Some(key_check);
-    state.workspaces.save(&ws)?;
+        // Persist workspace.encrypted = true + a key-verification token.
+        let key_check = workspace_key::encrypt(&workspace_id, &key)?;
+        let mut ws = workspaces.get(&workspace_id)?;
+        ws.encrypted = true;
+        ws.key_check = Some(key_check);
+        workspaces.save(&ws)?;
 
-    Ok(workspace_key::encode_key_display(&key))
+        Ok(workspace_key::encode_key_display(&key))
+    })
+    .await
 }
 
 /// Import a backup key, replacing the current one. When the workspace has a
@@ -183,30 +209,36 @@ pub async fn workspace_import_key(
     workspace_id: String,
     display_key: String,
 ) -> Result<(), VoleeoError> {
-    let key = workspace_key::decode_key_display(&display_key)?;
+    let workspaces = state.workspaces.clone();
+    let app_data_dir = state.app_data_dir.clone();
+    // YAML read + keychain save both block.
+    run_blocking(move || {
+        let key = workspace_key::decode_key_display(&display_key)?;
 
-    // Verify the key is correct when we have a token to check against.
-    if let Ok(ws) = state.workspaces.get(&workspace_id) {
-        if let Some(token) = &ws.key_check {
-            let plaintext = workspace_key::decrypt(token, &key).map_err(|_| {
-                VoleeoError::Crypto(
-                    "This key does not match the one used to encrypt this workspace. \
-                     Please check that you're importing the correct backup key."
-                        .to_string(),
-                )
-            })?;
-            if plaintext != workspace_id {
-                return Err(VoleeoError::Crypto(
-                    "Key verification failed — the decrypted token did not match \
-                     this workspace. Please import the correct backup key."
-                        .to_string(),
-                ));
+        // Verify the key is correct when we have a token to check against.
+        if let Ok(ws) = workspaces.get(&workspace_id) {
+            if let Some(token) = &ws.key_check {
+                let plaintext = workspace_key::decrypt(token, &key).map_err(|_| {
+                    VoleeoError::Crypto(
+                        "This key does not match the one used to encrypt this workspace. \
+                         Please check that you're importing the correct backup key."
+                            .to_string(),
+                    )
+                })?;
+                if plaintext != workspace_id {
+                    return Err(VoleeoError::Crypto(
+                        "Key verification failed — the decrypted token did not match \
+                         this workspace. Please import the correct backup key."
+                            .to_string(),
+                    ));
+                }
             }
         }
-    }
 
-    workspace_key::save_key(&workspace_id, &key, &state.app_data_dir)?;
-    Ok(())
+        workspace_key::save_key(&workspace_id, &key, &app_data_dir)?;
+        Ok(())
+    })
+    .await
 }
 
 /// Encrypt a value with the workspace key → `enc:v1:…`. Backs the
@@ -218,8 +250,12 @@ pub async fn workspace_encrypt_value(
     workspace_id: String,
     plaintext: String,
 ) -> Result<String, VoleeoError> {
-    let key = workspace_key::load_key(&workspace_id, &state.app_data_dir)?;
-    workspace_key::encrypt(&plaintext, &key)
+    let app_data_dir = state.app_data_dir.clone();
+    run_blocking(move || {
+        let key = workspace_key::load_key(&workspace_id, &app_data_dir)?;
+        workspace_key::encrypt(&plaintext, &key)
+    })
+    .await
 }
 
 /// Decrypt a ciphertext produced by `workspace_encrypt_value` back to plaintext.
@@ -231,8 +267,12 @@ pub async fn workspace_decrypt_value(
     workspace_id: String,
     ciphertext: String,
 ) -> Result<String, VoleeoError> {
-    let key = workspace_key::load_key(&workspace_id, &state.app_data_dir)?;
-    workspace_key::decrypt(&ciphertext, &key)
+    let app_data_dir = state.app_data_dir.clone();
+    run_blocking(move || {
+        let key = workspace_key::load_key(&workspace_id, &app_data_dir)?;
+        workspace_key::decrypt(&ciphertext, &key)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -241,7 +281,8 @@ pub async fn workspace_has_key(
     state: State<'_, AppState>,
     workspace_id: String,
 ) -> Result<bool, VoleeoError> {
-    Ok(workspace_key::load_key(&workspace_id, &state.app_data_dir).is_ok())
+    let app_data_dir = state.app_data_dir.clone();
+    run_blocking(move || Ok(workspace_key::load_key(&workspace_id, &app_data_dir).is_ok())).await
 }
 
 /// Permanently delete a workspace and its encryption key (if any).
@@ -251,13 +292,23 @@ pub async fn delete_workspace(
     state: State<'_, AppState>,
     workspace_id: String,
 ) -> Result<(), VoleeoError> {
-    state.workspaces.delete(&workspace_id)?;
-    // Best-effort cleanup of secrets, encryption key, and machine-local env files.
-    let _ = state.secrets.write().await.remove(&workspace_id);
-    workspace_key::delete_key(&workspace_id, &state.app_data_dir);
-    let _ = state.environments.delete_workspace(&workspace_id);
-    let _ = state.selections.delete_workspace(&workspace_id);
-    Ok(())
+    let workspaces = state.workspaces.clone();
+    let environments = state.environments.clone();
+    let selections = state.selections.clone();
+    let secrets = state.secrets.clone();
+    let app_data_dir = state.app_data_dir.clone();
+    // remove_dir_all, keychain delete, and YAML cleanup all block; the secrets
+    // guard is taken via blocking_write so it never crosses an .await.
+    run_blocking(move || {
+        workspaces.delete(&workspace_id)?;
+        // Best-effort cleanup of secrets, encryption key, and machine-local env files.
+        let _ = secrets.blocking_write().remove(&workspace_id);
+        workspace_key::delete_key(&workspace_id, &app_data_dir);
+        let _ = environments.delete_workspace(&workspace_id);
+        let _ = selections.delete_workspace(&workspace_id);
+        Ok(())
+    })
+    .await
 }
 
 #[tauri::command]
@@ -267,13 +318,18 @@ pub async fn rename_workspace(
     workspace_id: String,
     name: String,
 ) -> Result<Workspace, VoleeoError> {
-    let mut ws = state.workspaces.get(&workspace_id)?;
-    ws.name = name;
-    ws.updated_at = chrono::Utc::now().to_rfc3339();
-    state.workspaces.save(&ws)?;
-    // Re-attach sync dir (YAML never stores it; we derive it from symlink).
-    ws.sync_dir = derive_sync_dir(&state.app_data_dir, &workspace_id);
-    Ok(ws)
+    let workspaces = state.workspaces.clone();
+    let app_data_dir = state.app_data_dir.clone();
+    run_blocking(move || {
+        let mut ws = workspaces.get(&workspace_id)?;
+        ws.name = name;
+        ws.updated_at = chrono::Utc::now().to_rfc3339();
+        workspaces.save(&ws)?;
+        // Re-attach sync dir (YAML never stores it; we derive it from symlink).
+        ws.sync_dir = derive_sync_dir(&app_data_dir, &workspace_id);
+        Ok(ws)
+    })
+    .await
 }
 
 /// Absolute path of the workspace's data dir — the symlink target when synced,
@@ -299,67 +355,73 @@ pub async fn workspace_set_sync_dir(
     workspace_id: String,
     sync_dir: Option<String>,
 ) -> Result<Workspace, VoleeoError> {
-    let internal_dir = state.app_data_dir.join("workspaces").join(&workspace_id);
+    let workspaces = state.workspaces.clone();
+    let app_data_dir = state.app_data_dir.clone();
+    // Symlink + recursive copy + remove_dir_all all block; keep off the runtime.
+    run_blocking(move || {
+        let internal_dir = app_data_dir.join("workspaces").join(&workspace_id);
 
-    match &sync_dir {
-        Some(new_dir_str) => {
-            let new_dir = PathBuf::from(new_dir_str);
+        match &sync_dir {
+            Some(new_dir_str) => {
+                let new_dir = PathBuf::from(new_dir_str);
 
-            // Copy from the current target if already symlinked, else internal_dir.
-            let copy_src = if internal_dir.is_symlink() {
-                std::fs::read_link(&internal_dir)
-                    .map_err(|e| VoleeoError::Storage(format!("read symlink: {e}")))?
-            } else {
-                internal_dir.clone()
-            };
+                // Copy from the current target if already symlinked, else internal_dir.
+                let copy_src = if internal_dir.is_symlink() {
+                    std::fs::read_link(&internal_dir)
+                        .map_err(|e| VoleeoError::Storage(format!("read symlink: {e}")))?
+                } else {
+                    internal_dir.clone()
+                };
 
-            copy_workspace_files(&copy_src, &new_dir)?;
-            ensure_gitignore(&new_dir)?;
+                copy_workspace_files(&copy_src, &new_dir)?;
+                ensure_gitignore(&new_dir)?;
 
-            // Remove the old internal_dir entry (real dir or previous symlink).
-            if internal_dir.is_symlink() {
-                std::fs::remove_file(&internal_dir)
-                    .map_err(|e| VoleeoError::Storage(format!("remove symlink: {e}")))?;
-            } else {
-                std::fs::remove_dir_all(&internal_dir)
-                    .map_err(|e| VoleeoError::Storage(format!("remove dir: {e}")))?;
+                // Remove the old internal_dir entry (real dir or previous symlink).
+                if internal_dir.is_symlink() {
+                    std::fs::remove_file(&internal_dir)
+                        .map_err(|e| VoleeoError::Storage(format!("remove symlink: {e}")))?;
+                } else {
+                    std::fs::remove_dir_all(&internal_dir)
+                        .map_err(|e| VoleeoError::Storage(format!("remove dir: {e}")))?;
+                }
+
+                // Symlink internal_dir → new_dir; all stores read/write through it.
+                #[cfg(unix)]
+                std::os::unix::fs::symlink(&new_dir, &internal_dir)
+                    .map_err(|e| VoleeoError::Storage(format!("create symlink: {e}")))?;
+
+                #[cfg(not(unix))]
+                return Err(VoleeoError::InvalidConfig(
+                    "Directory sync requires a Unix system (macOS / Linux)".to_string(),
+                ));
             }
+            None => {
+                // Undo only if a symlink exists: restore a real dir, copy files back.
+                if internal_dir.is_symlink() {
+                    let target = std::fs::read_link(&internal_dir)
+                        .map_err(|e| VoleeoError::Storage(format!("read symlink: {e}")))?;
 
-            // Symlink internal_dir → new_dir; all stores read/write through it.
-            #[cfg(unix)]
-            std::os::unix::fs::symlink(&new_dir, &internal_dir)
-                .map_err(|e| VoleeoError::Storage(format!("create symlink: {e}")))?;
-
-            #[cfg(not(unix))]
-            return Err(VoleeoError::InvalidConfig(
-                "Directory sync requires a Unix system (macOS / Linux)".to_string(),
-            ));
-        }
-        None => {
-            // Undo only if a symlink exists: restore a real dir, copy files back.
-            if internal_dir.is_symlink() {
-                let target = std::fs::read_link(&internal_dir)
-                    .map_err(|e| VoleeoError::Storage(format!("read symlink: {e}")))?;
-
-                std::fs::remove_file(&internal_dir)
-                    .map_err(|e| VoleeoError::Storage(format!("remove symlink: {e}")))?;
-                std::fs::create_dir_all(&internal_dir)
-                    .map_err(|e| VoleeoError::Storage(format!("create dir: {e}")))?;
-                copy_workspace_files(&target, &internal_dir)?;
+                    std::fs::remove_file(&internal_dir)
+                        .map_err(|e| VoleeoError::Storage(format!("remove symlink: {e}")))?;
+                    std::fs::create_dir_all(&internal_dir)
+                        .map_err(|e| VoleeoError::Storage(format!("create dir: {e}")))?;
+                    copy_workspace_files(&target, &internal_dir)?;
+                }
             }
         }
-    }
 
-    // sync_dir is machine-local — never persist it; the symlink is the source of
-    // truth (re-derived below).
-    let mut ws = state.workspaces.get(&workspace_id)?;
-    ws.sync_dir = None; // ensure it never lands in YAML
-    ws.updated_at = chrono::Utc::now().to_rfc3339();
-    state.workspaces.save(&ws)?;
+        // sync_dir is machine-local — never persist it; the symlink is the source
+        // of truth (re-derived below).
+        let mut ws = workspaces.get(&workspace_id)?;
+        ws.sync_dir = None; // ensure it never lands in YAML
+        ws.updated_at = chrono::Utc::now().to_rfc3339();
+        workspaces.save(&ws)?;
 
-    // Re-attach sync dir from the symlink for the UI response.
-    ws.sync_dir = derive_sync_dir(&state.app_data_dir, &workspace_id);
-    Ok(ws)
+        // Re-attach sync dir from the symlink for the UI response.
+        ws.sync_dir = derive_sync_dir(&app_data_dir, &workspace_id);
+        Ok(ws)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -368,7 +430,10 @@ pub async fn workspace_open_folder(
     state: State<'_, AppState>,
     folder_path: String,
 ) -> Result<Workspace, VoleeoError> {
-    register_workspace_folder(&state.app_data_dir, &PathBuf::from(&folder_path))
+    let app_data_dir = state.app_data_dir.clone();
+    // read_to_string + git2 heal + symlink ops all block; keep off the runtime.
+    run_blocking(move || register_workspace_folder(&app_data_dir, &PathBuf::from(&folder_path)))
+        .await
 }
 
 /// Adopt a folder containing a `workspace.yaml` as a workspace: parse it and

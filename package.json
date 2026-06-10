@@ -9,7 +9,11 @@
     "build": "tauri build",
     "codegen": "cd src-tauri && TAURI_CONFIG='{\"bundle\":{\"externalBin\":[]}}' cargo run --bin codegen",
     "mcp-bridge:build": "cargo build --bin voleeo-mcp-bridge",
-    "typecheck": "cd src-web && bun run typecheck"
+    "typecheck": "cd src-web && bun run typecheck",
+    "test": "cd src-web && bun run test",
+    "lint": "cd src-web && bun run lint",
+    "lint:fix": "cd src-web && bun run lint:fix",
+    "format": "cd src-web && bun run format"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0",

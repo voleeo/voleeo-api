@@ -2,8 +2,9 @@ import type {
   GitEntity,
   GitEntityConflict,
 } from "../../../../packages/types/bindings"
-import { buildConflicts, mergeEntity } from "./engine"
+import { buildConflicts } from "./engine"
 import { type FolderRef, innerOf, locationOf, wrap } from "./entity"
+import { mergeEntity } from "./merge"
 import { SPECS_BY_TYPE } from "./specs"
 import { type Choice, type ConflictEntity, nodeKindToType } from "./types"
 

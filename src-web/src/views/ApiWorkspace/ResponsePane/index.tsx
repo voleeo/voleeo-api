@@ -119,7 +119,11 @@ export function ResponsePane() {
               const c = statusColor(response.status)
               return (
                 <div
-                  className={`px-2 py-[3px] border rounded-[3px] font-mono text-[0.786rem] font-bold shrink-0 ${c.className} ${c.textClass}`}
+                  className={cn(
+                    "px-2 py-[3px] border rounded-[3px] font-mono text-[0.786rem] font-bold shrink-0",
+                    c.className,
+                    c.textClass,
+                  )}
                 >
                   {response.status} {response.statusText || "—"}
                 </div>

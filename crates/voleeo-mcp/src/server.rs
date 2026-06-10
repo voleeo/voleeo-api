@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use subtle::ConstantTimeEq;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixListener;
 use tokio::sync::RwLock;
@@ -80,14 +81,17 @@ async fn handle_connection(
     }
     let presented = line.trim();
     let expected = token.read().await;
-    match expected.as_ref() {
-        Some(t) if t == presented => {}
-        _ => {
-            let _ = writer.write_all(b"ERR invalid token\n").await;
-            return;
-        }
-    }
+    // Constant-time compare so a timing side channel can't reveal the token
+    // prefix byte by byte (length still leaks, which is unavoidable here).
+    let ok = expected
+        .as_ref()
+        .map(|t| bool::from(t.as_bytes().ct_eq(presented.as_bytes())))
+        .unwrap_or(false);
     drop(expected);
+    if !ok {
+        let _ = writer.write_all(b"ERR invalid token\n").await;
+        return;
+    }
     let _ = writer.write_all(b"OK\n").await;
 
     // ── JSON-RPC message loop ──────────────────────────────────────────────

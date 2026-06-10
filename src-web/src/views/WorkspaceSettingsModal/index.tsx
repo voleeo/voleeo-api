@@ -1,4 +1,5 @@
 import { useRef, useState } from "react"
+import { useShallow } from "zustand/react/shallow"
 import { Glyph } from "@/components/Glyph"
 import { ManagementModal } from "@/components/ManagementModal"
 import { cn } from "@/lib/utils"
@@ -39,7 +40,13 @@ export function WorkspaceSettingsModal({
   initialSection,
   initialFocusKey,
 }: WorkspaceSettingsModalProps) {
-  const { activeWorkspaceId, workspaces, loadWorkspaces } = useUiStore()
+  const { activeWorkspaceId, workspaces, loadWorkspaces } = useUiStore(
+    useShallow((s) => ({
+      activeWorkspaceId: s.activeWorkspaceId,
+      workspaces: s.workspaces,
+      loadWorkspaces: s.loadWorkspaces,
+    })),
+  )
   const workspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null
   if (!workspace) return null
   return (

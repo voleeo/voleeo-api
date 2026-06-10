@@ -5,7 +5,7 @@ import { TopBar } from "@/layout/TopBar"
 import { useUiStore } from "@/store/workspace"
 
 export function MainLayout() {
-  const { activeTool } = useUiStore()
+  const activeTool = useUiStore((s) => s.activeTool)
 
   return (
     <div

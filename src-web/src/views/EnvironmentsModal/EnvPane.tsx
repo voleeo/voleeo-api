@@ -30,7 +30,7 @@ export function EnvPane({
   focusKey?: string
 }) {
   const [viewMode, setViewMode] = useState<ViewMode>("form")
-  const { update } = useEnvironmentStore()
+  const update = useEnvironmentStore((s) => s.update)
 
   function setShared(shared: boolean) {
     if (shared === env.shared) return

@@ -1,6 +1,7 @@
 import { useContext } from "react"
 import { Ctx } from "@/components/ApiRequestTree/types"
 import { C_WS } from "@/components/tokens"
+import { cn } from "@/lib/utils"
 import type { TreeNode } from "@/store/requests"
 import { useRequestStore } from "@/store/requests"
 import { LeafRow } from "./LeafRow"
@@ -44,7 +45,7 @@ export function ConnectionRow({
       statusDot={
         dotClass && (
           <span
-            className={`ml-auto w-2 h-2 rounded-full shrink-0 ${dotClass}`}
+            className={cn("ml-auto w-2 h-2 rounded-full shrink-0", dotClass)}
           />
         )
       }

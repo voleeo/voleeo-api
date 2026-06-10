@@ -4,8 +4,8 @@ import { Spinner } from "@/components/ui/spinner"
 import { cn } from "@/lib/utils"
 import { useHttpStore } from "@/store/http"
 import { useRequestStore } from "@/store/requests"
+import { SentRequestSummary } from "@/views/ApiWorkspace/SentRequestInspector/SentRequestSummary"
 import type { HttpResponse } from "../../../../../../packages/types/bindings"
-import { SentRequestSummary } from "../../SentRequestInspector/SentRequestSummary"
 import {
   buildEntries,
   type Entry,

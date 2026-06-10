@@ -4,22 +4,26 @@ use serde_json::Value;
 use voleeo_core::EnvironmentVariable;
 
 impl ApiBackend {
-    pub(super) fn env_list(&self, args: &Value) -> ToolResult {
+    pub(super) async fn env_list(&self, args: &Value) -> ToolResult {
         let ws_id = require!(args, "workspaceId");
-        match self.environments.list(&ws_id) {
+        let environments = self.environments.clone();
+        super::run_blocking(move || match environments.list(&ws_id) {
             Ok(envs) => ToolResult::json(&envs),
             Err(e) => ToolResult::error(e.to_string()),
-        }
+        })
+        .await
     }
 
-    pub(super) fn env_get(&self, args: &Value) -> ToolResult {
+    pub(super) async fn env_get(&self, args: &Value) -> ToolResult {
         let ws_id = require!(args, "workspaceId");
         let env_id = require!(args, "envId");
-        match self.environments.get(&ws_id, &env_id) {
+        let environments = self.environments.clone();
+        super::run_blocking(move || match environments.get(&ws_id, &env_id) {
             Ok(Some(env)) => ToolResult::json(&env),
             Ok(None) => ToolResult::error("Environment not found"),
             Err(e) => ToolResult::error(e.to_string()),
-        }
+        })
+        .await
     }
 
     pub(super) fn env_create(&self, args: &Value) -> ToolResult {

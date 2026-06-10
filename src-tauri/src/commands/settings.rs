@@ -1,4 +1,4 @@
-use tauri::State;
+use tauri::{Emitter, State};
 use voleeo_core::VoleeoError;
 
 use crate::state::AppState;
@@ -21,6 +21,7 @@ pub async fn settings_get_mcp(state: State<'_, AppState>) -> Result<McpSettings,
 #[tauri::command]
 #[specta::specta]
 pub async fn settings_set_mcp_enabled(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     enabled: bool,
 ) -> Result<McpSettings, VoleeoError> {
@@ -42,7 +43,15 @@ pub async fn settings_set_mcp_enabled(
     }
 
     state.save_settings().await;
+    // Notify status indicators in every window — they fetch once on mount.
+    app.emit("mcp:enabled:changed", McpEnabledChangedEvent { enabled })
+        .ok();
     settings_get_mcp(state).await
+}
+
+#[derive(serde::Serialize, Clone)]
+struct McpEnabledChangedEvent {
+    enabled: bool,
 }
 
 #[tauri::command]

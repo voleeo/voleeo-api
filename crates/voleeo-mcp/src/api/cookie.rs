@@ -12,34 +12,46 @@ use serde_json::Value;
 use voleeo_core::{SameSite, StoredCookie, VoleeoError};
 
 impl ApiBackend {
-    pub(super) fn cookie_list_jars(&self, args: &Value) -> ToolResult {
+    pub(super) async fn cookie_list_jars(&self, args: &Value) -> ToolResult {
         let ws_id = require!(args, "workspaceId");
-        let mut jars = match self.cookies.list(&ws_id) {
-            Ok(j) => j,
-            Err(e) => return ToolResult::error(e.to_string()),
-        };
-        // Decrypt values so the AI sees the same plaintext the UI sees.
-        // If the workspace is encrypted but the keychain is unavailable we'd
-        // rather show ciphertext than fail the whole list call.
-        for jar in jars.iter_mut() {
-            if let Err(e) = self.decrypt_cookies(jar) {
-                eprintln!("[mcp] cookie.list_jars decrypt failed for {}: {e}", jar.id);
+        let cookies = self.cookies.clone();
+        let workspaces = self.workspaces.clone();
+        let app_data_dir = self.app_data_dir.clone();
+        super::run_blocking(move || {
+            let mut jars = match cookies.list(&ws_id) {
+                Ok(j) => j,
+                Err(e) => return ToolResult::error(e.to_string()),
+            };
+            // Decrypt values so the AI sees the same plaintext the UI sees.
+            // If the workspace is encrypted but the keychain is unavailable we'd
+            // rather show ciphertext than fail the whole list call.
+            for jar in jars.iter_mut() {
+                if let Err(e) = decrypt_jar(&workspaces, &app_data_dir, jar) {
+                    eprintln!("[mcp] cookie.list_jars decrypt failed for {}: {e}", jar.id);
+                }
             }
-        }
-        ToolResult::json(&jars)
+            ToolResult::json(&jars)
+        })
+        .await
     }
 
-    pub(super) fn cookie_get_jar(&self, args: &Value) -> ToolResult {
+    pub(super) async fn cookie_get_jar(&self, args: &Value) -> ToolResult {
         let ws_id = require!(args, "workspaceId");
         let jar_id = require!(args, "jarId");
-        let mut jar = match self.cookies.get(&ws_id, &jar_id) {
-            Ok(j) => j,
-            Err(e) => return ToolResult::error(e.to_string()),
-        };
-        if let Err(e) = self.decrypt_cookies(&mut jar) {
-            return ToolResult::error(e.to_string());
-        }
-        ToolResult::json(&jar)
+        let cookies = self.cookies.clone();
+        let workspaces = self.workspaces.clone();
+        let app_data_dir = self.app_data_dir.clone();
+        super::run_blocking(move || {
+            let mut jar = match cookies.get(&ws_id, &jar_id) {
+                Ok(j) => j,
+                Err(e) => return ToolResult::error(e.to_string()),
+            };
+            if let Err(e) = decrypt_jar(&workspaces, &app_data_dir, &mut jar) {
+                return ToolResult::error(e.to_string());
+            }
+            ToolResult::json(&jar)
+        })
+        .await
     }
 
     pub(super) fn cookie_set_active_jar(&self, args: &Value) -> ToolResult {
@@ -168,6 +180,26 @@ impl ApiBackend {
             Err(e) => ToolResult::error(e.to_string()),
         }
     }
+}
+
+/// Off-`self` mirror of `ApiBackend::decrypt_cookies` for use inside
+/// `spawn_blocking` (which needs `'static` captures, so it can't borrow `self`).
+fn decrypt_jar(
+    workspaces: &voleeo_storage::WorkspaceStore,
+    app_data_dir: &std::path::Path,
+    jar: &mut voleeo_core::CookieJar,
+) -> Result<(), VoleeoError> {
+    if !voleeo_cookies::crypto::jar_needs_key(&jar.cookies) {
+        return Ok(());
+    }
+    let ws = workspaces.get(&jar.workspace_id)?;
+    if !ws.encrypted {
+        return Err(VoleeoError::InvalidConfig(
+            "workspace_encryption_required".to_string(),
+        ));
+    }
+    let key = voleeo_crypto::load_key(&jar.workspace_id, app_data_dir)?;
+    voleeo_cookies::crypto::decrypt_values(&mut jar.cookies, &key)
 }
 
 fn parse_same_site(s: &str) -> Option<SameSite> {

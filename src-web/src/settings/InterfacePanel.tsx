@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { useShallow } from "zustand/react/shallow"
 import {
   Select,
   SelectContent,
@@ -50,7 +51,20 @@ export function InterfacePanel() {
     setFontSize,
     setEditorFontFamily,
     setEditorFontSize,
-  } = useInterfaceStore()
+  } = useInterfaceStore(
+    useShallow((s) => ({
+      workspaceBehavior: s.workspaceBehavior,
+      fontFamily: s.fontFamily,
+      fontSize: s.fontSize,
+      editorFontFamily: s.editorFontFamily,
+      editorFontSize: s.editorFontSize,
+      setWorkspaceBehavior: s.setWorkspaceBehavior,
+      setFontFamily: s.setFontFamily,
+      setFontSize: s.setFontSize,
+      setEditorFontFamily: s.setEditorFontFamily,
+      setEditorFontSize: s.setEditorFontSize,
+    })),
+  )
 
   const [systemFonts, setSystemFonts] = useState<string[]>([])
 
@@ -153,10 +167,10 @@ function CustomTitleBarRow() {
     <div className="flex items-center justify-between gap-4">
       <div>
         <label className="block text-[0.929rem] text-fg font-semibold">
-          Custom title bar
+          Unified title bar
         </label>
         <p className="text-[0.857rem] text-muted mt-0.5">
-          Window controls in the toolbar instead of a native title bar.
+          Merge window controls into the toolbar. Restarts the app.
         </p>
       </div>
       <Switch

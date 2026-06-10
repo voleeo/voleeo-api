@@ -40,27 +40,35 @@ impl EnvironmentStore {
     }
 
     fn shared_dir(&self, workspace_id: &str) -> Result<PathBuf, VoleeoError> {
+        crate::validate_id(workspace_id)?;
         let dir = self.workspaces_dir.join(workspace_id);
         std::fs::create_dir_all(&dir).map_err(|e| VoleeoError::Storage(e.to_string()))?;
         Ok(dir)
     }
 
     fn local_dir(&self, workspace_id: &str) -> Result<PathBuf, VoleeoError> {
+        crate::validate_id(workspace_id)?;
         let dir = self.envs_local_dir.join(workspace_id);
         std::fs::create_dir_all(&dir).map_err(|e| VoleeoError::Storage(e.to_string()))?;
         Ok(dir)
     }
 
-    fn shared_path(&self, workspace_id: &str, id: &str) -> PathBuf {
-        self.workspaces_dir
+    fn shared_path(&self, workspace_id: &str, id: &str) -> Result<PathBuf, VoleeoError> {
+        crate::validate_id(workspace_id)?;
+        crate::validate_id(id)?;
+        Ok(self
+            .workspaces_dir
             .join(workspace_id)
-            .join(format!("env_{id}.yaml"))
+            .join(format!("env_{id}.yaml")))
     }
 
-    fn local_path(&self, workspace_id: &str, id: &str) -> PathBuf {
-        self.envs_local_dir
+    fn local_path(&self, workspace_id: &str, id: &str) -> Result<PathBuf, VoleeoError> {
+        crate::validate_id(workspace_id)?;
+        crate::validate_id(id)?;
+        Ok(self
+            .envs_local_dir
             .join(workspace_id)
-            .join(format!("env_{id}.yaml"))
+            .join(format!("env_{id}.yaml")))
     }
 
     /// Read all envs from both shared and local dirs. Shared wins on id conflict.
@@ -102,8 +110,8 @@ impl EnvironmentStore {
 
     pub fn get(&self, workspace_id: &str, id: &str) -> Result<Option<Environment>, VoleeoError> {
         for path in [
-            self.shared_path(workspace_id, id),
-            self.local_path(workspace_id, id),
+            self.shared_path(workspace_id, id)?,
+            self.local_path(workspace_id, id)?,
         ] {
             if path.exists() {
                 let content = std::fs::read_to_string(&path)
@@ -120,14 +128,14 @@ impl EnvironmentStore {
     /// existed in the other dir (shared flag flipped), removes the stale copy.
     pub fn save(&self, env: &Environment) -> Result<(), VoleeoError> {
         let target = if env.shared {
-            self.shared_path(&env.workspace_id, &env.id)
+            self.shared_path(&env.workspace_id, &env.id)?
         } else {
-            self.local_path(&env.workspace_id, &env.id)
+            self.local_path(&env.workspace_id, &env.id)?
         };
         let other = if env.shared {
-            self.local_path(&env.workspace_id, &env.id)
+            self.local_path(&env.workspace_id, &env.id)?
         } else {
-            self.shared_path(&env.workspace_id, &env.id)
+            self.shared_path(&env.workspace_id, &env.id)?
         };
 
         // Make sure the target's parent dir exists.
@@ -149,8 +157,8 @@ impl EnvironmentStore {
 
     pub fn delete(&self, workspace_id: &str, id: &str) -> Result<(), VoleeoError> {
         for path in [
-            self.shared_path(workspace_id, id),
-            self.local_path(workspace_id, id),
+            self.shared_path(workspace_id, id)?,
+            self.local_path(workspace_id, id)?,
         ] {
             if path.exists() {
                 std::fs::remove_file(&path).map_err(|e| VoleeoError::Storage(e.to_string()))?;
@@ -160,6 +168,7 @@ impl EnvironmentStore {
     }
 
     pub fn delete_workspace(&self, workspace_id: &str) -> Result<(), VoleeoError> {
+        crate::validate_id(workspace_id)?;
         let local = self.envs_local_dir.join(workspace_id);
         if local.exists() {
             std::fs::remove_dir_all(&local).map_err(|e| VoleeoError::Storage(e.to_string()))?;

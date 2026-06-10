@@ -57,11 +57,16 @@ impl ResponseStore {
         })
     }
 
-    fn body_file(&self, workspace_id: &str, response_id: &str) -> PathBuf {
-        self.responses_local_dir
+    fn body_file(&self, workspace_id: &str, response_id: &str) -> Result<PathBuf, VoleeoError> {
+        crate::validate_id(workspace_id)?;
+        // `response_id` is also used with `.filter` suffixes for filter side
+        // files; the `.` is rejected by validate_id, so validate the bare id.
+        crate::validate_id(response_id.split('.').next().unwrap_or(response_id))?;
+        Ok(self
+            .responses_local_dir
             .join(workspace_id)
             .join("bodies")
-            .join(format!("{response_id}.body"))
+            .join(format!("{response_id}.body")))
     }
 
     /// Slim large text bodies out of line: pretty-print JSON, write the body to
@@ -77,7 +82,7 @@ impl ResponseStore {
         if response.body_is_text && response.body.len() > WINDOW_THRESHOLD {
             let formatted = format_for_storage(&response.body);
             response.body_line_count = count_lines(&formatted);
-            let path = self.body_file(workspace_id, id);
+            let path = self.body_file(workspace_id, id)?;
             if let Some(dir) = path.parent() {
                 std::fs::create_dir_all(dir).map_err(|e| VoleeoError::Storage(e.to_string()))?;
             }
@@ -96,8 +101,12 @@ impl ResponseStore {
                 continue;
             }
             let filter_key = format!("{}.filter", e.id);
-            let _ = std::fs::remove_file(self.body_file(workspace_id, &e.id));
-            let _ = std::fs::remove_file(self.body_file(workspace_id, &filter_key));
+            if let Ok(p) = self.body_file(workspace_id, &e.id) {
+                let _ = std::fs::remove_file(p);
+            }
+            if let Ok(p) = self.body_file(workspace_id, &filter_key) {
+                let _ = std::fs::remove_file(p);
+            }
             if let Ok(mut c) = self.cache.lock() {
                 c.invalidate(&e.id);
                 c.invalidate(&filter_key);
@@ -115,7 +124,9 @@ impl ResponseStore {
     ) -> Result<BodyFilterResult, VoleeoError> {
         let key = format!("{response_id}.filter");
         let clear = |s: &Self| {
-            let _ = std::fs::remove_file(s.body_file(workspace_id, &key));
+            if let Ok(p) = s.body_file(workspace_id, &key) {
+                let _ = std::fs::remove_file(p);
+            }
             if let Ok(mut c) = s.cache.lock() {
                 c.invalidate(&key);
             }
@@ -130,11 +141,11 @@ impl ResponseStore {
             });
         }
 
-        let text = std::fs::read_to_string(self.body_file(workspace_id, response_id))
+        let text = std::fs::read_to_string(self.body_file(workspace_id, response_id)?)
             .map_err(|e| VoleeoError::Storage(e.to_string()))?;
         match apply_jsonpath(&text, query) {
             Ok((filtered, match_count)) => {
-                let path = self.body_file(workspace_id, &key);
+                let path = self.body_file(workspace_id, &key)?;
                 if let Some(dir) = path.parent() {
                     std::fs::create_dir_all(dir)
                         .map_err(|e| VoleeoError::Storage(e.to_string()))?;
@@ -171,7 +182,7 @@ impl ResponseStore {
         start_line: u32,
         count: u32,
     ) -> Result<BodyWindow, VoleeoError> {
-        let path = self.body_file(workspace_id, response_id);
+        let path = self.body_file(workspace_id, response_id)?;
         body_window::window(
             &self.cache,
             response_id,
@@ -189,7 +200,7 @@ impl ResponseStore {
         query: &str,
         opts: &SearchOpts,
     ) -> Result<BodySearchResult, VoleeoError> {
-        let path = self.body_file(workspace_id, response_id);
+        let path = self.body_file(workspace_id, response_id)?;
         body_window::search(
             &self.cache,
             response_id,
@@ -200,15 +211,19 @@ impl ResponseStore {
     }
 
     fn workspace_dir(&self, workspace_id: &str) -> Result<PathBuf, VoleeoError> {
+        crate::validate_id(workspace_id)?;
         let dir = self.responses_local_dir.join(workspace_id);
         std::fs::create_dir_all(&dir).map_err(|e| VoleeoError::Storage(e.to_string()))?;
         Ok(dir)
     }
 
-    fn file_path(&self, workspace_id: &str, request_id: &str) -> PathBuf {
-        self.responses_local_dir
+    fn file_path(&self, workspace_id: &str, request_id: &str) -> Result<PathBuf, VoleeoError> {
+        crate::validate_id(workspace_id)?;
+        crate::validate_id(request_id)?;
+        Ok(self
+            .responses_local_dir
             .join(workspace_id)
-            .join(format!("req_{request_id}.yaml"))
+            .join(format!("req_{request_id}.yaml")))
     }
 
     fn read_all(
@@ -216,7 +231,7 @@ impl ResponseStore {
         workspace_id: &str,
         request_id: &str,
     ) -> Result<Vec<StoredHttpResponse>, VoleeoError> {
-        let path = self.file_path(workspace_id, request_id);
+        let path = self.file_path(workspace_id, request_id)?;
         if !path.exists() {
             return Ok(Vec::new());
         }
@@ -233,7 +248,7 @@ impl ResponseStore {
         items: &[StoredHttpResponse],
     ) -> Result<(), VoleeoError> {
         self.workspace_dir(workspace_id)?;
-        let path = self.file_path(workspace_id, request_id);
+        let path = self.file_path(workspace_id, request_id)?;
         let content =
             serde_yaml::to_string(items).map_err(|e| VoleeoError::Storage(e.to_string()))?;
         std::fs::write(&path, content).map_err(|e| VoleeoError::Storage(e.to_string()))
@@ -316,7 +331,7 @@ impl ResponseStore {
     pub fn clear(&self, workspace_id: &str, request_id: &str) -> Result<(), VoleeoError> {
         let entries = self.read_all(workspace_id, request_id)?;
         self.remove_body_files(workspace_id, &entries);
-        let path = self.file_path(workspace_id, request_id);
+        let path = self.file_path(workspace_id, request_id)?;
         if path.exists() {
             std::fs::remove_file(&path).map_err(|e| VoleeoError::Storage(e.to_string()))?;
         }
@@ -324,6 +339,7 @@ impl ResponseStore {
     }
 
     pub fn delete_workspace(&self, workspace_id: &str) -> Result<(), VoleeoError> {
+        crate::validate_id(workspace_id)?;
         let dir = self.responses_local_dir.join(workspace_id);
         if dir.exists() {
             std::fs::remove_dir_all(&dir).map_err(|e| VoleeoError::Storage(e.to_string()))?;

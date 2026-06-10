@@ -298,7 +298,7 @@ function TextField({
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
       onBlur={onCommit}
-      className={`${className} resize-y min-h-[64px]`}
+      className={cn(className, "resize-y min-h-[64px]")}
       spellCheck={false}
       autoComplete="off"
     />

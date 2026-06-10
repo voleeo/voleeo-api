@@ -59,14 +59,19 @@ impl WsTranscriptStore {
         })
     }
 
-    fn file_path(&self, workspace_id: &str, connection_id: &str) -> PathBuf {
-        self.responses_local_dir
+    fn file_path(&self, workspace_id: &str, connection_id: &str) -> Result<PathBuf, VoleeoError> {
+        crate::validate_id(workspace_id)?;
+        crate::validate_id(connection_id)?;
+        Ok(self
+            .responses_local_dir
             .join(workspace_id)
-            .join(format!("ws_{connection_id}.yaml"))
+            .join(format!("ws_{connection_id}.yaml")))
     }
 
     fn read(&self, workspace_id: &str, connection_id: &str) -> Vec<StoredWsSession> {
-        let path = self.file_path(workspace_id, connection_id);
+        let Ok(path) = self.file_path(workspace_id, connection_id) else {
+            return Vec::new();
+        };
         std::fs::read_to_string(&path)
             .ok()
             .and_then(|s| serde_yaml::from_str(&s).ok())
@@ -79,12 +84,12 @@ impl WsTranscriptStore {
         connection_id: &str,
         sessions: &[StoredWsSession],
     ) -> Result<(), VoleeoError> {
+        let path = self.file_path(workspace_id, connection_id)?;
         let dir = self.responses_local_dir.join(workspace_id);
         std::fs::create_dir_all(&dir).map_err(|e| VoleeoError::Storage(e.to_string()))?;
         let content =
             serde_yaml::to_string(sessions).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-        std::fs::write(self.file_path(workspace_id, connection_id), content)
-            .map_err(|e| VoleeoError::Storage(e.to_string()))
+        std::fs::write(path, content).map_err(|e| VoleeoError::Storage(e.to_string()))
     }
 
     /// Open a fresh session (newest), trimming old ones. Returns the session id.
@@ -199,7 +204,7 @@ impl WsTranscriptStore {
     }
 
     pub fn clear(&self, workspace_id: &str, connection_id: &str) -> Result<(), VoleeoError> {
-        let path = self.file_path(workspace_id, connection_id);
+        let path = self.file_path(workspace_id, connection_id)?;
         if path.exists() {
             std::fs::remove_file(&path).map_err(|e| VoleeoError::Storage(e.to_string()))?;
         }
@@ -207,6 +212,7 @@ impl WsTranscriptStore {
     }
 
     pub fn delete_workspace(&self, workspace_id: &str) -> Result<(), VoleeoError> {
+        crate::validate_id(workspace_id)?;
         let dir = self.responses_local_dir.join(workspace_id);
         if !dir.exists() {
             return Ok(());

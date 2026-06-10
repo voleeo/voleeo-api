@@ -14,7 +14,8 @@ interface Props {
 }
 
 export function NavEnvItem({ env, isActive, onClick, onDeleted }: Props) {
-  const { update, remove } = useEnvironmentStore()
+  const update = useEnvironmentStore((s) => s.update)
+  const remove = useEnvironmentStore((s) => s.remove)
   const colorBtnRef = useRef<HTMLButtonElement>(null)
   const [pickerAnchor, setPickerAnchor] = useState<DOMRect | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)

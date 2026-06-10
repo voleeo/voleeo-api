@@ -1,5 +1,6 @@
 import { getCurrentWindow } from "@tauri-apps/api/window"
 import { useEffect } from "react"
+import { useShallow } from "zustand/react/shallow"
 import { Glyph } from "@/components/Glyph"
 import { formatKeyCombo, SHORTCUTS } from "@/config/shortcuts"
 import { useKeydown } from "@/hooks/useKeydown"
@@ -9,6 +10,7 @@ import { NewItemButton } from "@/layout/NewItemButton"
 import { PreferencesButton } from "@/layout/PreferencesButton"
 import { SourceControlMenu } from "@/layout/SourceControlMenu"
 import { WorkspaceSwitcher } from "@/layout/WorkspaceSwitcher"
+import { cn } from "@/lib/utils"
 import { useChromeStore } from "@/store/chrome"
 import { useEnvironmentStore } from "@/store/environment"
 import {
@@ -30,7 +32,10 @@ function SidebarToggleButton() {
       type="button"
       title={`${treeVisible ? "Hide" : "Show"} sidebar (${formatKeyCombo(SHORTCUTS.TOGGLE_TREE)})`}
       onClick={toggleTreeVisible}
-      className={`flex items-center justify-center w-7 h-7 rounded-[5px] cursor-pointer bg-transparent border-0 outline-none hover:bg-subtle ${treeVisible ? "" : "opacity-50"}`}
+      className={cn(
+        "flex items-center justify-center w-7 h-7 rounded-[5px] cursor-pointer bg-transparent border-0 outline-none hover:bg-subtle",
+        !treeVisible && "opacity-50",
+      )}
     >
       <Glyph kind="sidebar" size={14} color="var(--base04)" />
     </button>
@@ -38,7 +43,13 @@ function SidebarToggleButton() {
 }
 
 export function TopBar() {
-  const { activeTool, activeWorkspaceId, workspaces } = useUiStore()
+  const { activeTool, activeWorkspaceId, workspaces } = useUiStore(
+    useShallow((s) => ({
+      activeTool: s.activeTool,
+      activeWorkspaceId: s.activeWorkspaceId,
+      workspaces: s.workspaces,
+    })),
+  )
   const activeRequest = useRequestStore(selectActiveRequest)
   const activeFolder = useRequestStore(selectActiveFolder)
   const activeConnection = useRequestStore(selectActiveConnection)

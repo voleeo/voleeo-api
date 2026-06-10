@@ -1,7 +1,10 @@
+import { useShallow } from "zustand/react/shallow"
 import { useToastStore } from "@/store/toast"
 
 export function Toast() {
-  const { message, kind, _clear } = useToastStore()
+  const { message, kind, _clear } = useToastStore(
+    useShallow((s) => ({ message: s.message, kind: s.kind, _clear: s._clear })),
+  )
 
   if (!message) return null
 

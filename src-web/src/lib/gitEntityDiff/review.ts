@@ -2,7 +2,7 @@ import type {
   GitEntity,
   GitEntityChange,
 } from "../../../../packages/types/bindings"
-import { buildFields, revertField } from "./engine"
+import { buildFields } from "./engine"
 import {
   type FolderRef,
   innerOf,
@@ -11,6 +11,7 @@ import {
   TYPE_WORD,
   wrap,
 } from "./entity"
+import { revertField } from "./merge"
 import { SPECS_BY_TYPE } from "./specs"
 import {
   type EntityChange,

@@ -1,5 +1,6 @@
 import type { DropZone } from "@/components/ApiRequestTree/types"
 import type { ApiFolder, MoveItemUpdate, TreeNode } from "@/store/requests"
+import { effectiveOrder } from "@/store/requests"
 
 /** A single entry in the depth-first, visibility-aware flattened tree. */
 export type FlatNode = {
@@ -62,27 +63,6 @@ export function getKind(n: TreeNode) {
 /** Map a tree node kind to the `ItemKind` the backend `move_items` expects. */
 function toItemKind(kind: TreeNode["kind"]): MoveItemUpdate["kind"] {
   return kind === "websocket" ? "webSocket" : kind
-}
-
-/**
- * Effective sort order: the stored value when set, otherwise the createdAt
- * timestamp (ms since epoch). Both are in the same numeric range so fractional
- * midpoints work correctly for legacy items with order === 0.
- */
-export function effectiveOrder(n: TreeNode): number {
-  const order =
-    n.kind === "folder"
-      ? (n.folder.order ?? 0)
-      : n.kind === "websocket"
-        ? (n.connection.order ?? 0)
-        : (n.request.order ?? 0)
-  const createdAt =
-    n.kind === "folder"
-      ? n.folder.createdAt
-      : n.kind === "websocket"
-        ? n.connection.createdAt
-        : n.request.createdAt
-  return order || Date.parse(createdAt)
 }
 
 export function findParent(

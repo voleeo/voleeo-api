@@ -1,0 +1,107 @@
+import type {
+  ApiFolder,
+  AuthConfig,
+  EnvironmentVariable,
+  HttpRequest,
+  MoveItemUpdate,
+  RequestBody,
+  RequestParameter,
+  WsConnection,
+} from "../../../../packages/types/bindings"
+import type { TreeNode } from "./buildTree"
+
+export interface RequestStore {
+  folders: ApiFolder[]
+  requests: HttpRequest[]
+  connections: WsConnection[]
+  tree: TreeNode[]
+  /** Mutually exclusive with `activeFolderId`/`activeConnectionId`. */
+  activeRequestId: string | null
+  /** Mutually exclusive with `activeRequestId`/`activeConnectionId`. */
+  activeFolderId: string | null
+  /** Mutually exclusive with `activeRequestId`/`activeFolderId`. */
+  activeConnectionId: string | null
+  loadedWorkspaceId: string | null
+  recentRequestIds: string[]
+  pendingFolderFocus: {
+    folderId: string
+    tab: "headers" | "variables"
+    key: string
+  } | null
+
+  load: (workspaceId: string) => Promise<void>
+  reload: () => Promise<void>
+  setActiveRequest: (id: string | null) => void
+  setActiveFolder: (id: string | null) => void
+  setActiveConnection: (id: string | null) => void
+  focusFolderVariable: (folderId: string, key: string) => void
+  focusFolderHeader: (folderId: string, key: string) => void
+  consumePendingFolderFocus: () => void
+  createRequest: (
+    workspaceId: string,
+    opts?: { folderId?: string; name?: string; method?: string; url?: string },
+  ) => Promise<HttpRequest | null>
+  createFolder: (
+    workspaceId: string,
+    opts?: { folderId?: string; name?: string },
+  ) => Promise<ApiFolder | null>
+  createConnection: (
+    workspaceId: string,
+    opts?: { folderId?: string; name?: string; url?: string },
+  ) => Promise<WsConnection | null>
+  moveItems: (workspaceId: string, updates: MoveItemUpdate[]) => Promise<void>
+  duplicateRequest: (workspaceId: string, id: string) => Promise<void>
+  duplicateFolder: (workspaceId: string, id: string) => Promise<void>
+  duplicateConnection: (workspaceId: string, id: string) => Promise<void>
+  renameRequest: (
+    workspaceId: string,
+    id: string,
+    name: string,
+  ) => Promise<void>
+  renameFolder: (workspaceId: string, id: string, name: string) => Promise<void>
+  renameConnection: (
+    workspaceId: string,
+    id: string,
+    name: string,
+  ) => Promise<void>
+  deleteRequest: (workspaceId: string, id: string) => Promise<void>
+  deleteFolder: (workspaceId: string, id: string) => Promise<void>
+  deleteConnection: (workspaceId: string, id: string) => Promise<void>
+  updateRequest: (
+    workspaceId: string,
+    id: string,
+    method: string,
+    url: string,
+    parameters?: RequestParameter[],
+    headers?: RequestParameter[],
+    body?: RequestBody | null,
+    auth?: AuthConfig,
+  ) => Promise<void>
+  /** Persist a connection's editable fields + reflect optimistically in the tree. */
+  updateConnection: (
+    workspaceId: string,
+    id: string,
+    patch: {
+      url: string
+      parameters: RequestParameter[]
+      headers: RequestParameter[]
+      auth: AuthConfig
+    },
+  ) => Promise<void>
+  updateFolder: (
+    workspaceId: string,
+    id: string,
+    headers: RequestParameter[],
+    auth: AuthConfig,
+  ) => Promise<void>
+  updateFolderColor: (
+    workspaceId: string,
+    id: string,
+    color: string | null,
+  ) => Promise<void>
+  updateFolderVariables: (
+    workspaceId: string,
+    id: string,
+    variables: EnvironmentVariable[],
+  ) => Promise<void>
+}

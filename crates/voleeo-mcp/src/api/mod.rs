@@ -38,6 +38,16 @@ mod workspace;
 /// the frontend. Keeping this as a callback avoids a Tauri dependency in this crate.
 pub type NotifyFn = Arc<dyn Fn(&str, Value) + Send + Sync>;
 
+/// Run a `ToolResult`-producing closure on the blocking pool so YAML/keychain
+/// I/O never stalls the async runtime — mirrors `request_send`'s `spawn_blocking`
+/// (CLAUDE.md rule #17). On a join panic we surface it as a tool error.
+async fn run_blocking(f: impl FnOnce() -> ToolResult + Send + 'static) -> ToolResult {
+    match tokio::task::spawn_blocking(f).await {
+        Ok(r) => r,
+        Err(e) => ToolResult::error(format!("Internal error: {e}")),
+    }
+}
+
 pub struct ApiBackend {
     pub workspaces: WorkspaceStore,
     pub requests: RequestStore,
@@ -65,24 +75,24 @@ impl ApiBackend {
 
     pub async fn call_tool(&self, name: &str, args: Value) -> ToolResult {
         match name {
-            "workspace.list" => self.workspace_list(),
+            "workspace.list" => self.workspace_list().await,
             "workspace.create" => self.workspace_create(&args),
-            "request.list" => self.request_list(&args),
-            "request.get" => self.request_get(&args),
+            "request.list" => self.request_list(&args).await,
+            "request.get" => self.request_get(&args).await,
             "request.create" => self.request_create(&args),
             "request.update" => self.request_update(&args),
             "request.duplicate" => self.request_duplicate(&args),
             "request.send" => self.request_send(&args).await,
             "folder.create" => self.folder_create(&args),
             "folder.rename" => self.folder_rename(&args),
-            "response.list" => self.response_list(&args),
-            "response.get" => self.response_get(&args),
-            "env.list" => self.env_list(&args),
-            "env.get" => self.env_get(&args),
+            "response.list" => self.response_list(&args).await,
+            "response.get" => self.response_get(&args).await,
+            "env.list" => self.env_list(&args).await,
+            "env.get" => self.env_get(&args).await,
             "env.create" => self.env_create(&args),
             "env.set_variable" => self.env_set_variable(&args),
-            "cookie.list_jars" => self.cookie_list_jars(&args),
-            "cookie.get_jar" => self.cookie_get_jar(&args),
+            "cookie.list_jars" => self.cookie_list_jars(&args).await,
+            "cookie.get_jar" => self.cookie_get_jar(&args).await,
             "cookie.set_active_jar" => self.cookie_set_active_jar(&args),
             "cookie.set_cookie" => self.cookie_set_cookie(&args),
             "cookie.clear_jar" => self.cookie_clear_jar(&args),

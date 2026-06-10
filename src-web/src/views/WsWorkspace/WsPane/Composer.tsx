@@ -11,6 +11,7 @@ import { createPortal } from "react-dom"
 import { useShallow } from "zustand/react/shallow"
 import { Glyph } from "@/components/Glyph"
 import { Autocomplete } from "@/components/TemplateInput/Autocomplete"
+import { SHORTCUTS } from "@/config/shortcuts"
 import { useTemplateFunctions } from "@/plugins/hooks"
 import { useEnvironmentStore } from "@/store/environment"
 import type { WsConnection } from "@/store/requests"
@@ -109,7 +110,15 @@ export function Composer({
     () =>
       EditorView.domEventHandlers({
         keydown(e) {
-          if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+          const mac =
+            e.metaKey &&
+            SHORTCUTS.SEND_REQUEST.meta &&
+            e.key === SHORTCUTS.SEND_REQUEST.key
+          const other =
+            e.ctrlKey &&
+            SHORTCUTS.SEND_REQUEST_CTRL.ctrl &&
+            e.key === SHORTCUTS.SEND_REQUEST_CTRL.key
+          if (mac || other) {
             e.preventDefault()
             sendRef.current()
           }

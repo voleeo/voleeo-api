@@ -60,7 +60,24 @@ impl SecretStore {
     fn persist(&self) -> Result<(), VoleeoError> {
         let json = serde_json::to_string_pretty(&self.data)
             .map_err(|e| VoleeoError::Storage(e.to_string()))?;
-        std::fs::write(&self.path, json).map_err(|e| VoleeoError::Storage(e.to_string()))?;
+
+        // Create with mode 0600 from the start so the file is never momentarily
+        // world-readable (a write-then-chmod leaves that window open).
+        let mut opts = std::fs::OpenOptions::new();
+        opts.write(true).create(true).truncate(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            opts.mode(0o600);
+        }
+        let mut file = opts
+            .open(&self.path)
+            .map_err(|e| VoleeoError::Storage(e.to_string()))?;
+        std::io::Write::write_all(&mut file, json.as_bytes())
+            .map_err(|e| VoleeoError::Storage(e.to_string()))?;
+
+        // `mode()` only applies on creation; an existing file keeps its perms, so
+        // re-assert 0600 to repair anything that predates this code.
         #[cfg(unix)]
         {
             let _ = std::fs::set_permissions(&self.path, std::fs::Permissions::from_mode(0o600));

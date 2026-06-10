@@ -113,7 +113,7 @@ export function FolderHeader({ folder, activeWorkspaceId }: Props) {
 
       {pickerAnchor && (
         <ColorPickerPopover
-          color={folderColor ?? "#94a3b8"}
+          color={folderColor ?? "var(--base04)"}
           anchorRect={pickerAnchor}
           onChange={handleColorChange}
           onClose={() => setPickerAnchor(null)}

@@ -14,12 +14,13 @@ impl WorkspaceStore {
         Ok(Self { dir })
     }
 
-    fn workspace_dir(&self, id: &str) -> PathBuf {
-        self.dir.join(id)
+    fn workspace_dir(&self, id: &str) -> Result<PathBuf, VoleeoError> {
+        crate::validate_id(id)?;
+        Ok(self.dir.join(id))
     }
 
-    fn file_path(&self, id: &str) -> PathBuf {
-        self.workspace_dir(id).join("workspace.yaml")
+    fn file_path(&self, id: &str) -> Result<PathBuf, VoleeoError> {
+        Ok(self.workspace_dir(id)?.join("workspace.yaml"))
     }
 
     pub fn list(&self) -> Result<Vec<Workspace>, VoleeoError> {
@@ -47,7 +48,7 @@ impl WorkspaceStore {
     }
 
     pub fn get(&self, id: &str) -> Result<Workspace, VoleeoError> {
-        let content = std::fs::read_to_string(self.file_path(id))
+        let content = std::fs::read_to_string(self.file_path(id)?)
             .map_err(|_| VoleeoError::NotFound(format!("workspace '{id}'")))?;
         serde_yaml::from_str(&content).map_err(|e| VoleeoError::Storage(e.to_string()))
     }
@@ -68,20 +69,20 @@ impl WorkspaceStore {
             created_at: now.clone(),
             updated_at: now,
         };
-        std::fs::create_dir_all(self.workspace_dir(&id))
+        std::fs::create_dir_all(self.workspace_dir(&id)?)
             .map_err(|e| VoleeoError::Storage(e.to_string()))?;
         let content =
             serde_yaml::to_string(&ws).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-        std::fs::write(self.file_path(&id), content)
+        std::fs::write(self.file_path(&id)?, content)
             .map_err(|e| VoleeoError::Storage(e.to_string()))?;
         Ok(ws)
     }
 
     pub fn save(&self, ws: &Workspace) -> Result<(), VoleeoError> {
-        std::fs::create_dir_all(self.workspace_dir(&ws.id))
+        std::fs::create_dir_all(self.workspace_dir(&ws.id)?)
             .map_err(|e| VoleeoError::Storage(e.to_string()))?;
         let content = serde_yaml::to_string(ws).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-        std::fs::write(self.file_path(&ws.id), content)
+        std::fs::write(self.file_path(&ws.id)?, content)
             .map_err(|e| VoleeoError::Storage(e.to_string()))
     }
 
@@ -116,7 +117,7 @@ impl WorkspaceStore {
 
     /// Remove the entire workspace folder (requests, folders, keyfile, metadata).
     pub fn delete(&self, id: &str) -> Result<(), VoleeoError> {
-        let dir = self.workspace_dir(id);
+        let dir = self.workspace_dir(id)?;
         if dir.exists() {
             std::fs::remove_dir_all(&dir).map_err(|e| VoleeoError::Storage(e.to_string()))?;
         }

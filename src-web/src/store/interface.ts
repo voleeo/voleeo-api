@@ -62,31 +62,12 @@ function applyEditorFont(family: string, size: number) {
 }
 
 const saved = load()
-// Sanitise legacy fallback-chain values like `'JetBrains Mono', monospace`
-// left over from the hardcoded font dropdown. The new system-font picker
-// uses bare family names, so any value containing a comma or quote is stale
-// and gets reset to System default. Without this the CSS var still applies
-// the old mono chain even though the SELECT shows "System default".
-function sanitiseFamily(v: string | undefined): string {
-  if (!v) return ""
-  if (v.includes(",") || v.includes("'") || v.includes('"')) return ""
-  return v
-}
-const initFamily = sanitiseFamily(saved.fontFamily)
+const initFamily = saved.fontFamily ?? ""
 const initSize = saved.fontSize ?? 14
-const initEditorFamily = sanitiseFamily(saved.editorFontFamily)
-// 12 matches the previous hardcoded CodeMirror `fontSize: 12` on the body /
-// SQL editors so existing users see no visual change until they pick a size.
+const initEditorFamily = saved.editorFontFamily ?? ""
 const initEditorSize = saved.editorFontSize ?? 12
 applyFont(initFamily, initSize)
 applyEditorFont(initEditorFamily, initEditorSize)
-// Persist the cleaned values so subsequent loads don't see the legacy chain.
-if (
-  initFamily !== saved.fontFamily ||
-  initEditorFamily !== saved.editorFontFamily
-) {
-  save({ fontFamily: initFamily, editorFontFamily: initEditorFamily })
-}
 
 // Cross-window sync. Each Tauri webview has its own DOM and its own Zustand
 // instance, so a change in the Settings window doesn't reach the main window

@@ -46,12 +46,11 @@ function handleReveal({ workspaceId, type, nodeId }: GitRevealPayload) {
 export function useGitReveal(enabled: boolean) {
   useEffect(() => {
     if (!enabled) return
-    let unlisten: (() => void) | undefined
-    listen<GitRevealPayload>(GIT_REVEAL_EVENT, ({ payload }) =>
+    const p = listen<GitRevealPayload>(GIT_REVEAL_EVENT, ({ payload }) =>
       handleReveal(payload),
-    ).then((fn) => {
-      unlisten = fn
-    })
-    return () => unlisten?.()
+    )
+    return () => {
+      p.then((f) => f())
+    }
   }, [enabled])
 }

@@ -1,15 +1,16 @@
 import { Circle, Colorful } from "@uiw/react-color"
 import { useEffect, useRef } from "react"
 
+// Palette-aligned presets; no color math is done on these by the library.
 const PRESET_COLORS = [
-  "#ef4444",
-  "#f97316",
-  "#f59e0b",
-  "#10b981",
-  "#06b6d4",
-  "#3b82f6",
-  "#8b5cf6",
-  "#ec4899",
+  "var(--base08)",
+  "var(--base09)",
+  "var(--base0A)",
+  "var(--base0B)",
+  "var(--base0C)",
+  "var(--base0D)",
+  "var(--base0E)",
+  "var(--base0F)",
 ]
 
 interface Props {

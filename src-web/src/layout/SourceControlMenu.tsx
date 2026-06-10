@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { formatKeyCombo, SHORTCUTS } from "@/config/shortcuts"
 import { useKeydown } from "@/hooks/useKeydown"
+import { cn } from "@/lib/utils"
 import { useGitStore } from "@/store/git"
 import { type GitBranch, listBranches } from "@/store/gitBranches"
 import { getUpdates, share } from "@/store/gitReview"
@@ -144,7 +145,7 @@ export function SourceControlMenu() {
       <DropdownMenu onOpenChange={onMenuOpenChange}>
         <DropdownMenuTrigger
           title="Git Sync"
-          className={`${TRIGGER} data-[popup-open]:bg-subtle`}
+          className={cn(TRIGGER, "data-[popup-open]:bg-subtle")}
         >
           <Glyph kind="branch" size={14} color={stateColor} />
           {branch && (

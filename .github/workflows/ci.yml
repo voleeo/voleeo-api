@@ -46,6 +46,9 @@ jobs:
       - name: Lint (biome)
         run: cd src-web && bun run lint
 
+      - name: Frontend tests
+        run: cd src-web && bun run test
+
       - name: Build frontend
         run: cd src-web && bun run build
 

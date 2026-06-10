@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from "react"
+import { cn } from "@/lib/utils"
 
 export function MonoLabel({
   children,
@@ -122,13 +123,13 @@ export function TabItem({
           : undefined
       }
       tabIndex={onClick ? 0 : undefined}
-      className={`px-2.5 pt-[9px] pb-2 text-[0.714rem] tracking-[0.3px] ${
-        onClick ? "cursor-pointer" : "cursor-default"
-      } ${
+      className={cn(
+        "px-2.5 pt-[9px] pb-2 text-[0.714rem] tracking-[0.3px]",
+        onClick ? "cursor-pointer" : "cursor-default",
         active
           ? "border-b-[1.5px] border-fg text-fg font-semibold"
-          : "border-b-[1.5px] border-transparent text-muted font-normal"
-      }`}
+          : "border-b-[1.5px] border-transparent text-muted font-normal",
+      )}
     >
       {label}
     </div>

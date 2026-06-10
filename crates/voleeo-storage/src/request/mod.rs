@@ -66,6 +66,7 @@ impl RequestStore {
     }
 
     fn workspace_dir(&self, workspace_id: &str) -> Result<PathBuf, VoleeoError> {
+        crate::validate_id(workspace_id)?;
         let dir = self.workspaces_dir.join(workspace_id);
         std::fs::create_dir_all(&dir).map_err(|e| VoleeoError::Storage(e.to_string()))?;
         Ok(dir)

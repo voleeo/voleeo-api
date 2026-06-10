@@ -1,18 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { useShallow } from "zustand/react/shallow"
-import {
-  Autocomplete,
-  type AutocompleteItem,
-  buildItems,
-} from "@/components/TemplateInput/Autocomplete"
-import { serialize } from "@/lib/template"
+import { Autocomplete } from "@/components/TemplateInput/Autocomplete"
 import { useTemplateFunctions } from "@/plugins/hooks"
 import type { Environment, EnvironmentVariable } from "@/store/environment"
 import {
   useEnvironmentStore,
   useEnvironmentStore as useEnvStore,
 } from "@/store/environment"
+import { useTextareaAutocomplete } from "./useTextareaAutocomplete"
 
 function serializeVars(variables: EnvironmentVariable[]): string {
   return variables
@@ -52,61 +48,6 @@ function parse(
   return result
 }
 
-/** Returns the caret pixel rect inside a textarea using a shadow element. */
-function getTextareaCaretRect(textarea: HTMLTextAreaElement): DOMRect {
-  const mirror = document.createElement("div")
-  const style = window.getComputedStyle(textarea)
-  const copyProps = [
-    "fontFamily",
-    "fontSize",
-    "fontWeight",
-    "letterSpacing",
-    "lineHeight",
-    "padding",
-    "paddingTop",
-    "paddingRight",
-    "paddingBottom",
-    "paddingLeft",
-    "borderTopWidth",
-    "borderRightWidth",
-    "borderBottomWidth",
-    "borderLeftWidth",
-    "width",
-    "wordWrap",
-    "whiteSpace",
-    "overflowWrap",
-  ] as const
-  for (const prop of copyProps) {
-    mirror.style.setProperty(prop, style.getPropertyValue(prop))
-  }
-  mirror.style.position = "absolute"
-  mirror.style.top = "0"
-  mirror.style.left = "0"
-  mirror.style.visibility = "hidden"
-  mirror.style.overflow = "hidden"
-  mirror.style.height = "0"
-  mirror.style.whiteSpace = "pre-wrap"
-
-  const beforeCaret = textarea.value.slice(0, textarea.selectionStart ?? 0)
-  const textNode = document.createTextNode(beforeCaret)
-  const caretSpan = document.createElement("span")
-  caretSpan.textContent = "|"
-  mirror.appendChild(textNode)
-  mirror.appendChild(caretSpan)
-
-  document.body.appendChild(mirror)
-  const taRect = textarea.getBoundingClientRect()
-  const spanRect = caretSpan.getBoundingClientRect()
-  const mirrorRect = mirror.getBoundingClientRect()
-  document.body.removeChild(mirror)
-
-  // The mirror is at (0,0); offset by the textarea's position and scroll.
-  const top = taRect.top + (spanRect.top - mirrorRect.top) - textarea.scrollTop
-  const left =
-    taRect.left + (spanRect.left - mirrorRect.left) - textarea.scrollLeft
-  return new DOMRect(left, top, 0, Number.parseFloat(style.lineHeight) || 16)
-}
-
 interface Props {
   env: Environment
 }
@@ -132,14 +73,6 @@ export function TextEditor({ env }: Props) {
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  const [acItems, setAcItems] = useState<AutocompleteItem[]>([])
-  const [acIdx, setAcIdx] = useState(0)
-  const [acOpen, setAcOpen] = useState(false)
-  const [acPartialStart, setAcPartialStart] = useState(0)
-  const [acNsFilter, setAcNsFilter] = useState<string | null>(null)
-  const [acQuery, setAcQuery] = useState("")
-  const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null)
-
   const { environments, activeEnvId } = useEnvironmentStore(
     useShallow((s) => ({
       environments: s.environments,
@@ -164,150 +97,27 @@ export function TextEditor({ env }: Props) {
 
   const fns = useTemplateFunctions()
 
-  function getPartialExpr(
-    val: string,
-    caretPos: number,
-  ): { query: string; startPos: number } | null {
-    const before = val.slice(0, caretPos)
-    const openIdx = before.lastIndexOf("{{")
-    if (openIdx === -1 || before.slice(openIdx).includes("}}")) return null
-    const query = before.slice(openIdx + 2).trimStart()
-    return { query, startPos: openIdx }
-  }
-
-  function openAutocomplete(
-    query: string,
-    partialStart: number,
-    nsFilter: string | null = null,
-  ) {
-    const ta = textareaRef.current
-    if (!ta) return
-    const rect = getTextareaCaretRect(ta)
-    setAnchorRect(rect)
-    const items = buildItems(
-      query,
-      activeVars.map((v) => v.key),
-      fns,
-      nsFilter,
-    )
-    setAcItems(items)
-    setAcIdx(0)
-    setAcPartialStart(partialStart)
-    setAcNsFilter(nsFilter)
-    setAcQuery(query)
-    setAcOpen(items.length > 0)
-  }
-
-  function closeAutocomplete() {
-    setAcOpen(false)
-    setAcNsFilter(null)
-    setAcQuery("")
-  }
-
-  function insertToken(storedToken: string) {
-    const ta = textareaRef.current
-    if (!ta) return
-    const caret = ta.selectionStart ?? 0
-    const before = ta.value.slice(0, acPartialStart)
-    const after = ta.value.slice(caret)
-    const newText = before + storedToken + after
-    setText(newText)
-    // Restore caret after the inserted token.
-    const newCaret = acPartialStart + storedToken.length
-    // Use requestAnimationFrame so the state update flushes first.
-    requestAnimationFrame(() => {
-      ta.setSelectionRange(newCaret, newCaret)
-      ta.focus()
-    })
-    closeAutocomplete()
-  }
-
-  function selectItem(item: AutocompleteItem) {
-    if (item.kind === "namespace") {
-      // Narrow the list to this namespace without inserting.
-      const ta = textareaRef.current
-      if (!ta) return
-      const caret = ta.selectionStart ?? 0
-      const before = ta.value.slice(0, acPartialStart)
-      const after = ta.value.slice(caret)
-      const insertText = `{{ ${item.prefix}.`
-      const newText = before + insertText + after
-      setText(newText)
-      const newCaret = acPartialStart + insertText.length
-      requestAnimationFrame(() => {
-        ta.setSelectionRange(newCaret, newCaret)
-        ta.focus()
-      })
-      openAutocomplete("", acPartialStart, item.prefix)
-      return
-    }
-    if (item.kind === "var") {
-      insertToken(serialize([{ kind: "var", name: item.name }]))
-      return
-    }
-    // func — insert immediately (no modal in text view; users can edit the text directly)
-    if (item.kind !== "func") return
-    const argStr = (item.fn.args ?? [])
-      .map((a) => `${a.name}="${a.defaultValue ?? ""}"`)
-      .join(", ")
-    insertToken(
-      argStr ? `{{ ${item.fn.name}(${argStr}) }}` : `{{ ${item.fn.name}() }}`,
-    )
-  }
+  const {
+    acOpen,
+    acItems,
+    acIdx,
+    acQuery,
+    anchorRect,
+    selectItem,
+    closeAutocomplete,
+    syncFromCaret,
+    handleKeyDown,
+  } = useTextareaAutocomplete({
+    textareaRef,
+    varKeys: useMemo(() => activeVars.map((v) => v.key), [activeVars]),
+    fns,
+    setText,
+  })
 
   function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     const val = e.target.value
     setText(val)
-    const caret = e.target.selectionStart ?? val.length
-    const partial = getPartialExpr(val, caret)
-    if (partial) {
-      const dotIdx = partial.query.indexOf(".")
-      const nsFilter =
-        acNsFilter ?? (dotIdx !== -1 ? partial.query.slice(0, dotIdx) : null)
-      openAutocomplete(partial.query, partial.startPos, nsFilter)
-    } else {
-      closeAutocomplete()
-    }
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    // Ctrl+Space: open autocomplete at caret.
-    if (e.ctrlKey && e.code === "Space") {
-      e.preventDefault()
-      const ta = e.currentTarget
-      const caret = ta.selectionStart ?? 0
-      const partial = getPartialExpr(ta.value, caret)
-      if (partial) {
-        openAutocomplete(partial.query, partial.startPos, null)
-      } else {
-        openAutocomplete("", caret, null)
-      }
-      return
-    }
-
-    if (acOpen) {
-      if (e.key === "ArrowDown") {
-        e.preventDefault()
-        setAcIdx((i) => Math.min(i + 1, acItems.length - 1))
-        return
-      }
-      if (e.key === "ArrowUp") {
-        e.preventDefault()
-        setAcIdx((i) => Math.max(i - 1, 0))
-        return
-      }
-      if (e.key === "Tab" || (e.key === "Enter" && acOpen)) {
-        e.preventDefault()
-        const item = acItems[acIdx]
-        if (item) selectItem(item)
-        return
-      }
-      if (e.key === "Escape") {
-        e.preventDefault()
-        closeAutocomplete()
-        return
-      }
-    }
+    syncFromCaret(val, e.target.selectionStart ?? val.length)
   }
 
   async function handleBlur() {

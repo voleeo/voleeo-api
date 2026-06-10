@@ -1,6 +1,7 @@
 import { Command } from "cmdk"
 import type React from "react"
 import { useCallback, useState } from "react"
+import { useShallow } from "zustand/react/shallow"
 import { abbrev } from "@/components/ApiRequestTree/TreeRow"
 import {
   getAncestorFolderIds,
@@ -24,7 +25,15 @@ export function CommandPalette() {
     activeTool,
     setActiveTool,
     loadWorkspaces,
-  } = useUiStore()
+  } = useUiStore(
+    useShallow((s) => ({
+      workspaces: s.workspaces,
+      activeWorkspaceId: s.activeWorkspaceId,
+      activeTool: s.activeTool,
+      setActiveTool: s.setActiveTool,
+      loadWorkspaces: s.loadWorkspaces,
+    })),
+  )
   const {
     createRequest,
     createFolder,
@@ -33,7 +42,17 @@ export function CommandPalette() {
     activeRequestId,
     recentRequestIds,
     setActiveRequest,
-  } = useRequestStore()
+  } = useRequestStore(
+    useShallow((s) => ({
+      createRequest: s.createRequest,
+      createFolder: s.createFolder,
+      requests: s.requests,
+      folders: s.folders,
+      activeRequestId: s.activeRequestId,
+      recentRequestIds: s.recentRequestIds,
+      setActiveRequest: s.setActiveRequest,
+    })),
+  )
   const {
     handleSwitch,
     pendingWorkspace,

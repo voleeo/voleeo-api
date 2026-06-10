@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react"
 import { createPortal } from "react-dom"
 import { Glyph } from "@/components/Glyph"
 import { Switch } from "@/components/ui/switch"
+import { cn } from "@/lib/utils"
 import type { McpSettings } from "../../../../packages/types/bindings"
 import { commands } from "../../../../packages/types/bindings"
 import { McpClientPanel } from "./McpClientPanel"
@@ -103,11 +104,12 @@ export function McpModal({ onClose }: Props) {
                   key={client.id}
                   type="button"
                   onClick={() => setSelectedId(client.id)}
-                  className={`text-left w-full px-3 py-2 text-[0.929rem] font-normal cursor-pointer border-none transition-colors ${
+                  className={cn(
+                    "text-left w-full px-3 py-2 text-[0.929rem] font-normal cursor-pointer border-none transition-colors",
                     active
                       ? "bg-subtle text-fg"
-                      : "bg-transparent text-muted hover:bg-subtle hover:text-fg"
-                  }`}
+                      : "bg-transparent text-muted hover:bg-subtle hover:text-fg",
+                  )}
                 >
                   {client.name}
                 </button>
