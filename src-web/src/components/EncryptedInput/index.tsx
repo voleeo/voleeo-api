@@ -67,6 +67,9 @@ export interface EncryptedInputProps {
   onEncryptedChange: (next: boolean) => void
   placeholder?: string
   disabled?: boolean
+  /** Password-style field: value is masked when blurred, with an eye toggle to
+   *  reveal it regardless of focus. Independent of at-rest encryption. */
+  secret?: boolean
   onVarClick?: (varName: string) => void
   excludeVarKeys?: string[]
   className?: string
@@ -75,9 +78,10 @@ export interface EncryptedInputProps {
 }
 
 /**
- * A `TemplateInput` for sensitive values: a shield toggle marks the field
- * encrypted-at-rest, and while encrypted+blurred the value is masked behind
- * nine dots (revealed on focus). Supports `{{ }}` template autocomplete.
+ * A `TemplateInput` for sensitive values. A shield toggle marks the field
+ * encrypted-at-rest; `secret` makes it password-style (always masked when
+ * blurred). Either way the value masks behind nine dots and reveals on focus.
+ * Supports `{{ }}` template autocomplete.
  */
 export function EncryptedInput({
   value,
@@ -87,6 +91,7 @@ export function EncryptedInput({
   onEncryptedChange,
   placeholder,
   disabled,
+  secret,
   onVarClick,
   excludeVarKeys,
   className,
@@ -157,7 +162,9 @@ export function EncryptedInput({
     setCaretOffset(el, el.textContent?.length ?? 0)
   }, [])
 
-  const masked = encrypted && !focused && value !== ""
+  // Mask while blurred for secret (password-style) or encrypted fields; both
+  // reveal on focus.
+  const masked = (secret || encrypted) && !focused && value !== ""
 
   return (
     <div className={cn("flex items-center gap-1", className)}>

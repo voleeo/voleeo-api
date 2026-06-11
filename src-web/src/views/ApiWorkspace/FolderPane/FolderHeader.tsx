@@ -1,7 +1,6 @@
 import { useRef, useState } from "react"
 import { ColorPickerPopover } from "@/components/ColorPickerPopover"
 import { Glyph } from "@/components/Glyph"
-import { useFolderRunStore } from "@/store/folderRun"
 import type { ApiFolder } from "@/store/requests"
 import { useRequestStore } from "@/store/requests"
 
@@ -13,10 +12,6 @@ interface Props {
 export function FolderHeader({ folder, activeWorkspaceId }: Props) {
   const updateFolderColor = useRequestStore((s) => s.updateFolderColor)
   const renameFolder = useRequestStore((s) => s.renameFolder)
-  const isRunning = useFolderRunStore((s) => s.status === "running")
-  const includedCount = useFolderRunStore(
-    (s) => Object.values(s.included).filter(Boolean).length,
-  )
 
   const colorBtnRef = useRef<HTMLButtonElement>(null)
   const [pickerAnchor, setPickerAnchor] = useState<DOMRect | null>(null)
@@ -91,24 +86,6 @@ export function FolderHeader({ folder, activeWorkspaceId }: Props) {
             {folder.name}
           </span>
         )}
-        <button
-          type="button"
-          disabled={!isRunning && includedCount === 0}
-          onClick={() =>
-            isRunning
-              ? useFolderRunStore.getState().requestCancel()
-              : useFolderRunStore.getState().requestStart()
-          }
-          className="ml-auto p-2 flex items-center justify-center cursor-pointer bg-transparent hover:bg-subtle rounded-[5px] disabled:cursor-not-allowed disabled:opacity-40 outline-none shrink-0 transition-colors"
-          title={isRunning ? "Cancel run" : "Run folder"}
-          aria-label={isRunning ? "Cancel run" : "Run folder"}
-        >
-          {isRunning ? (
-            <Glyph kind="x" size={14} color="var(--base08)" />
-          ) : (
-            <Glyph kind="send-right" size={14} color="var(--base0D)" />
-          )}
-        </button>
       </div>
 
       {pickerAnchor && (

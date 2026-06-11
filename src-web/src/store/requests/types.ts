@@ -2,6 +2,8 @@ import type {
   ApiFolder,
   AuthConfig,
   EnvironmentVariable,
+  GrpcRequest,
+  GrpcRequestUpdate,
   HttpRequest,
   MoveItemUpdate,
   RequestBody,
@@ -14,13 +16,16 @@ export interface RequestStore {
   folders: ApiFolder[]
   requests: HttpRequest[]
   connections: WsConnection[]
+  grpcRequests: GrpcRequest[]
   tree: TreeNode[]
-  /** Mutually exclusive with `activeFolderId`/`activeConnectionId`. */
+  /** Mutually exclusive with the other `active*Id` fields. */
   activeRequestId: string | null
-  /** Mutually exclusive with `activeRequestId`/`activeConnectionId`. */
+  /** Mutually exclusive with the other `active*Id` fields. */
   activeFolderId: string | null
-  /** Mutually exclusive with `activeRequestId`/`activeFolderId`. */
+  /** Mutually exclusive with the other `active*Id` fields. */
   activeConnectionId: string | null
+  /** Mutually exclusive with the other `active*Id` fields. */
+  activeGrpcId: string | null
   loadedWorkspaceId: string | null
   recentRequestIds: string[]
   pendingFolderFocus: {
@@ -34,6 +39,7 @@ export interface RequestStore {
   setActiveRequest: (id: string | null) => void
   setActiveFolder: (id: string | null) => void
   setActiveConnection: (id: string | null) => void
+  setActiveGrpc: (id: string | null) => void
   focusFolderVariable: (folderId: string, key: string) => void
   focusFolderHeader: (folderId: string, key: string) => void
   consumePendingFolderFocus: () => void
@@ -49,10 +55,15 @@ export interface RequestStore {
     workspaceId: string,
     opts?: { folderId?: string; name?: string; url?: string },
   ) => Promise<WsConnection | null>
+  createGrpc: (
+    workspaceId: string,
+    opts?: { folderId?: string; name?: string; target?: string },
+  ) => Promise<GrpcRequest | null>
   moveItems: (workspaceId: string, updates: MoveItemUpdate[]) => Promise<void>
   duplicateRequest: (workspaceId: string, id: string) => Promise<void>
   duplicateFolder: (workspaceId: string, id: string) => Promise<void>
   duplicateConnection: (workspaceId: string, id: string) => Promise<void>
+  duplicateGrpc: (workspaceId: string, id: string) => Promise<void>
   renameRequest: (
     workspaceId: string,
     id: string,
@@ -64,9 +75,11 @@ export interface RequestStore {
     id: string,
     name: string,
   ) => Promise<void>
+  renameGrpc: (workspaceId: string, id: string, name: string) => Promise<void>
   deleteRequest: (workspaceId: string, id: string) => Promise<void>
   deleteFolder: (workspaceId: string, id: string) => Promise<void>
   deleteConnection: (workspaceId: string, id: string) => Promise<void>
+  deleteGrpc: (workspaceId: string, id: string) => Promise<void>
   updateRequest: (
     workspaceId: string,
     id: string,
@@ -87,6 +100,13 @@ export interface RequestStore {
       headers: RequestParameter[]
       auth: AuthConfig
     },
+  ) => Promise<void>
+  /** Persist a gRPC request's editable fields + reflect optimistically in the
+   *  tree (mirrors `updateConnection`). */
+  updateGrpc: (
+    workspaceId: string,
+    id: string,
+    patch: GrpcRequestUpdate,
   ) => Promise<void>
   updateFolder: (
     workspaceId: string,

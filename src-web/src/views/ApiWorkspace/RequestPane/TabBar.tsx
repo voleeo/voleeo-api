@@ -18,7 +18,7 @@ interface Props {
   onBodyKindChange: (kind: BodyKind) => void
 }
 
-function countLabel(label: string, enabled: number, total: number) {
+export function countLabel(label: string, enabled: number, total: number) {
   if (total === 0) return label
   return (
     <>
@@ -30,7 +30,7 @@ function countLabel(label: string, enabled: number, total: number) {
   )
 }
 
-function configuredLabel(label: string, configured: boolean) {
+export function configuredLabel(label: string, configured: boolean) {
   if (!configured) return label
   return (
     <span className="inline-flex items-center gap-1">

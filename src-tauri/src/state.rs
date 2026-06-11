@@ -5,8 +5,8 @@ use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 use voleeo_core::VoleeoError;
 use voleeo_storage::{
-    CookieJarStore, EnvironmentStore, RequestStore, ResponseStore, SelectionStore, WorkspaceStore,
-    WsStore, WsTranscriptStore,
+    CookieJarStore, EnvironmentStore, GrpcResponseStore, GrpcStore, GrpcTranscriptStore,
+    RequestStore, ResponseStore, SelectionStore, WorkspaceStore, WsStore, WsTranscriptStore,
 };
 
 const DEFAULT_THEME: &str = "dark";
@@ -36,8 +36,14 @@ pub struct AppState {
     pub selections: SelectionStore,
     pub ws: WsStore,
     pub ws_transcripts: WsTranscriptStore,
+    pub grpc: GrpcStore,
+    pub grpc_responses: GrpcResponseStore,
+    pub grpc_transcripts: GrpcTranscriptStore,
     pub executor: voleeo_http::HttpExecutor,
     pub ws_manager: voleeo_ws::WsManager,
+    pub grpc_executor: voleeo_grpc::GrpcExecutor,
+    pub grpc_manager: voleeo_grpc::GrpcManager,
+    pub grpc_descriptors: voleeo_grpc::DescriptorCache,
     pub active_theme_id: Arc<RwLock<String>>,
     pub color_mode: Arc<RwLock<String>>,
     pub settings_path: PathBuf,
@@ -66,6 +72,9 @@ impl AppState {
         let selections = SelectionStore::new(&app_data_dir)?;
         let ws = WsStore::new(&app_data_dir)?;
         let ws_transcripts = WsTranscriptStore::new(&app_data_dir)?;
+        let grpc = GrpcStore::new(&app_data_dir)?;
+        let grpc_responses = GrpcResponseStore::new(&app_data_dir)?;
+        let grpc_transcripts = GrpcTranscriptStore::new(&app_data_dir)?;
         let secrets = SecretStore::new(&app_data_dir)?;
 
         let settings: Option<PersistedSettings> = std::fs::read_to_string(&settings_path)
@@ -89,6 +98,9 @@ impl AppState {
 
         let executor = voleeo_http::HttpExecutor::new()?;
         let ws_manager = voleeo_ws::WsManager::new();
+        let grpc_executor = voleeo_grpc::GrpcExecutor::new();
+        let grpc_manager = voleeo_grpc::GrpcManager::new();
+        let grpc_descriptors = voleeo_grpc::DescriptorCache::new();
 
         Ok(Self {
             workspaces,
@@ -99,8 +111,14 @@ impl AppState {
             selections,
             ws,
             ws_transcripts,
+            grpc,
+            grpc_responses,
+            grpc_transcripts,
             executor,
             ws_manager,
+            grpc_executor,
+            grpc_manager,
+            grpc_descriptors,
             active_theme_id: Arc::new(RwLock::new(active_theme_id)),
             color_mode: Arc::new(RwLock::new(color_mode)),
             settings_path,

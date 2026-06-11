@@ -10,6 +10,7 @@ voleeo-core = { path = "../voleeo-core" }
 voleeo-storage = { path = "../voleeo-storage" }
 voleeo-http = { path = "../voleeo-http" }
 voleeo-ws = { path = "../voleeo-ws" }
+voleeo-grpc = { path = "../voleeo-grpc" }
 voleeo-crypto = { path = "../voleeo-crypto" }
 voleeo-cookies = { path = "../voleeo-cookies" }
 serde = { workspace = true }

@@ -40,15 +40,23 @@ export function ApiRequestTree({
   onDeleteIds,
   handleRef,
 }: Props) {
-  const { renameRequest, renameFolder, renameConnection, setActiveConnection } =
-    useRequestStore(
-      useShallow((s) => ({
-        renameRequest: s.renameRequest,
-        renameFolder: s.renameFolder,
-        renameConnection: s.renameConnection,
-        setActiveConnection: s.setActiveConnection,
-      })),
-    )
+  const {
+    renameRequest,
+    renameFolder,
+    renameConnection,
+    renameGrpc,
+    setActiveConnection,
+    setActiveGrpc,
+  } = useRequestStore(
+    useShallow((s) => ({
+      renameRequest: s.renameRequest,
+      renameFolder: s.renameFolder,
+      renameConnection: s.renameConnection,
+      renameGrpc: s.renameGrpc,
+      setActiveConnection: s.setActiveConnection,
+      setActiveGrpc: s.setActiveGrpc,
+    })),
+  )
   const drag = useDrag(tree, onMoveItems)
   const folderState = useFolderState(workspaceId)
   const [renamingId, setRenamingId] = useState<string | null>(null)
@@ -87,16 +95,17 @@ export function ApiRequestTree({
   // Enter on a focused item starts inline rename.
   const onEnterAction = (
     id: string,
-    kind: "folder" | "request" | "websocket",
+    kind: "folder" | "request" | "websocket" | "grpc",
   ) => {
     if (kind === "request") onSelectRequest(id)
     else if (kind === "websocket") setActiveConnection(id)
+    else if (kind === "grpc") setActiveGrpc(id)
     setRenamingId(id)
   }
 
   const commitRename = (
     id: string,
-    kind: "folder" | "request" | "websocket",
+    kind: "folder" | "request" | "websocket" | "grpc",
     name: string,
   ) => {
     const trimmed = name.trim()
@@ -104,6 +113,7 @@ export function ApiRequestTree({
     if (!trimmed) return
     if (kind === "request") renameRequest(workspaceId, id, trimmed)
     else if (kind === "websocket") renameConnection(workspaceId, id, trimmed)
+    else if (kind === "grpc") renameGrpc(workspaceId, id, trimmed)
     else renameFolder(workspaceId, id, trimmed)
   }
 

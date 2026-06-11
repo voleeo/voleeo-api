@@ -14,6 +14,7 @@ export interface FolderRef {
 const KIND_OF: Record<EntityType, GitNodeKind> = {
   request: "request",
   websocket: "webSocket",
+  grpc: "grpc",
   folder: "folder",
   environment: "env",
   cookie: "jar",
@@ -23,6 +24,7 @@ const KIND_OF: Record<EntityType, GitNodeKind> = {
 export const TYPE_WORD: Record<EntityType, string> = {
   request: "request",
   websocket: "WebSocket",
+  grpc: "gRPC request",
   folder: "folder",
   environment: "environment",
   cookie: "cookie jar",
@@ -38,6 +40,8 @@ export function innerOf(entity: GitEntity | null, type: EntityType): any {
       return entity.request ?? null
     case "websocket":
       return entity.connection ?? null
+    case "grpc":
+      return entity.grpc ?? null
     case "folder":
       return entity.folder ?? null
     case "environment":
@@ -59,6 +63,9 @@ export function wrap(type: EntityType, inner: any): GitEntity {
       break
     case "websocket":
       e.connection = inner
+      break
+    case "grpc":
+      e.grpc = inner
       break
     case "folder":
       e.folder = inner
@@ -88,11 +95,17 @@ export function locationOf(
   inner: any,
   folders: Map<string, string>,
 ): string {
-  if (type === "request" || type === "folder" || type === "websocket") {
+  if (
+    type === "request" ||
+    type === "folder" ||
+    type === "websocket" ||
+    type === "grpc"
+  ) {
     const parent = inner?.folderId ? folders.get(inner.folderId) : null
     if (parent) return parent
     if (type === "request") return "Requests"
     if (type === "websocket") return "WebSockets"
+    if (type === "grpc") return "gRPC"
     return "Folders"
   }
   if (type === "environment") return "Environments"

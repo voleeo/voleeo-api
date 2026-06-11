@@ -10,7 +10,7 @@ export interface RowProps {
   onSelectRequest: (id: string) => void
 }
 
-export type RowKind = "folder" | "request" | "websocket"
+export type RowKind = "folder" | "request" | "websocket" | "grpc"
 
 export function RenameInput({
   id,

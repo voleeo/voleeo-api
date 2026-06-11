@@ -11,8 +11,9 @@ export type CtxMenuState =
   | { kind: "request"; id: string; x: number; y: number }
   | { kind: "folder"; id: string; x: number; y: number }
   | { kind: "websocket"; id: string; x: number; y: number }
+  | { kind: "grpc"; id: string; x: number; y: number }
 
-type ItemKindUi = "request" | "folder" | "websocket"
+type ItemKindUi = "request" | "folder" | "websocket" | "grpc"
 
 interface Props {
   state: CtxMenuState
@@ -20,6 +21,7 @@ interface Props {
   onCreateRequest: (folderId?: string) => void
   onCreateFolder: (folderId?: string) => void
   onCreateConnection: (folderId?: string) => void
+  onCreateGrpc: (folderId?: string) => void
   onRename: (id: string) => void
   onDuplicate: (kind: ItemKindUi, id: string) => void
   onDelete: (kind: ItemKindUi, id: string) => void
@@ -37,6 +39,7 @@ export function RequestContextMenu({
   onCreateRequest,
   onCreateFolder,
   onCreateConnection,
+  onCreateGrpc,
   onRename,
   onDuplicate,
   onDelete,
@@ -104,6 +107,14 @@ export function RequestContextMenu({
           <button
             type="button"
             className={ITEM_CLASSES}
+            onClick={() => onCreateGrpc()}
+          >
+            <Glyph kind="plus" size={13} color="var(--base04)" />
+            <span>gRPC</span>
+          </button>
+          <button
+            type="button"
+            className={ITEM_CLASSES}
             onClick={() => onCreateFolder()}
           >
             <Glyph kind="plus" size={13} color="var(--base04)" />
@@ -151,6 +162,14 @@ export function RequestContextMenu({
           >
             <Glyph kind="plus" size={13} color="var(--base04)" />
             <span>WebSocket</span>
+          </button>
+          <button
+            type="button"
+            className={ITEM_CLASSES}
+            onClick={() => onCreateGrpc(state.id)}
+          >
+            <Glyph kind="plus" size={13} color="var(--base04)" />
+            <span>gRPC</span>
           </button>
           <button
             type="button"

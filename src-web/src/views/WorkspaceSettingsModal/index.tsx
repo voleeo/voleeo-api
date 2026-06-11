@@ -80,7 +80,6 @@ function WorkspaceSettingsModalInner({
   )
   const [editingName, setEditingName] = useState(false)
   const [nameValue, setNameValue] = useState(workspace.name)
-  const [idCopied, setIdCopied] = useState(false)
 
   const dnsCommitRef = useRef<(() => Promise<void> | void) | null>(null)
 
@@ -107,13 +106,6 @@ function WorkspaceSettingsModalInner({
       await loadWorkspaces()
     }
     setEditingName(false)
-  }
-
-  function handleCopyId() {
-    navigator.clipboard.writeText(workspace.id).then(() => {
-      setIdCopied(true)
-      setTimeout(() => setIdCopied(false), 1800)
-    })
   }
 
   function handleWorkspaceChanged(updated: Workspace) {
@@ -174,25 +166,6 @@ function WorkspaceSettingsModalInner({
           ))}
         </nav>
         <div className="flex-1" />
-        <div className="px-3 pb-3">
-          <div className="flex items-end gap-0.5 border border-border rounded-[5px] px-2 py-1.5">
-            <span className="font-mono text-[0.643rem] text-muted break-all leading-relaxed flex-1 min-w-0">
-              {workspace.id}
-            </span>
-            <button
-              type="button"
-              onClick={handleCopyId}
-              title="Copy workspace ID"
-              className="shrink-0 p-0.5 rounded-[3px] cursor-pointer hover:bg-subtle bg-transparent border-0 outline-none"
-            >
-              {idCopied ? (
-                <Glyph kind="check" size={13} color="var(--base0B)" />
-              ) : (
-                <Glyph kind="copy" size={13} color="var(--base04)" />
-              )}
-            </button>
-          </div>
-        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-6">

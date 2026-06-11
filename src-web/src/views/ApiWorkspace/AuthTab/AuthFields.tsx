@@ -82,6 +82,7 @@ function SecretField({
         onEncryptedChange={onEncryptedChange}
         onVarClick={onVarClick}
         placeholder={placeholder}
+        secret
       />
     </FieldShell>
   )

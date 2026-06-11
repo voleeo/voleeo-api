@@ -117,8 +117,6 @@ bun run codegen      # regenerate packages/types/bindings.ts
 bun run typecheck
 bun run test         # bun:test — colocated *.test.ts in src-web/src/lib/; runs in CI
 bun run lint         # biome; lint:fix for auto-fix (pre-commit hook runs this)
-bun run format
-cargo check --workspace
 cargo clippy --workspace
 cargo fmt --all
 cargo test -p voleeo-storage test_name
@@ -132,9 +130,7 @@ cargo test -p voleeo-storage test_name
 
 ## Toolchain
 
-**Node 24.15.0** pinned in `.nvmrc`; `nvm use` activates. Hook into your shell (`direnv`, `zsh-nvm`) for auto-activation.
-
-**Icons.** Production in `src-tauri/icons/production/`, dev in `src-tauri/icons/dev/` — different bundles for `bun run dev` vs `bun run build`. Regenerate with `bunx tauri icon <src.png> --output <dir>`.
+**Node 24.15.0** pinned in `.nvmrc`; `nvm use` activates (hook `direnv`/`zsh-nvm` for auto-activation). **Icons:** production in `src-tauri/icons/production/`, dev in `src-tauri/icons/dev/` — different bundles per build; regenerate with `bunx tauri icon <src.png> --output <dir>`.
 
 ## Architecture
 
@@ -149,6 +145,7 @@ crates/           pure Rust, zero Tauri deps
   voleeo-crypto   AES-256-GCM + OS keychain
   voleeo-http     reqwest-based HTTP executor
   voleeo-ws       live WebSocket connections (Tauri-free HttpExecutor counterpart)
+  voleeo-grpc     tonic-based gRPC — descriptor resolution, unary + streaming calls
   voleeo-cookies  cookie jar — model, matching, at-rest crypto
   voleeo-git      git2 wrapper for workspace sync (one repo == one workspace dir)
   voleeo-mcp      MCP server — protocol, tools, request resolution
@@ -178,6 +175,10 @@ All IPC types carry `#[derive(specta::Type)]`; commands annotated `#[specta::spe
 `HttpExecutor` holds a long-lived `reqwest::Client` (built once in `AppState::new()`). Per-request state (start `Instant`, redirect hops) flows via `tokio::task_local!` — never via per-request `Client::builder()`. `HttpResponse.events: Vec<TimelineEvent>` is the canonical phase log (`config`, `send`, `dns`, `info`, `recv`, `chunk`, `redirect`, `error`, `done`); `TimelineTab` maps events directly to rows.
 
 **In-flight cancellation.** `HttpExecutor` tracks active sends in `Arc<Mutex<HashMap<RequestId, oneshot::Sender<()>>>>`. `send()` races `send_inner` against `cancel_rx` via `tokio::select!`. Cancelled → `VoleeoError::Cancelled` (unit). `useHttpStore` special-cases `kind === "cancelled"`: no error banner, build a shell response whose Timeline shows pre-flight resolution + a "Request cancelled" row. Any `VoleeoError` matcher must handle `Cancelled` (no `.data`). The send button in `RequestActionBar` swaps to an `x` glyph while sending; click and Enter/⌘-Enter route to `cancelRequest`.
+
+### gRPC execution (`voleeo-grpc`)
+
+`DescriptorCache` (keyed by request id) resolves schemas via server reflection or local `.proto` compile (`protox`, offloaded to `spawn_blocking`); entries store their build inputs and self-invalidate when source/target/TLS change. `GrpcExecutor` runs unary calls — cancellation mirrors HTTP (`oneshot` + `select!`), and calls go through `server_streaming` so trailers are readable (tonic's `unary` swallows them). `GrpcManager` drives streaming calls, pushing `grpc:status`/`grpc:message`/`grpc:timeline` events. Send-time resolution lives in `voleeo_mcp::resolve` (`resolve_grpc_for_send`, `grpc_vars`) — Tauri commands and MCP tools both call it; never re-inline the env/folder/metadata pipeline.
 
 ### Plugins & theming
 
@@ -232,9 +233,11 @@ Voleeo is an MCP **server**: AI clients connect over the bridge (stdio ↔ Unix 
   workspaces/{workspace_id}/     real dir OR symlink → user sync dir
     workspace.yaml               id, name, model, encrypted, keyCheck, …
     req_{id}.yaml                HTTP request (auth secrets plaintext over IPC, ciphertext at rest)
+    ws_{id}.yaml / grpc_{id}.yaml   WS connection / gRPC request (same auth handling)
     folder_{id}.yaml             request folder
   responses-local/{workspace_id}/   machine-local, never synced
     req_{request_id}.yaml        ring buffer of last 20 HttpResponses (newest first)
+    grpc_resp_{rid}.yaml         gRPC unary ring buffer; ws_{cid}.yaml / grpc_{rid}.yaml hold WS/gRPC transcripts
 ```
 
 `syncDir` is **never** in `workspace.yaml` — it's machine-local; `workspaces/{id}/` becomes a symlink. `derive_sync_dir()` reads `read_link` at runtime. Caller-supplied ids pass `validate_id` (`[A-Za-z0-9_-]`, ≤128) before any path construction — new storage paths must do the same.

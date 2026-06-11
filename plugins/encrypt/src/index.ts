@@ -31,7 +31,7 @@ const templateFunctions: TemplateFunctionContribution[] = [
         const msg =
           err.kind === "cancelled" || err.kind === "web_socket_closed"
             ? "Cancelled"
-            : err.kind === "http_failed"
+            : err.kind === "http_failed" || err.kind === "grpc_failed"
               ? err.data.message
               : err.data
         throw new Error(msg ?? "Encryption failed")

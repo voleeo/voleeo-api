@@ -22,13 +22,15 @@ export function NewItemButton() {
   const [open, setOpen] = useState(false)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const activeWorkspaceId = useUiStore((s) => s.activeWorkspaceId)
-  const { createRequest, createFolder, createConnection } = useRequestStore(
-    useShallow((s) => ({
-      createRequest: s.createRequest,
-      createFolder: s.createFolder,
-      createConnection: s.createConnection,
-    })),
-  )
+  const { createRequest, createFolder, createConnection, createGrpc } =
+    useRequestStore(
+      useShallow((s) => ({
+        createRequest: s.createRequest,
+        createFolder: s.createFolder,
+        createConnection: s.createConnection,
+        createGrpc: s.createGrpc,
+      })),
+    )
 
   const openMenu = useCallback(() => {
     wrapperRef.current?.querySelector("button")?.click()
@@ -69,6 +71,17 @@ export function NewItemButton() {
     queueRenameFor(created?.id)
   }
 
+  async function handleCreateGrpc() {
+    if (!activeWorkspaceId) return
+    setOpen(false)
+    const folderId = resolveTargetFolderId()
+    const created = await createGrpc(
+      activeWorkspaceId,
+      folderId ? { folderId } : undefined,
+    )
+    queueRenameFor(created?.id)
+  }
+
   async function handleCreateFolder() {
     if (!activeWorkspaceId) return
     setOpen(false)
@@ -95,6 +108,10 @@ export function NewItemButton() {
           <DropdownMenuItem className={ITEM} onClick={handleCreateConnection}>
             <Glyph kind="plug-charging" size={13} color="var(--base04)" />
             WebSocket
+          </DropdownMenuItem>
+          <DropdownMenuItem className={ITEM} onClick={handleCreateGrpc}>
+            <Glyph kind="schema" size={13} color="var(--base04)" />
+            gRPC
           </DropdownMenuItem>
           <DropdownMenuItem className={ITEM} onClick={handleCreateFolder}>
             <Glyph kind="folder" size={13} color="var(--base04)" />

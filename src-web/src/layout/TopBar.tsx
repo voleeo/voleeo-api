@@ -16,6 +16,7 @@ import { useEnvironmentStore } from "@/store/environment"
 import {
   selectActiveConnection,
   selectActiveFolder,
+  selectActiveGrpc,
   selectActiveRequest,
   useRequestStore,
 } from "@/store/requests"
@@ -53,6 +54,7 @@ export function TopBar() {
   const activeRequest = useRequestStore(selectActiveRequest)
   const activeFolder = useRequestStore(selectActiveFolder)
   const activeConnection = useRequestStore(selectActiveConnection)
+  const activeGrpc = useRequestStore(selectActiveGrpc)
   const activeEnvColor = useEnvironmentStore((s) => {
     const env = s.environments.find((e) => e.id === s.activeEnvId)
     return env?.color ?? null
@@ -64,7 +66,11 @@ export function TopBar() {
   const showSwitcher = activeTool !== "welcome" && activeWorkspace !== null
 
   const activeApiItemName =
-    activeFolder?.name ?? activeConnection?.name ?? activeRequest?.name ?? null
+    activeFolder?.name ??
+    activeConnection?.name ??
+    activeGrpc?.name ??
+    activeRequest?.name ??
+    null
   const centerLabel =
     activeTool === "git"
       ? "Git Sync"

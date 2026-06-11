@@ -115,18 +115,33 @@ const templateDecorationsTheme = EditorView.baseTheme({
 
 export function createTemplateDecorations(
   onVarClickRef: RefObject<((name: string) => void) | null>,
+  onFuncClickRef?: RefObject<
+    ((token: string, from: number, to: number) => void) | null
+  >,
 ) {
   return [
     decorationsPlugin,
     atomicChipRanges,
     templateDecorationsTheme,
     EditorView.domEventHandlers({
-      click(event) {
+      click(event, view) {
         const target = event.target as HTMLElement
         const varName = target.getAttribute("data-var")
         if (varName && target.classList.contains("cm-tpl-var")) {
           onVarClickRef.current?.(varName)
           return true
+        }
+        // A function chip opens its editor modal (provided onFuncClickRef).
+        if (onFuncClickRef && target.classList.contains("cm-tpl-func")) {
+          const pos = view.posAtDOM(target)
+          const doc = view.state.doc.toString()
+          const start = doc.lastIndexOf("{{", pos)
+          const close = doc.indexOf("}}", start)
+          if (start !== -1 && close !== -1) {
+            const end = close + 2
+            onFuncClickRef.current?.(doc.slice(start, end), start, end)
+            return true
+          }
         }
         return false
       },

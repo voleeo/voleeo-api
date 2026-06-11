@@ -36,7 +36,7 @@ export function collectDescendantRequests(
       else if (node.kind === "folder") walk(node.children)
     }
   }
-  walk(buildTree(folders, requests, [], folderId))
+  walk(buildTree(folders, requests, [], [], folderId))
   return out
 }
 

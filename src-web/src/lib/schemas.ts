@@ -18,10 +18,18 @@ export const ToolSchema = z.enum(["welcome", "api"])
 /** Non-empty string (trims before checking). */
 export const NonEmptyStringSchema = z.string().trim().min(1)
 
-/** Valid environment variable key: A-Z, a-z, 0-9, _ and - with at least one char. */
+/**
+ * Valid env/folder variable key — the POSIX shell convention: a letter or `_`
+ * first, then letters, digits and `_` (conventionally `UPPER_SNAKE_CASE`). No
+ * hyphens, never a leading digit. Matches the `{{ VAR }}` token rule
+ * (`parseExpr` / backend `is_identifier`) so every valid key resolves.
+ */
 export const EnvVarKeySchema = z
   .string()
-  .regex(/^[a-zA-Z0-9_-]+$/, "Only A–Z, 0–9, _ and - are allowed")
+  .regex(
+    /^[a-zA-Z_][a-zA-Z0-9_]*$/,
+    "Start with a letter or _, then A–Z, 0–9 and _",
+  )
 
 /** Hex color string (#rrggbb). */
 export const HexColorSchema = z

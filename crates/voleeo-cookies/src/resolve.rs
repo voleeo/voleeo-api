@@ -21,10 +21,33 @@ pub fn resolve_cookies(
     key: Option<&[u8; 32]>,
 ) {
     for c in cookies.iter_mut() {
-        c.domain = resolve_field(&c.domain, vars, key);
+        c.domain = normalize_domain(&resolve_field(&c.domain, vars, key));
         c.value = resolve_field(&c.value, vars, key);
         c.path = resolve_field(&c.path, vars, key);
     }
+}
+
+/// Reduce a domain to a bare host so a URL-form value (e.g. `{{ HOST }}`
+/// resolving to `https://httpbin.org`) still domain-matches the request host.
+/// Strips scheme, path, and port; preserves a leading `.` (subdomain match).
+pub fn normalize_domain(domain: &str) -> String {
+    let mut d = domain.trim();
+    if let Some(pos) = d.find("://") {
+        d = &d[pos + 3..];
+    }
+    if let Some(slash) = d.find('/') {
+        d = &d[..slash];
+    }
+    // Strip a trailing `:port` (skip the IPv6 bracket form `[::1]`).
+    if !d.starts_with('[') {
+        if let Some(colon) = d.rfind(':') {
+            let port = &d[colon + 1..];
+            if !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit()) {
+                d = &d[..colon];
+            }
+        }
+    }
+    d.to_ascii_lowercase()
 }
 
 fn resolve_field(text: &str, vars: &HashMap<String, String>, key: Option<&[u8; 32]>) -> String {
@@ -102,7 +125,7 @@ fn strip_encrypt_chips(text: &str) -> String {
 /// has already done env-var sub + chip-strip, leaving only `enc:v1:` blobs.
 pub fn decrypt_cookies(cookies: &mut [StoredCookie], key: Option<&[u8; 32]>) {
     for c in cookies.iter_mut() {
-        c.domain = decrypt_inline(&c.domain, key);
+        c.domain = normalize_domain(&decrypt_inline(&c.domain, key));
         c.value = decrypt_inline(&c.value, key);
         c.path = decrypt_inline(&c.path, key);
     }
@@ -179,6 +202,23 @@ mod tests {
         resolve_cookies(&mut cs, &vars, None);
         assert_eq!(cs[0].domain, "api.example.com");
         assert_eq!(cs[0].path, "/v1");
+    }
+
+    #[test]
+    fn url_form_domain_reduced_to_host() {
+        // A `{{ HOST }}` that resolves to a full URL must still match the host.
+        let mut vars = HashMap::new();
+        vars.insert("HOST".into(), "https://httpbin.org".into());
+        let mut cs = vec![cookie_with("x", "{{ HOST }}", "/")];
+        resolve_cookies(&mut cs, &vars, None);
+        assert_eq!(cs[0].domain, "httpbin.org");
+    }
+
+    #[test]
+    fn normalize_domain_strips_scheme_path_port() {
+        assert_eq!(normalize_domain("https://httpbin.org:443/x"), "httpbin.org");
+        assert_eq!(normalize_domain("example.com"), "example.com");
+        assert_eq!(normalize_domain(".example.com"), ".example.com");
     }
 
     #[test]

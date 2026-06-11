@@ -162,6 +162,7 @@ export function RequestTreePane() {
           onCreateRequest={actions.handleCreateRequest}
           onCreateFolder={actions.handleCreateFolder}
           onCreateConnection={actions.handleCreateConnection}
+          onCreateGrpc={actions.handleCreateGrpc}
           onRename={actions.handleRename}
           onDuplicate={actions.handleDuplicate}
           onDelete={actions.handleDelete}

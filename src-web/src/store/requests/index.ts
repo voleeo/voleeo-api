@@ -6,6 +6,7 @@ import type {
   BodyField,
   BodyKind,
   EnvironmentVariable,
+  GrpcRequest,
   HttpRequest,
   MoveItemUpdate,
   RequestBody,
@@ -24,6 +25,7 @@ export type {
   BodyField,
   BodyKind,
   EnvironmentVariable,
+  GrpcRequest,
   HttpRequest,
   MoveItemUpdate,
   RequestBody,
@@ -51,14 +53,22 @@ export function selectActiveConnection(
   return connections.find((c) => c.id === activeConnectionId) ?? null
 }
 
+export function selectActiveGrpc(state: RequestStore): GrpcRequest | null {
+  const { activeGrpcId, grpcRequests } = state
+  if (!activeGrpcId) return null
+  return grpcRequests.find((g) => g.id === activeGrpcId) ?? null
+}
+
 export const useRequestStore = create<RequestStore>((set, get) => ({
   folders: [],
   requests: [],
   connections: [],
+  grpcRequests: [],
   tree: [],
   activeRequestId: null,
   activeFolderId: null,
   activeConnectionId: null,
+  activeGrpcId: null,
   loadedWorkspaceId: null,
   recentRequestIds: [],
   pendingFolderFocus: null,

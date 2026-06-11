@@ -25,7 +25,6 @@ export function FolderRow({
     selectedIds,
     selectRow,
     renamingId,
-    onEnterAction,
     gitChangeByNode,
   } = useContext(Ctx)
 
@@ -56,8 +55,8 @@ export function FolderRow({
           }
         }}
         onDoubleClick={() => {
-          if (didDrag.current) return
-          onEnterAction(id, "folder")
+          if (didDrag.current || !hasKids) return
+          toggleFolder(id)
         }}
         className={[
           "flex items-center gap-1.5 py-1.5 pr-3.5 hover:bg-subtle",

@@ -4,10 +4,11 @@ use std::sync::Arc;
 use serde_json::Value;
 use voleeo_cookies::crypto as cookie_crypto;
 use voleeo_core::VoleeoError;
+use voleeo_grpc::{DescriptorCache, GrpcExecutor, GrpcManager};
 use voleeo_http::HttpExecutor;
 use voleeo_storage::{
-    CookieJarStore, EnvironmentStore, RequestStore, ResponseStore, SelectionStore, WorkspaceStore,
-    WsStore, WsTranscriptStore,
+    CookieJarStore, EnvironmentStore, GrpcResponseStore, GrpcStore, GrpcTranscriptStore,
+    RequestStore, ResponseStore, SelectionStore, WorkspaceStore, WsStore, WsTranscriptStore,
 };
 use voleeo_ws::WsManager;
 
@@ -28,6 +29,7 @@ macro_rules! require {
 mod cookie;
 mod env;
 mod folder;
+mod grpc;
 mod request;
 mod response;
 mod tools;
@@ -59,8 +61,14 @@ pub struct ApiBackend {
     pub selections: SelectionStore,
     pub ws: WsStore,
     pub ws_transcripts: WsTranscriptStore,
+    pub grpc: GrpcStore,
+    pub grpc_responses: GrpcResponseStore,
+    pub grpc_transcripts: GrpcTranscriptStore,
     pub executor: HttpExecutor,
     pub ws_manager: WsManager,
+    pub grpc_executor: GrpcExecutor,
+    pub grpc_manager: GrpcManager,
+    pub grpc_descriptors: DescriptorCache,
     /// Emit a Tauri / IPC event to the frontend after a mutation.
     pub notify: NotifyFn,
     /// Used to load workspace encryption keys when resolving encrypted env vars
@@ -102,6 +110,14 @@ impl ApiBackend {
             "websocket.send" => self.ws_send(&args),
             "websocket.read_messages" => self.ws_read_messages(&args),
             "websocket.disconnect" => self.ws_disconnect(&args),
+            "grpc.list" => self.grpc_list(&args),
+            "grpc.create" => self.grpc_create(&args),
+            "grpc.describe" => self.grpc_describe(&args).await,
+            "grpc.call" => self.grpc_call_tool(&args).await,
+            "grpc.stream_start" => self.grpc_stream_start_tool(&args).await,
+            "grpc.stream_send" => self.grpc_stream_send_tool(&args),
+            "grpc.stream_read" => self.grpc_stream_read(&args),
+            "grpc.stream_close" => self.grpc_stream_close(&args),
             _ => ToolResult::error(format!("Unknown tool: {name}")),
         }
     }
@@ -116,6 +132,13 @@ impl ApiBackend {
     pub(crate) fn notify_connections(&self, workspace_id: &str) {
         (self.notify)(
             "mcp:connections:changed",
+            serde_json::json!({ "workspaceId": workspace_id }),
+        );
+    }
+
+    pub(crate) fn notify_grpc(&self, workspace_id: &str) {
+        (self.notify)(
+            "mcp:grpc:changed",
             serde_json::json!({ "workspaceId": workspace_id }),
         );
     }
@@ -177,10 +200,11 @@ mod tests {
     use super::ApiBackend;
     use serde_json::Value;
     use std::sync::Arc;
+    use voleeo_grpc::{DescriptorCache, GrpcExecutor, GrpcManager};
     use voleeo_http::HttpExecutor;
     use voleeo_storage::{
-        CookieJarStore, EnvironmentStore, RequestStore, ResponseStore, SelectionStore,
-        WorkspaceStore, WsStore, WsTranscriptStore,
+        CookieJarStore, EnvironmentStore, GrpcResponseStore, GrpcStore, GrpcTranscriptStore,
+        RequestStore, ResponseStore, SelectionStore, WorkspaceStore, WsStore, WsTranscriptStore,
     };
     use voleeo_ws::WsManager;
 
@@ -194,8 +218,14 @@ mod tests {
             selections: SelectionStore::new(dir.path()).unwrap(),
             ws: WsStore::new(dir.path()).unwrap(),
             ws_transcripts: WsTranscriptStore::new(dir.path()).unwrap(),
+            grpc: GrpcStore::new(dir.path()).unwrap(),
+            grpc_responses: GrpcResponseStore::new(dir.path()).unwrap(),
+            grpc_transcripts: GrpcTranscriptStore::new(dir.path()).unwrap(),
             executor: HttpExecutor::new().unwrap(),
             ws_manager: WsManager::new(),
+            grpc_executor: GrpcExecutor::new(),
+            grpc_manager: GrpcManager::new(),
+            grpc_descriptors: DescriptorCache::new(),
             notify: Arc::new(|_, _| {}),
             app_data_dir: dir.path().to_path_buf(),
         }
@@ -851,6 +881,66 @@ mod tests {
         assert!(r.content[0].text.contains("sameSite"));
     }
 
+    // ---------- gRPC tools ----------
+
+    #[tokio::test]
+    async fn grpc_create_and_list() {
+        let dir = tempfile::tempdir().unwrap();
+        let b = make_backend(&dir);
+        let ws_id = ws(&b).await;
+        let created = b
+            .call_tool(
+                "grpc.create",
+                args(&[
+                    ("workspaceId", Value::String(ws_id.clone())),
+                    ("name", Value::String("Greeter".into())),
+                    ("target", Value::String("localhost:50051".into())),
+                ]),
+            )
+            .await;
+        assert!(created.is_error.is_none(), "{}", created.content[0].text);
+        let g: Value = serde_json::from_str(&created.content[0].text).unwrap();
+        assert_eq!(g["model"], "grpc_request");
+
+        let listed = b
+            .call_tool("grpc.list", args(&[("workspaceId", Value::String(ws_id))]))
+            .await;
+        let list: Vec<Value> = serde_json::from_str(&listed.content[0].text).unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0]["target"], "localhost:50051");
+    }
+
+    #[tokio::test]
+    async fn grpc_describe_unreachable_target_errors_cleanly() {
+        // No server on this port → reflection connect fails with a tool error
+        // (not a panic). Verifies the descriptor path is wired end to end.
+        let dir = tempfile::tempdir().unwrap();
+        let b = make_backend(&dir);
+        let ws_id = ws(&b).await;
+        let created = b
+            .call_tool(
+                "grpc.create",
+                args(&[
+                    ("workspaceId", Value::String(ws_id.clone())),
+                    ("name", Value::String("G".into())),
+                    ("target", Value::String("127.0.0.1:1".into())),
+                ]),
+            )
+            .await;
+        let g: Value = serde_json::from_str(&created.content[0].text).unwrap();
+        let id = g["id"].as_str().unwrap();
+        let described = b
+            .call_tool(
+                "grpc.describe",
+                args(&[
+                    ("workspaceId", Value::String(ws_id)),
+                    ("id", Value::String(id.into())),
+                ]),
+            )
+            .await;
+        assert_eq!(described.is_error, Some(true));
+    }
+
     #[tokio::test]
     async fn cookie_change_notifies() {
         // Mutations emit `mcp:cookies:changed` so the frontend reloads.
@@ -867,8 +957,14 @@ mod tests {
             selections: SelectionStore::new(dir.path()).unwrap(),
             ws: WsStore::new(dir.path()).unwrap(),
             ws_transcripts: WsTranscriptStore::new(dir.path()).unwrap(),
+            grpc: GrpcStore::new(dir.path()).unwrap(),
+            grpc_responses: GrpcResponseStore::new(dir.path()).unwrap(),
+            grpc_transcripts: GrpcTranscriptStore::new(dir.path()).unwrap(),
             executor: HttpExecutor::new().unwrap(),
             ws_manager: WsManager::new(),
+            grpc_executor: GrpcExecutor::new(),
+            grpc_manager: GrpcManager::new(),
+            grpc_descriptors: DescriptorCache::new(),
             notify: Arc::new(move |event, _payload| {
                 if event == "mcp:cookies:changed" {
                     count_clone.fetch_add(1, Ordering::SeqCst);

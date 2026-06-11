@@ -1,6 +1,11 @@
 import { useState } from "react"
 import { EmptyPaneShortcuts } from "@/components/EmptyPaneShortcuts"
 import { TabItem } from "@/components/Primitives"
+import {
+  HistoryTag,
+  ResponseHeader,
+  StatusPill,
+} from "@/components/ResponseHeader"
 import { Spinner } from "@/components/ui/spinner"
 import { SHORTCUTS } from "@/config/shortcuts"
 import { cn } from "@/lib/utils"
@@ -84,12 +89,26 @@ export function ResponsePane() {
 
   return (
     <div className="h-full min-h-0 flex flex-col">
-      <div className="px-3.5 py-2.5 border-b border-border flex items-center gap-3 min-h-[40px]">
+      <ResponseHeader
+        trailing={
+          activeRequestId &&
+          activeWorkspaceId && (
+            <HistoryPicker
+              workspaceId={activeWorkspaceId}
+              requestId={activeRequestId}
+              selectedId={selectedHistoryId}
+              refreshKey={historyRefreshKey}
+              onSelect={handleHistorySelect}
+              onClear={handleHistoryClear}
+            />
+          )
+        }
+      >
         {error ? (
           <>
-            <div className="px-2 py-[3px] border border-destructive bg-surface rounded-[3px] font-mono text-[0.786rem] font-bold shrink-0 text-destructive">
+            <StatusPill className="border-destructive text-destructive">
               ERROR
-            </div>
+            </StatusPill>
             <div className="font-mono text-[0.75rem] text-muted">
               — ms · — B
             </div>
@@ -110,23 +129,13 @@ export function ResponsePane() {
               (!isLatestHistory ||
                 (selectedHistoryRecordedAt &&
                   Date.now() - new Date(selectedHistoryRecordedAt).getTime() >
-                    5 * 60_000)) && (
-                <div className="px-1.5 py-[2px] rounded-[3px] bg-accent/10 text-accent text-[0.679rem] font-mono uppercase tracking-wide shrink-0">
-                  history
-                </div>
-              )}
+                    5 * 60_000)) && <HistoryTag />}
             {(() => {
               const c = statusColor(response.status)
               return (
-                <div
-                  className={cn(
-                    "px-2 py-[3px] border rounded-[3px] font-mono text-[0.786rem] font-bold shrink-0",
-                    c.className,
-                    c.textClass,
-                  )}
-                >
+                <StatusPill className={cn(c.className, c.textClass)}>
                   {response.status} {response.statusText || "—"}
-                </div>
+                </StatusPill>
               )
             })()}
             <div className="font-mono text-[0.75rem] text-muted min-w-0">
@@ -142,18 +151,7 @@ export function ResponsePane() {
             Send a request to see the response
           </div>
         )}
-        <div className="flex-1" />
-        {activeRequestId && activeWorkspaceId && (
-          <HistoryPicker
-            workspaceId={activeWorkspaceId}
-            requestId={activeRequestId}
-            selectedId={selectedHistoryId}
-            refreshKey={historyRefreshKey}
-            onSelect={handleHistorySelect}
-            onClear={handleHistoryClear}
-          />
-        )}
-      </div>
+      </ResponseHeader>
 
       <div className="pt-1.5 px-3.5 border-b border-border flex">
         <TabItem

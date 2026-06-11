@@ -2,7 +2,9 @@ import type {
   ApiFolder,
   GitChange,
   GitFileChange,
+  GrpcRequest,
   HttpRequest,
+  WsConnection,
 } from "../../../packages/types/bindings"
 
 /** Higher rank = more severe; wins when a node has several change kinds. */
@@ -20,13 +22,16 @@ function worse(a: GitChange, b: GitChange): GitChange {
 }
 
 /**
- * Map node id → change for O(1) tree lookups, rolling each request/folder change
- * up into its ancestor folders so a collapsed folder still shows a dot.
+ * Map node id → change for O(1) tree lookups, rolling each item's change up into
+ * its ancestor folders so a collapsed folder still shows a dot. Covers requests,
+ * WebSocket connections, and gRPC requests.
  */
 export function buildChangeMap(
   files: GitFileChange[],
   requests: HttpRequest[],
   folders: ApiFolder[],
+  connections: WsConnection[] = [],
+  grpcRequests: GrpcRequest[] = [],
 ): Record<string, GitChange> {
   const own: Record<string, GitChange> = {}
   for (const f of files) {
@@ -37,6 +42,8 @@ export function buildChangeMap(
 
   const parentOf: Record<string, string | null> = {}
   for (const r of requests) parentOf[r.id] = r.folderId ?? null
+  for (const c of connections) parentOf[c.id] = c.folderId ?? null
+  for (const g of grpcRequests) parentOf[g.id] = g.folderId ?? null
   for (const fo of folders) parentOf[fo.id] = fo.folderId ?? null
 
   const map: Record<string, GitChange> = { ...own }

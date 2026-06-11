@@ -1,6 +1,7 @@
 import type {
   AuthConfig,
   EnvironmentVariable,
+  GrpcRequestUpdate,
   MoveItemUpdate,
   RequestBody,
   RequestParameter,
@@ -43,7 +44,10 @@ export function mutationActions(set: SetState, get: GetState) {
               }
             : r,
         )
-        return { requests, tree: buildTree(s.folders, requests, s.connections) }
+        return {
+          requests,
+          tree: buildTree(s.folders, requests, s.connections, s.grpcRequests),
+        }
       })
       await commands.updateRequest(
         workspaceId,
@@ -75,7 +79,7 @@ export function mutationActions(set: SetState, get: GetState) {
         )
         return {
           connections,
-          tree: buildTree(s.folders, s.requests, connections),
+          tree: buildTree(s.folders, s.requests, connections, s.grpcRequests),
         }
       })
       await commands.updateWsConnection(
@@ -86,6 +90,25 @@ export function mutationActions(set: SetState, get: GetState) {
         patch.headers,
         patch.auth,
       )
+    },
+
+    updateGrpc: async (
+      workspaceId: string,
+      id: string,
+      patch: GrpcRequestUpdate,
+    ) => {
+      set((s) => {
+        const grpcRequests = s.grpcRequests.map((g) =>
+          g.id === id
+            ? { ...g, ...patch, updatedAt: new Date().toISOString() }
+            : g,
+        )
+        return {
+          grpcRequests,
+          tree: buildTree(s.folders, s.requests, s.connections, grpcRequests),
+        }
+      })
+      await commands.updateGrpcRequest(workspaceId, id, patch)
     },
 
     updateFolder: async (
@@ -100,7 +123,10 @@ export function mutationActions(set: SetState, get: GetState) {
             ? { ...f, headers, auth, updatedAt: new Date().toISOString() }
             : f,
         )
-        return { folders, tree: buildTree(folders, s.requests, s.connections) }
+        return {
+          folders,
+          tree: buildTree(folders, s.requests, s.connections, s.grpcRequests),
+        }
       })
       await commands.updateFolder(workspaceId, id, headers, auth)
     },
@@ -116,7 +142,10 @@ export function mutationActions(set: SetState, get: GetState) {
             ? { ...f, color, updatedAt: new Date().toISOString() }
             : f,
         )
-        return { folders, tree: buildTree(folders, s.requests, s.connections) }
+        return {
+          folders,
+          tree: buildTree(folders, s.requests, s.connections, s.grpcRequests),
+        }
       })
       await commands.updateFolderColor(workspaceId, id, color)
     },
@@ -132,7 +161,10 @@ export function mutationActions(set: SetState, get: GetState) {
             ? { ...f, variables, updatedAt: new Date().toISOString() }
             : f,
         )
-        return { folders, tree: buildTree(folders, s.requests, s.connections) }
+        return {
+          folders,
+          tree: buildTree(folders, s.requests, s.connections, s.grpcRequests),
+        }
       })
       await commands.updateFolderVariables(workspaceId, id, variables)
     },
@@ -151,11 +183,16 @@ export function mutationActions(set: SetState, get: GetState) {
           const u = updates.find((u) => u.id === c.id && u.kind === "webSocket")
           return u ? { ...c, folderId: u.folderId, order: u.order } : c
         })
+        const grpcRequests = s.grpcRequests.map((g) => {
+          const u = updates.find((u) => u.id === g.id && u.kind === "grpc")
+          return u ? { ...g, folderId: u.folderId, order: u.order } : g
+        })
         return {
           folders,
           requests,
           connections,
-          tree: buildTree(folders, requests, connections),
+          grpcRequests,
+          tree: buildTree(folders, requests, connections, grpcRequests),
         }
       })
       await commands.moveItems(workspaceId, updates)

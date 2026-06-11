@@ -13,7 +13,7 @@ export function loadSelectActions(set: SetState, get: GetState) {
   return {
     load: async (workspaceId: string) => {
       if (get().loadedWorkspaceId === workspaceId) return
-      const { folders, requests, connections } =
+      const { folders, requests, connections, grpcRequests } =
         await fetchEntities(workspaceId)
       const remembered = loadLastRequestId(workspaceId)
       const activeRequestId =
@@ -28,7 +28,8 @@ export function loadSelectActions(set: SetState, get: GetState) {
         folders,
         requests,
         connections,
-        tree: buildTree(folders, requests, connections),
+        grpcRequests,
+        tree: buildTree(folders, requests, connections, grpcRequests),
         loadedWorkspaceId: workspaceId,
         activeRequestId,
         recentRequestIds,
@@ -38,13 +39,14 @@ export function loadSelectActions(set: SetState, get: GetState) {
     reload: async () => {
       const workspaceId = get().loadedWorkspaceId
       if (!workspaceId) return
-      const { folders, requests, connections } =
+      const { folders, requests, connections, grpcRequests } =
         await fetchEntities(workspaceId)
       set({
         folders,
         requests,
         connections,
-        tree: buildTree(folders, requests, connections),
+        grpcRequests,
+        tree: buildTree(folders, requests, connections, grpcRequests),
       })
     },
 
@@ -57,6 +59,7 @@ export function loadSelectActions(set: SetState, get: GetState) {
         activeRequestId: id,
         activeFolderId: null,
         activeConnectionId: null,
+        activeGrpcId: null,
         recentRequestIds: next,
       })
     },
@@ -67,6 +70,7 @@ export function loadSelectActions(set: SetState, get: GetState) {
           activeFolderId: id,
           activeRequestId: null,
           activeConnectionId: null,
+          activeGrpcId: null,
         })
       else set({ activeFolderId: null })
     },
@@ -77,8 +81,20 @@ export function loadSelectActions(set: SetState, get: GetState) {
           activeConnectionId: id,
           activeRequestId: null,
           activeFolderId: null,
+          activeGrpcId: null,
         })
       else set({ activeConnectionId: null })
+    },
+
+    setActiveGrpc: (id: string | null) => {
+      if (id)
+        set({
+          activeGrpcId: id,
+          activeRequestId: null,
+          activeFolderId: null,
+          activeConnectionId: null,
+        })
+      else set({ activeGrpcId: null })
     },
 
     focusFolderVariable: (folderId: string, key: string) =>
@@ -86,6 +102,7 @@ export function loadSelectActions(set: SetState, get: GetState) {
         activeFolderId: folderId,
         activeRequestId: null,
         activeConnectionId: null,
+        activeGrpcId: null,
         pendingFolderFocus: { folderId, tab: "variables", key },
       }),
 
@@ -94,6 +111,7 @@ export function loadSelectActions(set: SetState, get: GetState) {
         activeFolderId: folderId,
         activeRequestId: null,
         activeConnectionId: null,
+        activeGrpcId: null,
         pendingFolderFocus: { folderId, tab: "headers", key },
       }),
 

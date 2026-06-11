@@ -5,6 +5,6 @@ pub mod traits;
 pub mod types;
 
 pub use cookies::{CookieJar, SameSite, StoredCookie};
-pub use error::{HttpFailure, VoleeoError};
+pub use error::{GrpcFailure, HttpFailure, VoleeoError};
 pub use git::*;
 pub use types::*;

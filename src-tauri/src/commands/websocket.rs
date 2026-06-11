@@ -3,12 +3,11 @@
 
 use std::sync::Arc;
 
-use chrono::Utc;
 use serde_json::json;
 use tauri::{AppHandle, Emitter, State};
 use voleeo_core::{
-    new_id, AuthConfig, RequestParameter, TimelineEvent, VoleeoError, WsConnection, WsMessage,
-    WsMessageKind,
+    new_id, now_iso, AuthConfig, RequestParameter, TimelineEvent, VoleeoError, WsConnection,
+    WsMessage, WsMessageKind,
 };
 use voleeo_storage::{StoredWsSession, StoredWsSessionSummary};
 use voleeo_ws::{WsEvent, WsEventSink};
@@ -22,10 +21,6 @@ async fn run_blocking<T: Send + 'static>(
     tokio::task::spawn_blocking(f)
         .await
         .map_err(|e| VoleeoError::Storage(e.to_string()))?
-}
-
-fn now_iso() -> String {
-    Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
 }
 
 #[tauri::command]

@@ -11,6 +11,11 @@ use voleeo_core::{
 };
 use voleeo_storage::EnvironmentStore;
 
+mod grpc;
+mod text;
+pub use grpc::{apply_to_grpc, grpc_vars, resolve_grpc_for_send};
+use text::{base64_encode, extract_path_params, replace_path_param, strip_query, url_encode};
+
 /// Globals merged with the personal env at `env_id` (personal shadows). Undecryptable
 /// values are left as ciphertext rather than failing the whole send.
 pub fn load_env_vars(
@@ -90,6 +95,39 @@ fn ancestor_chain_root_first(start: Option<&str>, folders: &[ApiFolder]) -> Vec<
     chain
 }
 
+/// Merge inherited folder/workspace headers into a request's own metadata for
+/// gRPC sends. Precedence: own > nearest folder > … > root folder > workspace;
+/// deduped case-insensitively by name, disabled rows dropped. The frontend
+/// `computeInheritedHeaders` mirrors this ordering for the read-only display.
+pub fn merge_inherited_metadata(
+    own: &[RequestParameter],
+    folder_id: Option<&str>,
+    folders: &[ApiFolder],
+    workspace_headers: &[RequestParameter],
+) -> Vec<RequestParameter> {
+    let mut out: Vec<RequestParameter> = Vec::new();
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut add = |rows: &[RequestParameter]| {
+        for r in rows
+            .iter()
+            .filter(|r| r.enabled && !r.name.trim().is_empty())
+        {
+            if seen.insert(r.name.to_ascii_lowercase()) {
+                out.push(r.clone());
+            }
+        }
+    };
+    add(own); // strongest first so it wins on duplicate names
+    for f in ancestor_chain_root_first(folder_id, folders)
+        .into_iter()
+        .rev()
+    {
+        add(&f.headers);
+    }
+    add(workspace_headers);
+    out
+}
+
 /// Layer folder vars over `vars`. Chain inserted root→nearest, so nearest wins.
 /// `key` decrypts `encrypted` values; `None` leaves them as ciphertext.
 pub fn apply_folder_vars(
@@ -163,6 +201,8 @@ fn resolve_inner(
 }
 
 fn is_identifier(s: &str) -> bool {
+    // POSIX env-var convention: letter/underscore first, then letters, digits
+    // and `_` (matches `EnvVarKeySchema`). No hyphens, never a leading digit.
     let mut chars = s.chars();
     matches!(chars.next(), Some(c) if c.is_alphabetic() || c == '_')
         && chars.all(|c| c.is_alphanumeric() || c == '_')
@@ -378,101 +418,6 @@ fn auth_header(name: impl Into<String>, value: impl Into<String>) -> RequestPara
         value: value.into(),
         enabled: true,
     }
-}
-
-/// Extract `:name` path-parameter names from a URL.
-fn extract_path_params(url: &str) -> HashSet<String> {
-    let path = url.split('?').next().unwrap_or(url);
-    let mut names = HashSet::new();
-    let mut rest = path;
-    while let Some(colon) = rest.find(':') {
-        rest = &rest[colon + 1..];
-        let end = rest
-            .find(|c: char| !c.is_alphanumeric() && c != '_')
-            .unwrap_or(rest.len());
-        let name = &rest[..end];
-        if !name.is_empty() && is_identifier(name) {
-            names.insert(name.to_string());
-        }
-        rest = &rest[end..];
-    }
-    names
-}
-
-fn strip_query(url: &str) -> &str {
-    url.split('?').next().unwrap_or(url)
-}
-
-/// Replace `:name` with `replacement` in `url`, respecting word boundaries.
-fn replace_path_param(url: &str, name: &str, replacement: &str) -> String {
-    let pattern = format!(":{name}");
-    let mut result = String::with_capacity(url.len());
-    let mut rest = url;
-    while let Some(pos) = rest.find(&pattern) {
-        let after = &rest[pos + pattern.len()..];
-        let boundary = after
-            .chars()
-            .next()
-            .map_or(true, |c| !c.is_alphanumeric() && c != '_');
-        if boundary {
-            result.push_str(&rest[..pos]);
-            result.push_str(replacement);
-            rest = after;
-        } else {
-            result.push_str(&rest[..pos + 1]);
-            rest = &rest[pos + 1..];
-        }
-    }
-    result.push_str(rest);
-    result
-}
-
-/// Percent-encode a string for use in a URL query value or path segment.
-/// Unreserved chars (RFC 3986) are passed through; everything else is encoded.
-fn url_encode(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for b in s.bytes() {
-        match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                out.push(b as char);
-            }
-            _ => {
-                out.push('%');
-                out.push(hex_digit(b >> 4));
-                out.push(hex_digit(b & 0xf));
-            }
-        }
-    }
-    out
-}
-
-fn hex_digit(n: u8) -> char {
-    b"0123456789ABCDEF"[n as usize] as char
-}
-
-/// Standard base64 encoding (RFC 4648), used for Basic auth.
-fn base64_encode(input: &[u8]) -> String {
-    const TABLE: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity((input.len() + 2) / 3 * 4);
-    for chunk in input.chunks(3) {
-        let b0 = chunk[0] as u32;
-        let b1 = chunk.get(1).copied().unwrap_or(0) as u32;
-        let b2 = chunk.get(2).copied().unwrap_or(0) as u32;
-        let n = (b0 << 16) | (b1 << 8) | b2;
-        out.push(TABLE[((n >> 18) & 0x3f) as usize] as char);
-        out.push(TABLE[((n >> 12) & 0x3f) as usize] as char);
-        out.push(if chunk.len() > 1 {
-            TABLE[((n >> 6) & 0x3f) as usize] as char
-        } else {
-            '='
-        });
-        out.push(if chunk.len() > 2 {
-            TABLE[(n & 0x3f) as usize] as char
-        } else {
-            '='
-        });
-    }
-    out
 }
 
 #[cfg(test)]

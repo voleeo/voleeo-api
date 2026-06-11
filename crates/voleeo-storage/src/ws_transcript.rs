@@ -6,18 +6,12 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::path::{Path, PathBuf};
-use voleeo_core::{new_id, TimelineEvent, VoleeoError, WsMessage};
+use voleeo_core::{new_id, now_iso, TimelineEvent, VoleeoError, WsMessage};
 
 /// Max retained sessions per connection, and per-session message/event caps.
 const SESSION_CAP: usize = 20;
 const MESSAGE_CAP: usize = 500;
 const EVENT_CAP: usize = 500;
-
-fn now_iso() -> String {
-    chrono::Utc::now()
-        .format("%Y-%m-%dT%H:%M:%S%.3fZ")
-        .to_string()
-}
 
 /// One connection session: everything exchanged between a connect and its close.
 #[derive(Type, Serialize, Deserialize, Debug, Clone, Default)]

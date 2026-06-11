@@ -74,7 +74,8 @@ export function parseExpr(expr: string): TemplateToken | null {
     return { kind: "func", name, args }
   }
 
-  // Env variable: plain identifier (letters, digits, underscores)
+  // Env variable: POSIX identifier (letter/underscore first, then letters,
+  // digits and `_`) — same rule as `EnvVarKeySchema`.
   if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trimmed)) {
     return { kind: "var", name: trimmed }
   }

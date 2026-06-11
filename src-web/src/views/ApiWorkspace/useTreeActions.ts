@@ -6,7 +6,7 @@ import { useRequestStore } from "@/store/requests"
 import { useTreeUiStore } from "@/store/treeUi"
 import type { CtxMenuState } from "./RequestContextMenu"
 
-export type NodeKind = "request" | "folder" | "websocket"
+export type NodeKind = "request" | "folder" | "websocket" | "grpc"
 
 export interface PendingDelete {
   kind: NodeKind
@@ -18,6 +18,7 @@ export interface PendingDelete {
 function entityPath(kind: NodeKind, id: string): string {
   if (kind === "request") return `req_${id}.yaml`
   if (kind === "websocket") return `ws_${id}.yaml`
+  if (kind === "grpc") return `grpc_${id}.yaml`
   return `folder_${id}.yaml`
 }
 
@@ -29,7 +30,13 @@ function findNodeTarget(
   while (el) {
     const id = el.dataset?.nodeId
     const kind = el.dataset?.nodeKind
-    if (id && (kind === "request" || kind === "folder" || kind === "websocket"))
+    if (
+      id &&
+      (kind === "request" ||
+        kind === "folder" ||
+        kind === "websocket" ||
+        kind === "grpc")
+    )
       return { id, kind }
     el = el.parentElement
   }
@@ -100,6 +107,16 @@ export function useTreeActions(
     queueRenameFor(created?.id)
   }
 
+  async function handleCreateGrpc(folderId?: string) {
+    setCtxMenu(null)
+    if (!activeWorkspaceId) return
+    if (folderId) useTreeUiStore.getState().ensureFoldersOpen([folderId])
+    const created = await useRequestStore
+      .getState()
+      .createGrpc(activeWorkspaceId, folderId ? { folderId } : undefined)
+    queueRenameFor(created?.id)
+  }
+
   function handleRename(id: string) {
     setCtxMenu(null)
     treeRef.current?.startRename(id)
@@ -112,6 +129,7 @@ export function useTreeActions(
     if (kind === "request") void s.duplicateRequest(activeWorkspaceId, id)
     else if (kind === "websocket")
       void s.duplicateConnection(activeWorkspaceId, id)
+    else if (kind === "grpc") void s.duplicateGrpc(activeWorkspaceId, id)
     else void s.duplicateFolder(activeWorkspaceId, id)
   }
 
@@ -127,17 +145,21 @@ export function useTreeActions(
     if (kind === "request") void s.deleteRequest(activeWorkspaceId, id)
     else if (kind === "websocket")
       void s.deleteConnection(activeWorkspaceId, id)
+    else if (kind === "grpc") void s.deleteGrpc(activeWorkspaceId, id)
     else void s.deleteFolder(activeWorkspaceId, id)
     setPendingDelete(null)
     treeRef.current?.focus()
   }
 
   function entityName(kind: NodeKind, id: string): string {
-    const { requests, folders, connections } = useRequestStore.getState()
+    const { requests, folders, connections, grpcRequests } =
+      useRequestStore.getState()
     if (kind === "request")
       return requests.find((r) => r.id === id)?.name ?? "this request"
     if (kind === "websocket")
       return connections.find((c) => c.id === id)?.name ?? "this connection"
+    if (kind === "grpc")
+      return grpcRequests.find((g) => g.id === id)?.name ?? "this gRPC request"
     return folders.find((f) => f.id === id)?.name ?? "this folder"
   }
 
@@ -171,7 +193,8 @@ export function useTreeActions(
     if (!activeWorkspaceId || ids.length === 0) return
     if (ids.length === 1) {
       const id = ids[0]
-      const { requests, folders, connections } = useRequestStore.getState()
+      const { requests, folders, connections, grpcRequests } =
+        useRequestStore.getState()
       const folder = folders.find((f) => f.id === id)
       if (folder) {
         setPendingDelete({ kind: "folder", id, name: folder.name })
@@ -183,8 +206,12 @@ export function useTreeActions(
         return
       }
       const connection = connections.find((c) => c.id === id)
-      if (connection)
+      if (connection) {
         setPendingDelete({ kind: "websocket", id, name: connection.name })
+        return
+      }
+      const grpc = grpcRequests.find((g) => g.id === id)
+      if (grpc) setPendingDelete({ kind: "grpc", id, name: grpc.name })
       return
     }
     setPendingDeleteBatch(ids)
@@ -201,19 +228,23 @@ export function useTreeActions(
         requests,
         folders,
         connections,
+        grpcRequests,
         deleteFolder,
         deleteRequest,
         deleteConnection,
+        deleteGrpc,
       } = useRequestStore.getState()
       const folderIds = ids.filter((id) => folders.some((f) => f.id === id))
       const requestIds = ids.filter((id) => requests.some((r) => r.id === id))
       const connectionIds = ids.filter((id) =>
         connections.some((c) => c.id === id),
       )
+      const grpcIds = ids.filter((id) => grpcRequests.some((g) => g.id === id))
       for (const id of folderIds) await deleteFolder(wsId, id).catch(() => {})
       for (const id of requestIds) await deleteRequest(wsId, id).catch(() => {})
       for (const id of connectionIds)
         await deleteConnection(wsId, id).catch(() => {})
+      for (const id of grpcIds) await deleteGrpc(wsId, id).catch(() => {})
     })()
 
     treeRef.current?.focus()
@@ -226,6 +257,7 @@ export function useTreeActions(
     handleCreateRequest,
     handleCreateFolder,
     handleCreateConnection,
+    handleCreateGrpc,
     handleRename,
     handleDuplicate,
     handleDelete,

@@ -20,11 +20,14 @@ export interface TreeCtx {
   setFocusedId: (id: string | null) => void
   selectedIds: string[]
   selectRow: (id: string, modifiers: { meta: boolean; shift: boolean }) => void
-  onEnterAction: (id: string, kind: "folder" | "request" | "websocket") => void
+  onEnterAction: (
+    id: string,
+    kind: "folder" | "request" | "websocket" | "grpc",
+  ) => void
   renamingId: string | null
   commitRename: (
     id: string,
-    kind: "folder" | "request" | "websocket",
+    kind: "folder" | "request" | "websocket" | "grpc",
     name: string,
   ) => void
   cancelRename: () => void

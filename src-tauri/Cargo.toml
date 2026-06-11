@@ -28,6 +28,7 @@ voleeo-cookies = { path = "../crates/voleeo-cookies" }
 voleeo-crypto = { path = "../crates/voleeo-crypto" }
 voleeo-http = { path = "../crates/voleeo-http" }
 voleeo-ws = { path = "../crates/voleeo-ws" }
+voleeo-grpc = { path = "../crates/voleeo-grpc" }
 voleeo-git = { path = "../crates/voleeo-git" }
 voleeo-mcp = { path = "../crates/voleeo-mcp" }
 voleeo-storage = { path = "../crates/voleeo-storage" }

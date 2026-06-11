@@ -3,6 +3,8 @@ import { formatKeyCombo, SHORTCUTS } from "@/config/shortcuts"
 import { useKeydown } from "@/hooks/useKeydown"
 import { useRequestStore } from "@/store/requests"
 import { useUiStore } from "@/store/workspace"
+import { GrpcPane } from "@/views/GrpcWorkspace/GrpcPane"
+import { GrpcResponsePane } from "@/views/GrpcWorkspace/GrpcResponsePane"
 import { WsPane } from "@/views/WsWorkspace/WsPane"
 import { WsTranscriptPane } from "@/views/WsWorkspace/WsTranscriptPane"
 import { FolderPane } from "./FolderPane"
@@ -38,6 +40,7 @@ export function ApiWorkspace() {
   const hasRequests = useRequestStore((s) => s.requests.length > 0)
   const activeFolderId = useRequestStore((s) => s.activeFolderId)
   const activeConnectionId = useRequestStore((s) => s.activeConnectionId)
+  const activeGrpcId = useRequestStore((s) => s.activeGrpcId)
   const wsId = activeWorkspaceId ?? "default"
   const isColumns = panelLayout === "columns"
 
@@ -76,6 +79,8 @@ export function ApiWorkspace() {
             <FolderPane />
           ) : activeConnectionId ? (
             <WsPane key={activeConnectionId} />
+          ) : activeGrpcId ? (
+            <GrpcPane key={activeGrpcId} />
           ) : hasRequests ? (
             <RequestPane />
           ) : (
@@ -93,6 +98,8 @@ export function ApiWorkspace() {
             <FolderRunPanel />
           ) : activeConnectionId ? (
             <WsTranscriptPane />
+          ) : activeGrpcId ? (
+            <GrpcResponsePane key={activeGrpcId} />
           ) : (
             <ResponsePane />
           )}
@@ -148,6 +155,21 @@ export function ApiWorkspace() {
 
             <div className="flex-1 min-h-0 w-full overflow-hidden">
               <WsTranscriptPane />
+            </div>
+          </>
+        ) : activeGrpcId ? (
+          <>
+            <div
+              style={{ height: `${sizes.rowInner}%` }}
+              className="shrink-0 w-full overflow-hidden flex flex-col"
+            >
+              <GrpcPane key={activeGrpcId} />
+            </div>
+
+            <PaneSeparator dir="row" onMouseDown={onRowInnerSepDown} />
+
+            <div className="flex-1 min-h-0 w-full overflow-hidden">
+              <GrpcResponsePane key={activeGrpcId} />
             </div>
           </>
         ) : hasRequests ? (

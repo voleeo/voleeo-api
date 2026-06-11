@@ -3,12 +3,13 @@ import { buildTree } from "../buildTree"
 import { saveLastRequestId } from "../persistence"
 import {
   DEFAULT_CONNECTION_NAME,
+  DEFAULT_GRPC_NAME,
   DEFAULT_REQUEST_NAME,
   type GetState,
   type SetState,
 } from "./shared"
 
-/** Create / duplicate / rename / delete for requests, folders, connections. */
+/** Create / duplicate / rename / delete for requests, folders, connections, gRPC. */
 export function crudActions(set: SetState, get: GetState) {
   return {
     createRequest: async (
@@ -34,7 +35,7 @@ export function crudActions(set: SetState, get: GetState) {
         const requests = [...s.requests, req]
         return {
           requests,
-          tree: buildTree(s.folders, requests, s.connections),
+          tree: buildTree(s.folders, requests, s.connections, s.grpcRequests),
           activeRequestId: req.id,
           activeFolderId: null,
           activeConnectionId: null,
@@ -56,7 +57,10 @@ export function crudActions(set: SetState, get: GetState) {
       const folder = res.data
       set((s) => {
         const folders = [...s.folders, folder]
-        return { folders, tree: buildTree(folders, s.requests, s.connections) }
+        return {
+          folders,
+          tree: buildTree(folders, s.requests, s.connections, s.grpcRequests),
+        }
       })
       return folder
     },
@@ -77,7 +81,7 @@ export function crudActions(set: SetState, get: GetState) {
         const connections = [...s.connections, connection]
         return {
           connections,
-          tree: buildTree(s.folders, s.requests, connections),
+          tree: buildTree(s.folders, s.requests, connections, s.grpcRequests),
           activeConnectionId: connection.id,
           activeRequestId: null,
           activeFolderId: null,
@@ -86,12 +90,78 @@ export function crudActions(set: SetState, get: GetState) {
       return connection
     },
 
+    createGrpc: async (
+      workspaceId: string,
+      opts: { folderId?: string; name?: string; target?: string } = {},
+    ) => {
+      const res = await commands.createGrpcRequest(
+        workspaceId,
+        opts.folderId ?? null,
+        opts.name ?? DEFAULT_GRPC_NAME,
+        opts.target ?? "",
+      )
+      if (res.status !== "ok") return null
+      const request = res.data
+      set((s) => {
+        const grpcRequests = [...s.grpcRequests, request]
+        return {
+          grpcRequests,
+          tree: buildTree(s.folders, s.requests, s.connections, grpcRequests),
+          activeGrpcId: request.id,
+          activeRequestId: null,
+          activeFolderId: null,
+          activeConnectionId: null,
+        }
+      })
+      return request
+    },
+
+    duplicateGrpc: async (workspaceId: string, id: string) => {
+      const res = await commands.duplicateGrpcRequest(workspaceId, id)
+      if (res.status !== "ok") return
+      set((s) => {
+        const grpcRequests = [...s.grpcRequests, res.data]
+        return {
+          grpcRequests,
+          tree: buildTree(s.folders, s.requests, s.connections, grpcRequests),
+        }
+      })
+    },
+
+    renameGrpc: async (workspaceId: string, id: string, name: string) => {
+      set((s) => {
+        const grpcRequests = s.grpcRequests.map((g) =>
+          g.id === id ? { ...g, name } : g,
+        )
+        return {
+          grpcRequests,
+          tree: buildTree(s.folders, s.requests, s.connections, grpcRequests),
+        }
+      })
+      await commands.renameGrpcRequest(workspaceId, id, name)
+    },
+
+    deleteGrpc: async (workspaceId: string, id: string) => {
+      set((s) => {
+        const grpcRequests = s.grpcRequests.filter((g) => g.id !== id)
+        return {
+          grpcRequests,
+          tree: buildTree(s.folders, s.requests, s.connections, grpcRequests),
+          activeGrpcId: s.activeGrpcId === id ? null : s.activeGrpcId,
+        }
+      })
+      await commands.deleteGrpcRequest(workspaceId, id)
+    },
+
     duplicateRequest: async (workspaceId: string, id: string) => {
       const res = await commands.duplicateRequest(workspaceId, id)
       if (res.status !== "ok") return
       set((s) => {
         const requests = [...s.requests, res.data]
-        return { requests, tree: buildTree(s.folders, requests, s.connections) }
+        return {
+          requests,
+          tree: buildTree(s.folders, requests, s.connections, s.grpcRequests),
+        }
       })
     },
 
@@ -108,7 +178,7 @@ export function crudActions(set: SetState, get: GetState) {
         const connections = [...s.connections, res.data]
         return {
           connections,
-          tree: buildTree(s.folders, s.requests, connections),
+          tree: buildTree(s.folders, s.requests, connections, s.grpcRequests),
         }
       })
     },
@@ -118,7 +188,10 @@ export function crudActions(set: SetState, get: GetState) {
         const requests = s.requests.map((r) =>
           r.id === id ? { ...r, name } : r,
         )
-        return { requests, tree: buildTree(s.folders, requests, s.connections) }
+        return {
+          requests,
+          tree: buildTree(s.folders, requests, s.connections, s.grpcRequests),
+        }
       })
       await commands.renameRequest(workspaceId, id, name)
     },
@@ -126,7 +199,10 @@ export function crudActions(set: SetState, get: GetState) {
     renameFolder: async (workspaceId: string, id: string, name: string) => {
       set((s) => {
         const folders = s.folders.map((f) => (f.id === id ? { ...f, name } : f))
-        return { folders, tree: buildTree(folders, s.requests, s.connections) }
+        return {
+          folders,
+          tree: buildTree(folders, s.requests, s.connections, s.grpcRequests),
+        }
       })
       await commands.renameFolder(workspaceId, id, name)
     },
@@ -138,7 +214,7 @@ export function crudActions(set: SetState, get: GetState) {
         )
         return {
           connections,
-          tree: buildTree(s.folders, s.requests, connections),
+          tree: buildTree(s.folders, s.requests, connections, s.grpcRequests),
         }
       })
       await commands.renameWsConnection(workspaceId, id, name)
@@ -154,7 +230,7 @@ export function crudActions(set: SetState, get: GetState) {
             : s.activeRequestId
         return {
           requests,
-          tree: buildTree(s.folders, requests, s.connections),
+          tree: buildTree(s.folders, requests, s.connections, s.grpcRequests),
           activeRequestId: nextActiveId,
         }
       })
@@ -166,7 +242,7 @@ export function crudActions(set: SetState, get: GetState) {
         const connections = s.connections.filter((c) => c.id !== id)
         return {
           connections,
-          tree: buildTree(s.folders, s.requests, connections),
+          tree: buildTree(s.folders, s.requests, connections, s.grpcRequests),
           activeConnectionId:
             s.activeConnectionId === id ? null : s.activeConnectionId,
         }
@@ -218,7 +294,7 @@ export function crudActions(set: SetState, get: GetState) {
           folders,
           requests,
           connections,
-          tree: buildTree(folders, requests, connections),
+          tree: buildTree(folders, requests, connections, s.grpcRequests),
           activeRequestId: nextActiveId,
           activeFolderId: nextActiveFolderId,
           activeConnectionId: connActiveInDeleted ? null : s.activeConnectionId,

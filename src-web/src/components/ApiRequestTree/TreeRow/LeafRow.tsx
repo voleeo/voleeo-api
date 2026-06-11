@@ -7,7 +7,7 @@ import { dragAttrs, RenameInput, type RowKind } from "./shared"
 
 interface Props {
   id: string
-  kind: Extract<RowKind, "request" | "websocket">
+  kind: Extract<RowKind, "request" | "websocket" | "grpc">
   name: string
   depth: number
   active: boolean

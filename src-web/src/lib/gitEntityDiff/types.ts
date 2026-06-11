@@ -9,7 +9,9 @@ export const GROUP_ORDER = [
   "URL",
   "Query Parameters",
   "Headers",
+  "Metadata",
   "Body",
+  "Message",
   "Authentication",
   "DNS Overrides",
   "Variables",
@@ -21,6 +23,7 @@ export type FieldGroup = (typeof GROUP_ORDER)[number]
 export type EntityType =
   | "request"
   | "websocket"
+  | "grpc"
   | "folder"
   | "environment"
   | "cookie"
@@ -29,6 +32,7 @@ export type EntityType =
 export const TYPE_GROUPS: { type: EntityType; label: string }[] = [
   { type: "request", label: "Requests" },
   { type: "websocket", label: "WebSockets" },
+  { type: "grpc", label: "gRPC" },
   { type: "folder", label: "Folders" },
   { type: "environment", label: "Environments" },
   { type: "cookie", label: "Cookies" },
@@ -41,6 +45,8 @@ export function nodeKindToType(kind: GitNodeKind): EntityType | null {
       return "request"
     case "webSocket":
       return "websocket"
+    case "grpc":
+      return "grpc"
     case "folder":
       return "folder"
     case "env":

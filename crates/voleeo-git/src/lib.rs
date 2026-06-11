@@ -57,6 +57,7 @@ pub fn classify_path(path: &str) -> (GitNodeKind, Option<String>) {
     for (prefix, kind) in [
         ("req_", GitNodeKind::Request),
         ("ws_", GitNodeKind::WebSocket),
+        ("grpc_", GitNodeKind::Grpc),
         ("folder_", GitNodeKind::Folder),
         ("jar_", GitNodeKind::Jar),
         ("env_", GitNodeKind::Env),

@@ -20,6 +20,7 @@ interface Props {
   connectionId: string
   selectedId: string | null
   refreshKey: number
+  live: boolean
   onSelect: (sessionId: string, isLatest: boolean) => void
   onClear: () => void
 }
@@ -30,6 +31,7 @@ export function WsHistoryPicker({
   connectionId,
   selectedId,
   refreshKey,
+  live,
   onSelect,
   onClear,
 }: Props) {
@@ -160,7 +162,7 @@ export function WsHistoryPicker({
                       >
                         {item.messageCount === 1 ? "msg" : "msgs"}
                       </span>
-                      {isLatest && (
+                      {isLatest && live && (
                         <span className="text-[0.643rem] font-mono uppercase tracking-wide text-success/80 shrink-0">
                           live
                         </span>

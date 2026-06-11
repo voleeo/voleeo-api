@@ -108,9 +108,10 @@ impl RequestStore {
                 ItemKind::Folder => {
                     self.update_folder_position(workspace_id, &u.id, u.folder_id, u.order)?
                 }
-                // WS connections live in a sibling store; the `move_items`
-                // command dispatches those to `WsStore::update_position`.
-                ItemKind::WebSocket => {}
+                // WS connections and gRPC requests live in sibling stores; the
+                // `move_items` command dispatches those to their own
+                // `update_position`.
+                ItemKind::WebSocket | ItemKind::Grpc => {}
             }
         }
         Ok(())

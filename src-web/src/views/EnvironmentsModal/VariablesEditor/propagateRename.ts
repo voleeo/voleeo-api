@@ -2,10 +2,15 @@ import { serialize } from "@/lib/template"
 import { useEnvironmentStore } from "@/store/environment"
 import { useRequestStore } from "@/store/requests"
 
+/** Rewrite every `oldToken` occurrence in `value` to `newToken`. */
+function rewrite(value: string, oldToken: string, newToken: string): string {
+  return value.split(oldToken).join(newToken)
+}
+
 /**
  * When a variable key is renamed, update every stored `{{ oldKey }}` token to
- * `{{ newKey }}` across all environments in the workspace and across all
- * request URLs (query params are embedded in the URL string).
+ * `{{ newKey }}` across all environments in the workspace and across HTTP
+ * requests, WebSocket connections, and gRPC requests.
  *
  * Pass `skipEnvId` to exclude the env being actively edited — its local state
  * is handled by VariablesEditor directly, avoiding a race between the debounced
@@ -66,6 +71,59 @@ export async function propagateVariableRename(
         newParameters,
         newHeaders,
       ).catch(() => {})
+    }
+  }
+
+  const { connections, updateConnection } = useRequestStore.getState()
+  for (const conn of connections) {
+    if (conn.workspaceId !== workspaceId) continue
+    const newUrl = rewrite(conn.url, oldToken, newToken)
+    const newParameters = (conn.parameters ?? []).map((p) => {
+      const next = rewrite(p.value, oldToken, newToken)
+      return next !== p.value ? { ...p, value: next } : p
+    })
+    const newHeaders = (conn.headers ?? []).map((h) => {
+      const next = rewrite(h.value, oldToken, newToken)
+      return next !== h.value ? { ...h, value: next } : h
+    })
+    const changed =
+      newUrl !== conn.url ||
+      newParameters.some((p, i) => p !== (conn.parameters ?? [])[i]) ||
+      newHeaders.some((h, i) => h !== (conn.headers ?? [])[i])
+    if (changed) {
+      await updateConnection(workspaceId, conn.id, {
+        url: newUrl,
+        parameters: newParameters,
+        headers: newHeaders,
+        auth: conn.auth ?? { kind: "none" },
+      }).catch(() => {})
+    }
+  }
+
+  const { grpcRequests, updateGrpc } = useRequestStore.getState()
+  for (const g of grpcRequests) {
+    if (g.workspaceId !== workspaceId) continue
+    const newTarget = rewrite(g.target, oldToken, newToken)
+    const newMessage = rewrite(g.message ?? "", oldToken, newToken)
+    const newMetadata = (g.metadata ?? []).map((m) => {
+      const next = rewrite(m.value, oldToken, newToken)
+      return next !== m.value ? { ...m, value: next } : m
+    })
+    const changed =
+      newTarget !== g.target ||
+      newMessage !== (g.message ?? "") ||
+      newMetadata.some((m, i) => m !== (g.metadata ?? [])[i])
+    if (changed) {
+      await updateGrpc(workspaceId, g.id, {
+        target: newTarget,
+        tls: g.tls ?? false,
+        protoSource: g.protoSource ?? { kind: "reflection" },
+        service: g.service ?? null,
+        method: g.method ?? null,
+        metadata: newMetadata,
+        message: newMessage,
+        auth: g.auth ?? { kind: "none" },
+      }).catch(() => {})
     }
   }
 }

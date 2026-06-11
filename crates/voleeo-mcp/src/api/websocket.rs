@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use serde_json::{json, Value};
-use voleeo_core::{new_id, WsDirection, WsMessage, WsMessageKind};
+use voleeo_core::{new_id, now_iso, WsDirection, WsMessage, WsMessageKind};
 use voleeo_ws::{WsEvent, WsEventSink};
 
 use super::ApiBackend;
@@ -128,9 +128,7 @@ impl ApiBackend {
             kind,
             data: data.clone(),
             size: data.len() as u32,
-            at: chrono::Utc::now()
-                .format("%Y-%m-%dT%H:%M:%S%.3fZ")
-                .to_string(),
+            at: now_iso(),
         };
         (self.notify)(
             "ws:message",

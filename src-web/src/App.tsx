@@ -2,6 +2,7 @@ import { emit } from "@tauri-apps/api/event"
 import { useEffect } from "react"
 import { PluginPromptHost } from "@/components/PluginPromptHost"
 import { useGitReveal } from "@/hooks/useGitReveal"
+import { useGrpcSync } from "@/hooks/useGrpcSync"
 import { useMcpSync } from "@/hooks/useMcpSync"
 import { useWsSync } from "@/hooks/useWsSync"
 import { MainLayout } from "@/layout/MainLayout"
@@ -44,6 +45,7 @@ export default function App() {
 
   useMcpSync()
   useWsSync()
+  useGrpcSync()
   useGitReveal(windowLabel === "main")
 
   useEffect(() => {

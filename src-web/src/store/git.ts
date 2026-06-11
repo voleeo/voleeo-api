@@ -60,8 +60,9 @@ export interface GitStore {
 }
 
 function mapFor(files: GitFileChange[]): Record<string, GitChange> {
-  const { requests, folders } = useRequestStore.getState()
-  return buildChangeMap(files, requests, folders)
+  const { requests, folders, connections, grpcRequests } =
+    useRequestStore.getState()
+  return buildChangeMap(files, requests, folders, connections, grpcRequests)
 }
 
 export const useGitStore = create<GitStore>((set, get) => ({
@@ -233,9 +234,15 @@ let debounceTimer: ReturnType<typeof setTimeout> | null = null
 let refreshSeq = 0
 let repoSeq = 0
 
-// Refresh badges + review after request/folder mutations (saves are debounced upstream).
+// Refresh badges + review after any entity mutation (saves are debounced upstream).
 useRequestStore.subscribe((state, prev) => {
-  if (state.requests === prev.requests && state.folders === prev.folders) return
+  if (
+    state.requests === prev.requests &&
+    state.folders === prev.folders &&
+    state.connections === prev.connections &&
+    state.grpcRequests === prev.grpcRequests
+  )
+    return
   const id = useGitStore.getState().loadedWorkspaceId
   if (id) useGitStore.getState().refreshDebounced(id)
 })

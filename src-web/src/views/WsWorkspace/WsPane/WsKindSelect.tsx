@@ -27,7 +27,7 @@ export function WsKindSelect({ kind, onChange }: Props) {
     <DropdownMenu>
       <DropdownMenuTrigger
         className={cn(
-          "px-2.5 pt-[9px] pb-2 font-sans text-[0.857rem] flex items-center gap-1 cursor-pointer outline-none transition-colors",
+          "px-2.5 pt-[9px] pb-2 font-sans text-[0.857rem] leading-none flex items-center gap-1 cursor-pointer outline-none transition-colors",
           "text-accent hover:text-accent/80",
         )}
       >

@@ -1,5 +1,6 @@
 import type {
   ApiFolder,
+  GrpcRequest,
   HttpRequest,
   WsConnection,
 } from "../../../../packages/types/bindings"
@@ -8,6 +9,7 @@ export type TreeNode =
   | { kind: "folder"; folder: ApiFolder; children: TreeNode[] }
   | { kind: "request"; request: HttpRequest }
   | { kind: "websocket"; connection: WsConnection }
+  | { kind: "grpc"; request: GrpcRequest }
 
 export function effectiveOrder(n: TreeNode): number {
   const order =
@@ -29,6 +31,7 @@ export function buildTree(
   folders: ApiFolder[],
   requests: HttpRequest[],
   connections: WsConnection[] = [],
+  grpcRequests: GrpcRequest[] = [],
   parentId: string | null = null,
 ): TreeNode[] {
   const folderNodes: TreeNode[] = folders
@@ -36,7 +39,13 @@ export function buildTree(
     .map((folder) => ({
       kind: "folder" as const,
       folder,
-      children: buildTree(folders, requests, connections, folder.id),
+      children: buildTree(
+        folders,
+        requests,
+        connections,
+        grpcRequests,
+        folder.id,
+      ),
     }))
 
   const requestNodes: TreeNode[] = requests
@@ -47,8 +56,15 @@ export function buildTree(
     .filter((c) => (c.folderId ?? null) === parentId)
     .map((connection) => ({ kind: "websocket" as const, connection }))
 
-  // Sort all three kinds together by effective order (numeric, not string).
-  return [...folderNodes, ...requestNodes, ...connectionNodes].sort(
-    (a, b) => effectiveOrder(a) - effectiveOrder(b),
-  )
+  const grpcNodes: TreeNode[] = grpcRequests
+    .filter((g) => (g.folderId ?? null) === parentId)
+    .map((request) => ({ kind: "grpc" as const, request }))
+
+  // Sort all kinds together by effective order (numeric, not string).
+  return [
+    ...folderNodes,
+    ...requestNodes,
+    ...connectionNodes,
+    ...grpcNodes,
+  ].sort((a, b) => effectiveOrder(a) - effectiveOrder(b))
 }

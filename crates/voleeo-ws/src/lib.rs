@@ -3,7 +3,6 @@
 //! the sender before awaiting; the read loop touches `conns` only at teardown.
 
 use base64::Engine;
-use chrono::Utc;
 use futures_util::{SinkExt, StreamExt};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -13,7 +12,9 @@ use tokio::task::JoinHandle;
 use tokio_tungstenite::tungstenite::client::ClientRequestBuilder;
 use tokio_tungstenite::tungstenite::http::Uri;
 use tokio_tungstenite::tungstenite::Message;
-use voleeo_core::{new_id, TimelineEvent, VoleeoError, WsDirection, WsMessage, WsMessageKind};
+use voleeo_core::{
+    new_id, now_iso, TimelineEvent, VoleeoError, WsDirection, WsMessage, WsMessageKind,
+};
 
 pub enum WsEvent {
     Status(&'static str),
@@ -31,10 +32,6 @@ struct LiveConn {
 #[derive(Clone, Default)]
 pub struct WsManager {
     conns: Arc<Mutex<HashMap<String, LiveConn>>>,
-}
-
-fn now_iso() -> String {
-    Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
 }
 
 fn timeline(started: Instant, kind: &str, text: impl Into<String>) -> TimelineEvent {

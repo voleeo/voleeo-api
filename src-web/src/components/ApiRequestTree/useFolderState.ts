@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react"
+import { useCallback, useEffect, useMemo } from "react"
 import { useShallow } from "zustand/react/shallow"
 import { useTreeUiStore } from "@/store/treeUi"
 
@@ -8,12 +8,16 @@ export interface FolderStateHandle {
 }
 
 export function useFolderState(workspaceId: string): FolderStateHandle {
-  const { initForWorkspace, isFolderOpen, toggleFolder } = useTreeUiStore(
+  const { initForWorkspace, toggleFolder } = useTreeUiStore(
     useShallow((s) => ({
       initForWorkspace: s.initForWorkspace,
-      isFolderOpen: s.isFolderOpen,
       toggleFolder: s.toggleFolder,
     })),
+  )
+  const closedFolderIds = useTreeUiStore((s) => s.closedFolderIds)
+  const isFolderOpen = useCallback(
+    (id: string) => !closedFolderIds.includes(id),
+    [closedFolderIds],
   )
 
   useEffect(() => {

@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react"
 import { EmptyPaneShortcuts } from "@/components/EmptyPaneShortcuts"
 import { TabItem } from "@/components/Primitives"
+import {
+  HistoryTag,
+  ResponseHeader,
+  StatusPill,
+} from "@/components/ResponseHeader"
 import { Spinner } from "@/components/ui/spinner"
 import { SHORTCUTS } from "@/config/shortcuts"
 import { cn } from "@/lib/utils"
@@ -119,6 +124,7 @@ export function WsTranscriptPane() {
   }, [status])
 
   const getSession = useWebsocketStore((s) => s.getSession)
+  const listSessions = useWebsocketStore((s) => s.listSessions)
   useEffect(() => {
     if (!id || !selectedSessionId) {
       setHistorical(null)
@@ -133,13 +139,45 @@ export function WsTranscriptPane() {
     }
   }, [workspaceId, id, selectedSessionId, getSession])
 
+  const live =
+    status === "open" || status === "connecting" || status === "closing"
+
+  // With no live transcript and nothing explicitly selected, preload the most
+  // recent session so an idle connection still shows its last result.
+  const [latest, setLatest] = useState<StoredWsSession | null>(null)
+  useEffect(() => {
+    if (!id || live || messages.length > 0 || selectedSessionId) {
+      setLatest(null)
+      return
+    }
+    let cancelled = false
+    void listSessions(workspaceId, id).then((items) => {
+      if (cancelled) return
+      const first = items[0]
+      if (!first) return setLatest(null)
+      void getSession(workspaceId, id, first.id).then((data) => {
+        if (!cancelled) setLatest(data)
+      })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [
+    workspaceId,
+    id,
+    live,
+    messages.length,
+    selectedSessionId,
+    listSessions,
+    getSession,
+  ])
+
   if (!connection || !id) return null
 
   const pill = statusPill(status)
-  const viewMessages = historical
-    ? (historical.messages ?? NO_MESSAGES)
-    : messages
-  const viewTimeline = historical ? (historical.events ?? NO_EVENTS) : timeline
+  const shown = historical ?? (messages.length === 0 ? latest : null)
+  const viewMessages = shown ? (shown.messages ?? NO_MESSAGES) : messages
+  const viewTimeline = shown ? (shown.events ?? NO_EVENTS) : timeline
 
   if (
     !historical &&
@@ -159,40 +197,33 @@ export function WsTranscriptPane() {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      <div className="px-3.5 py-2.5 border-b border-border flex items-center gap-3 min-h-[40px] shrink-0">
-        <div
-          className={cn(
-            "px-2 py-[3px] border rounded-[3px] font-mono text-[0.786rem] font-bold shrink-0 flex items-center gap-1.5",
-            pill.className,
-            pill.textClass,
-          )}
-        >
+      <ResponseHeader
+        trailing={
+          <WsHistoryPicker
+            workspaceId={workspaceId}
+            connectionId={id}
+            selectedId={selectedSessionId}
+            refreshKey={refreshKey}
+            live={live}
+            onSelect={(sessionId, isLatest) =>
+              setSelectedSessionId(isLatest ? null : sessionId)
+            }
+            onClear={() => setSelectedSessionId(null)}
+          />
+        }
+      >
+        <StatusPill className={cn(pill.className, pill.textClass)}>
           {(status === "connecting" || status === "closing") && (
             <Spinner className="size-3 shrink-0" aria-label="Connecting" />
           )}
           {pill.label}
-        </div>
+        </StatusPill>
         <div className="font-mono text-[0.75rem] text-muted">
           {viewMessages.length}{" "}
           {viewMessages.length === 1 ? "message" : "messages"}
         </div>
-        {historical && (
-          <div className="px-1.5 py-[2px] rounded-[3px] bg-accent/10 text-accent text-[0.679rem] font-mono uppercase tracking-wide shrink-0">
-            history
-          </div>
-        )}
-        <div className="flex-1" />
-        <WsHistoryPicker
-          workspaceId={workspaceId}
-          connectionId={id}
-          selectedId={selectedSessionId}
-          refreshKey={refreshKey}
-          onSelect={(sessionId, isLatest) =>
-            setSelectedSessionId(isLatest ? null : sessionId)
-          }
-          onClear={() => setSelectedSessionId(null)}
-        />
-      </div>
+        {historical && <HistoryTag />}
+      </ResponseHeader>
 
       <div className="pt-1.5 px-3.5 border-b border-border flex shrink-0">
         <TabItem

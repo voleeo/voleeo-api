@@ -3,8 +3,8 @@
 
 use crate::commands::request::{transform_auth_secrets, transform_var_secrets, Direction, Stores};
 use voleeo_core::{
-    ApiFolder, CookieJar, Environment, GitEntity, GitEntityChange, GitNodeKind, HttpRequest,
-    VoleeoError, Workspace, WsConnection,
+    ApiFolder, CookieJar, Environment, GitEntity, GitEntityChange, GitNodeKind, GrpcRequest,
+    HttpRequest, VoleeoError, Workspace, WsConnection,
 };
 use voleeo_crypto as workspace_key;
 
@@ -59,6 +59,13 @@ pub(super) fn parse_entity(
             transform_auth_secrets(&mut c.auth, workspace_id, stores, Direction::Decrypt)?;
             entity.connection = Some(c);
         }
+        GitNodeKind::Grpc => {
+            let Ok(mut g) = serde_yaml::from_str::<GrpcRequest>(yaml) else {
+                return Ok(None);
+            };
+            transform_auth_secrets(&mut g.auth, workspace_id, stores, Direction::Decrypt)?;
+            entity.grpc = Some(g);
+        }
         GitNodeKind::Folder => {
             let Ok(mut f) = serde_yaml::from_str::<ApiFolder>(yaml) else {
                 return Ok(None);
@@ -104,6 +111,9 @@ pub(super) fn encrypt_entity(
     }
     if let Some(c) = entity.connection.as_mut() {
         transform_auth_secrets(&mut c.auth, workspace_id, stores, Direction::Encrypt)?;
+    }
+    if let Some(g) = entity.grpc.as_mut() {
+        transform_auth_secrets(&mut g.auth, workspace_id, stores, Direction::Encrypt)?;
     }
     if let Some(f) = entity.folder.as_mut() {
         transform_auth_secrets(&mut f.auth, workspace_id, stores, Direction::Encrypt)?;
@@ -153,6 +163,7 @@ pub(super) fn entity_to_yaml(entity: &GitEntity) -> Result<String, VoleeoError> 
     let yaml = match entity.kind {
         GitNodeKind::Request => entity.request.as_ref().map(serde_yaml::to_string),
         GitNodeKind::WebSocket => entity.connection.as_ref().map(serde_yaml::to_string),
+        GitNodeKind::Grpc => entity.grpc.as_ref().map(serde_yaml::to_string),
         GitNodeKind::Folder => entity.folder.as_ref().map(serde_yaml::to_string),
         GitNodeKind::Env => entity.environment.as_ref().map(serde_yaml::to_string),
         GitNodeKind::Jar => entity.jar.as_ref().map(serde_yaml::to_string),

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useShallow } from "zustand/react/shallow"
 import { TabItem } from "@/components/Primitives"
 import { FolderScopeProvider } from "@/components/TemplateInput/folderScope"
+import { SHORTCUTS } from "@/config/shortcuts"
+import { useKeydown } from "@/hooks/useKeydown"
 import { usePaneTabsStore } from "@/store/paneTabs"
 import { selectActiveConnection, useRequestStore } from "@/store/requests"
 import { useWebsocketStore } from "@/store/websocket"
@@ -54,7 +56,9 @@ export function WsPane() {
   }
   const [uiKind, setUiKind] = useState<WsMessageUiKind>("json")
   const [messageDraft, setMessageDraft] = useState("")
-  const [urlDraft, setUrlDraft] = useState(connection?.url ?? "")
+  const [urlOverride, setUrlOverride] = useState<string | null>(null)
+  const urlDraft = urlOverride ?? connection?.url ?? ""
+  const setUrlDraft = setUrlOverride
   const [envModalVar, setEnvModalVar] = useState<string | null>(null)
   const onToggleRef = useRef<() => void>(() => {})
 
@@ -85,10 +89,19 @@ export function WsPane() {
     setEnvModalVar,
   )
 
+  const sendShortcutRef = useRef<() => void>(() => {})
+  const fireSend = useCallback(() => sendShortcutRef.current(), [])
+  useKeydown(SHORTCUTS.SEND_REQUEST, fireSend)
+  useKeydown(SHORTCUTS.SEND_REQUEST_CTRL, fireSend)
+
   const connectionId = connection?.id
   useEffect(() => {
     if (workspaceId && connectionId) hydrate(workspaceId, connectionId)
   }, [workspaceId, connectionId, hydrate])
+
+  const storedUrl = connection?.url
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset on external URL change
+  useEffect(() => setUrlOverride(null), [storedUrl])
 
   const inheritedHeaders = useMemo(
     () =>
@@ -135,6 +148,10 @@ export function WsPane() {
   }
   onToggleRef.current = () => {
     void onToggle()
+  }
+  sendShortcutRef.current = () => {
+    if (status === "open") handleSendMessage()
+    else handleUrlSend()
   }
 
   return (

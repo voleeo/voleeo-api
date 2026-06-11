@@ -7,6 +7,9 @@ export const C_DELETE = "var(--base08)"
 export const C_PATCH = "var(--base0E)"
 export const C_META = "var(--base0D)"
 export const C_WS = "var(--base09)"
+// Deliberately shares base0E with C_PATCH and the bidi kind in
+// GrpcWorkspace/GrpcPane/methodKind.ts — purple is the gRPC accent.
+export const C_GRPC = "var(--base0E)"
 
 export function methodColor(method: string): string {
   switch (method.toUpperCase()) {

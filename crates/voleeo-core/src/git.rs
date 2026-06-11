@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 
 use crate::cookies::CookieJar;
-use crate::types::{ApiFolder, Environment, HttpRequest, Workspace, WsConnection};
+use crate::types::{ApiFolder, Environment, GrpcRequest, HttpRequest, Workspace, WsConnection};
 
 /// How a tracked file changed relative to HEAD / the index.
 #[derive(Type, Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,6 +24,7 @@ pub enum GitNodeKind {
     Folder,
     Request,
     WebSocket,
+    Grpc,
     Jar,
     Env,
     Other,
@@ -83,6 +84,8 @@ pub struct GitEntity {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub connection: Option<WsConnection>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub grpc: Option<GrpcRequest>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub folder: Option<ApiFolder>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub environment: Option<Environment>,
@@ -99,6 +102,7 @@ impl GitEntity {
             kind,
             request: None,
             connection: None,
+            grpc: None,
             folder: None,
             environment: None,
             jar: None,
