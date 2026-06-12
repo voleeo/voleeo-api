@@ -1,3 +1,10 @@
+import { MANAGED_CONTENT_TYPE } from "@/lib/contentTypes"
+import { randomId } from "@/lib/ids"
+import type {
+  HttpRequest,
+  RequestBody,
+  RequestParameter,
+} from "../../../../../packages/types/bindings"
 import { commands } from "../../../../../packages/types/bindings"
 import { buildTree } from "../buildTree"
 import { saveLastRequestId } from "../persistence"
@@ -19,6 +26,8 @@ export function crudActions(set: SetState, get: GetState) {
         name?: string
         method?: string
         url?: string
+        body?: RequestBody | null
+        headers?: RequestParameter[]
       } = {},
     ) => {
       const res = await commands.createRequest(
@@ -29,7 +38,22 @@ export function crudActions(set: SetState, get: GetState) {
         opts.url ?? "",
       )
       if (res.status !== "ok") return null
-      const req = res.data
+      let req: HttpRequest = res.data
+      if (opts.body !== undefined || opts.headers) {
+        const headers = opts.headers ?? req.headers ?? []
+        const body = opts.body !== undefined ? opts.body : (req.body ?? null)
+        await commands.updateRequest(
+          workspaceId,
+          req.id,
+          req.method,
+          req.url,
+          req.parameters ?? [],
+          headers,
+          body,
+          req.auth ?? { kind: "none" },
+        )
+        req = { ...req, headers, body }
+      }
       saveLastRequestId(workspaceId, req.id)
       set((s) => {
         const requests = [...s.requests, req]
@@ -43,6 +67,24 @@ export function crudActions(set: SetState, get: GetState) {
       })
       return req
     },
+
+    createGraphqlRequest: async (
+      workspaceId: string,
+      opts: { folderId?: string; name?: string } = {},
+    ) =>
+      get().createRequest(workspaceId, {
+        ...opts,
+        method: "POST",
+        headers: [
+          {
+            id: randomId(),
+            name: "Content-Type",
+            value: MANAGED_CONTENT_TYPE.graphql ?? "application/json",
+            enabled: true,
+          },
+        ],
+        body: { kind: "graphql", text: "" },
+      }),
 
     createFolder: async (
       workspaceId: string,

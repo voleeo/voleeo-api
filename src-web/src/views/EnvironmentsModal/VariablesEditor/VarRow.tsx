@@ -89,7 +89,7 @@ export const VarRow = memo(function VarRow({
           </div>
         )}
 
-        <div className="relative group/key">
+        <div className="relative group/key min-w-0">
           <input
             value={v.key}
             onChange={(e) => onUpdateKey(v._rowId, e.target.value)}
@@ -125,7 +125,7 @@ export const VarRow = memo(function VarRow({
           excludeVarKeys={excludeVarKeys}
           focusOnMount={focusKey === v.key}
           className={cn(
-            "px-1 py-0.5",
+            "min-w-0 px-1 py-0.5",
             !isTrailing && !v.enabled && "opacity-40",
           )}
         />

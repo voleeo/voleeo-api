@@ -11,6 +11,7 @@ export type AutocompleteItem =
   | { kind: "func"; fn: BoundTemplateFunction }
   | { kind: "namespace"; prefix: string }
   | { kind: "constant"; value: string; badge: string; description?: string }
+  | { kind: "schema"; label: string; detail: string }
 
 export function deriveNamespaces(fns: BoundTemplateFunction[]): string[] {
   const seen = new Set<string>()

@@ -428,6 +428,51 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn request_update_sets_graphql_body() {
+        let dir = tempfile::tempdir().unwrap();
+        let b = make_backend(&dir);
+        let ws_id = ws(&b).await;
+        let req: Value = serde_json::from_str(
+            &b.call_tool(
+                "request.create",
+                args(&[
+                    ("workspaceId", Value::String(ws_id.clone())),
+                    ("name", Value::String("Gql".into())),
+                    ("method", Value::String("GET".into())),
+                    (
+                        "url",
+                        Value::String("https://api.example.com/graphql".into()),
+                    ),
+                ]),
+            )
+            .await
+            .content[0]
+                .text,
+        )
+        .unwrap();
+        let req_id = req["id"].as_str().unwrap();
+
+        let updated = b
+            .call_tool(
+                "request.update",
+                args(&[
+                    ("workspaceId", Value::String(ws_id.clone())),
+                    ("requestId", Value::String(req_id.into())),
+                    ("graphqlQuery", Value::String("query { me { id } }".into())),
+                    ("graphqlVariables", Value::String(r#"{"x":1}"#.into())),
+                ]),
+            )
+            .await;
+        assert!(updated.is_error.is_none(), "{}", updated.content[0].text);
+        let u: Value = serde_json::from_str(&updated.content[0].text).unwrap();
+        // GraphQL body set, and the GET was auto-switched to POST.
+        assert_eq!(u["method"], "POST");
+        assert_eq!(u["body"]["kind"], "graphql");
+        assert_eq!(u["body"]["text"], "query { me { id } }");
+        assert_eq!(u["body"]["graphqlVariables"], r#"{"x":1}"#);
+    }
+
+    #[tokio::test]
     async fn request_duplicate_creates_copy() {
         let dir = tempfile::tempdir().unwrap();
         let b = make_backend(&dir);

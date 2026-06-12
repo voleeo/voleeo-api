@@ -28,6 +28,21 @@ pub(crate) fn parse_method(s: &str) -> Result<reqwest::Method, VoleeoError> {
         .map_err(|_| VoleeoError::Http(format!("Invalid HTTP method: {s}")))
 }
 
+/// GraphQL bodies go over POST — the only send shape we build. The UI locks
+/// the picker, but MCP updates and imports can store any method; enforce the
+/// invariant at the wire, where every path converges.
+pub(crate) fn effective_method(request: &HttpRequest) -> Result<reqwest::Method, VoleeoError> {
+    let is_graphql = request
+        .body
+        .as_ref()
+        .is_some_and(|b| matches!(b.kind, voleeo_core::BodyKind::Graphql));
+    if is_graphql {
+        Ok(reqwest::Method::POST)
+    } else {
+        parse_method(&request.method)
+    }
+}
+
 impl HttpExecutor {
     pub(crate) async fn send_inner(
         &self,
@@ -40,7 +55,7 @@ impl HttpExecutor {
     ) -> Result<HttpResponse, VoleeoError> {
         let request_id = request.id.clone();
         let url = normalize_url(&request.url)?;
-        let method = parse_method(&request.method)?;
+        let method = effective_method(request)?;
 
         let parsed_url = reqwest::Url::parse(&url)
             .map_err(|e| VoleeoError::Http(format!("Invalid URL: {e}")))?;
@@ -90,7 +105,7 @@ impl HttpExecutor {
             &mut events,
             started,
             "send",
-            format!("{} {} HTTP/1.1", request.method.to_uppercase(), path),
+            format!("{method} {path} HTTP/1.1"),
         );
         if !host.is_empty() {
             push_event(&mut events, started, "send", format!("Host: {host}"));
@@ -447,5 +462,34 @@ mod tests {
     fn parse_method_rejects_invalid() {
         assert!(parse_method("").is_err());
         assert!(parse_method("GET POST").is_err()); // spaces are not valid in method tokens
+    }
+
+    #[test]
+    fn effective_method_forces_post_for_graphql_bodies() {
+        let mut req = HttpRequest {
+            id: "test-req".into(),
+            request_type: "http".into(),
+            model: "request".into(),
+            workspace_id: "ws".into(),
+            folder_id: None,
+            method: "GET".into(),
+            name: "Test".into(),
+            url: "https://example.com".into(),
+            parameters: vec![],
+            headers: vec![],
+            body: None,
+            auth: voleeo_core::AuthConfig::None,
+            order: 0.0,
+            created_at: "2024-01-01T00:00:00.000000".into(),
+            updated_at: "2024-01-01T00:00:00.000000".into(),
+        };
+        assert_eq!(effective_method(&req).unwrap(), reqwest::Method::GET);
+
+        req.body = Some(voleeo_core::RequestBody {
+            kind: voleeo_core::BodyKind::Graphql,
+            text: "{ me }".into(),
+            ..Default::default()
+        });
+        assert_eq!(effective_method(&req).unwrap(), reqwest::Method::POST);
     }
 }

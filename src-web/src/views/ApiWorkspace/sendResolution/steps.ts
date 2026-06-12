@@ -97,6 +97,14 @@ export async function resolveBody(
       contentType: stored.contentType,
     }
   }
+  if (stored.kind === "graphql") {
+    const query = await resolve(ctx, stored.text ?? "", "GraphQL query")
+    if (!query.trim()) return null
+    const variables = stored.graphqlVariables
+      ? await resolve(ctx, stored.graphqlVariables, "GraphQL variables")
+      : undefined
+    return { kind: "graphql", text: query, graphqlVariables: variables }
+  }
   if (!(stored.text ?? "").trim()) return null
   return {
     kind: stored.kind,

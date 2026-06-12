@@ -19,6 +19,7 @@ interface Props {
   state: CtxMenuState
   onClose: () => void
   onCreateRequest: (folderId?: string) => void
+  onCreateGraphql: (folderId?: string) => void
   onCreateFolder: (folderId?: string) => void
   onCreateConnection: (folderId?: string) => void
   onCreateGrpc: (folderId?: string) => void
@@ -37,6 +38,7 @@ export function RequestContextMenu({
   state,
   onClose,
   onCreateRequest,
+  onCreateGraphql,
   onCreateFolder,
   onCreateConnection,
   onCreateGrpc,
@@ -99,6 +101,14 @@ export function RequestContextMenu({
           <button
             type="button"
             className={ITEM_CLASSES}
+            onClick={() => onCreateGraphql()}
+          >
+            <Glyph kind="plus" size={13} color="var(--base04)" />
+            <span>GraphQL</span>
+          </button>
+          <button
+            type="button"
+            className={ITEM_CLASSES}
             onClick={() => onCreateConnection()}
           >
             <Glyph kind="plus" size={13} color="var(--base04)" />
@@ -112,6 +122,7 @@ export function RequestContextMenu({
             <Glyph kind="plus" size={13} color="var(--base04)" />
             <span>gRPC</span>
           </button>
+          <div className={SEP} />
           <button
             type="button"
             className={ITEM_CLASSES}
@@ -158,6 +169,14 @@ export function RequestContextMenu({
           <button
             type="button"
             className={ITEM_CLASSES}
+            onClick={() => onCreateGraphql(state.id)}
+          >
+            <Glyph kind="plus" size={13} color="var(--base04)" />
+            <span>GraphQL</span>
+          </button>
+          <button
+            type="button"
+            className={ITEM_CLASSES}
             onClick={() => onCreateConnection(state.id)}
           >
             <Glyph kind="plus" size={13} color="var(--base04)" />
@@ -171,6 +190,7 @@ export function RequestContextMenu({
             <Glyph kind="plus" size={13} color="var(--base04)" />
             <span>gRPC</span>
           </button>
+          <div className={SEP} />
           <button
             type="button"
             className={ITEM_CLASSES}

@@ -23,6 +23,9 @@ interface Props {
   bodyKind: BodyKind
   bodyText: string
   onVarClickRef: RefObject<((name: string) => void) | null>
+  onFuncClickRef?: RefObject<
+    ((token: string, from: number, to: number) => void) | null
+  >
   overlay: ReturnType<typeof useBodyOverlay>
   onChange: (text: string) => void
   onBeautify: () => void
@@ -32,6 +35,7 @@ export function BodyEditor({
   bodyKind,
   bodyText,
   onVarClickRef,
+  onFuncClickRef,
   overlay,
   onChange,
   onBeautify,
@@ -52,9 +56,9 @@ export function BodyEditor({
     return []
   }, [bodyKind])
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: onVarClickRef is a stable ref
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refs are stable
   const chipDecorations = useMemo(
-    () => createTemplateDecorations(onVarClickRef),
+    () => createTemplateDecorations(onVarClickRef, onFuncClickRef),
     [],
   )
 

@@ -3,29 +3,44 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import type { BodyKind } from "./useBodyEditor"
 
-// Grouped: none · raw · form/multipart · binary — separators sit between groups.
-const BODY_KIND_GROUPS: { kind: BodyKind; label: string }[][] = [
-  [{ kind: "none", label: "No Body" }],
-  [
-    { kind: "json", label: "JSON" },
-    { kind: "xml", label: "XML" },
-    { kind: "html", label: "HTML" },
-    { kind: "text", label: "Text" },
-  ],
-  [
-    { kind: "form_url_encoded", label: "Form URL Encoded" },
-    { kind: "multipart", label: "Multipart Form" },
-  ],
-  [{ kind: "binary", label: "Binary" }],
+interface BodyKindGroup {
+  label?: string
+  items: { kind: BodyKind; label: string }[]
+}
+
+const BODY_KIND_GROUPS: BodyKindGroup[] = [
+  {
+    label: "Text",
+    items: [
+      { kind: "json", label: "JSON" },
+      { kind: "xml", label: "XML" },
+      { kind: "html", label: "HTML" },
+      { kind: "text", label: "Text" },
+    ],
+  },
+  { label: "Query", items: [{ kind: "graphql", label: "GraphQL" }] },
+  {
+    label: "Form",
+    items: [
+      { kind: "form_url_encoded", label: "URL Encoded" },
+      { kind: "multipart", label: "Multipart" },
+    ],
+  },
+  {
+    label: "Other",
+    items: [
+      { kind: "none", label: "No Body" },
+      { kind: "binary", label: "Binary" },
+    ],
+  },
 ]
 
-const BODY_KINDS = BODY_KIND_GROUPS.flat()
+const BODY_KINDS = BODY_KIND_GROUPS.flatMap((g) => g.items)
 
 interface Props {
   bodyKind: BodyKind
@@ -49,26 +64,30 @@ export function BodyKindSelect({ bodyKind, onChange }: Props) {
         {activeLabel}
         <Glyph kind="chevron" size={11} color="currentColor" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-[140px]">
-        {BODY_KIND_GROUPS.map((group, i) => (
-          <div key={group[0].kind}>
-            {i > 0 && <DropdownMenuSeparator />}
-            {group.map((b) => {
+      <DropdownMenuContent align="end" className="min-w-[150px]">
+        {BODY_KIND_GROUPS.map((group) => (
+          <div key={group.label ?? group.items[0].kind}>
+            {group.label && (
+              <div className="px-2 pt-2 pb-1 font-mono text-[0.72rem] uppercase tracking-wider text-muted">
+                {group.label}
+              </div>
+            )}
+            {group.items.map((b) => {
               const active = b.kind === bodyKind
               return (
                 <DropdownMenuItem
                   key={b.kind}
-                  className="font-sans text-[0.857rem] focus:bg-subtle focus:text-fg cursor-pointer grid grid-cols-[1fr_16px] items-center gap-2"
+                  className="font-sans text-[0.857rem] focus:bg-subtle focus:text-fg cursor-pointer grid grid-cols-[16px_1fr] items-center gap-2"
                   onClick={() => {
                     if (!active) onChange(b.kind)
                   }}
                 >
-                  <span>{b.label}</span>
                   <span className="flex items-center justify-center">
                     {active && (
                       <Glyph kind="check" size={11} color="var(--base04)" />
                     )}
                   </span>
+                  <span>{b.label}</span>
                 </DropdownMenuItem>
               )
             })}

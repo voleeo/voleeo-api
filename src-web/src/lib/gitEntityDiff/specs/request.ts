@@ -4,7 +4,16 @@ import type {
 } from "../../../../../packages/types/bindings"
 import { blob, type Field, listField, scalar } from "../engine"
 import { paramEqual, paramId, paramValue } from "../helpers"
-import { authBlob, bodyShow, bodyText, headerList } from "./shared"
+import {
+  authBlob,
+  bodyShow,
+  bodyText,
+  gqlQueryShow,
+  gqlQueryText,
+  gqlVarsShow,
+  gqlVarsText,
+  headerList,
+} from "./shared"
 
 export const requestSpecs: Field<HttpRequest>[] = [
   scalar(
@@ -52,6 +61,24 @@ export const requestSpecs: Field<HttpRequest>[] = [
     "Body",
     (e) => bodyText(e.body),
     (e) => bodyShow(e.body),
+    (from, to) => {
+      to.body = from.body
+    },
+  ),
+  blob<HttpRequest>(
+    "graphqlQuery",
+    "Query",
+    (e) => gqlQueryText(e.body),
+    (e) => gqlQueryShow(e.body),
+    (from, to) => {
+      to.body = from.body
+    },
+  ),
+  blob<HttpRequest>(
+    "graphqlVariables",
+    "Variables",
+    (e) => gqlVarsText(e.body),
+    (e) => gqlVarsShow(e.body),
     (from, to) => {
       to.body = from.body
     },

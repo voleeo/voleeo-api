@@ -4,6 +4,7 @@ import { AuthTypeSelect } from "../AuthTab/AuthTypeSelect"
 import type { SetAuth } from "../AuthTab/useAuthEditor"
 import { BodyKindSelect } from "../BodyTab/BodyKindSelect"
 import type { BodyKind } from "../BodyTab/useBodyEditor"
+import type { InheritedHeader } from "../HeadersTab/InheritedHeaders"
 
 export type RequestTab = "params" | "headers" | "body" | "auth"
 
@@ -11,6 +12,7 @@ interface Props {
   request: HttpRequest | null
   activeTab: RequestTab
   paramCounts: { enabled: number; total: number } | null
+  inheritedHeaders: InheritedHeader[]
   auth: AuthConfig
   bodyKind: BodyKind
   onTabChange: (tab: RequestTab) => void
@@ -44,6 +46,7 @@ export function TabBar({
   request,
   activeTab,
   paramCounts,
+  inheritedHeaders,
   auth,
   bodyKind,
   onTabChange,
@@ -56,11 +59,12 @@ export function TabBar({
     : "PARAMS"
 
   const hdrAll = (request?.headers ?? []).filter((h) => h.name.trim())
+  const inherited = inheritedHeaders.filter((h) => !h.overridden).length
   const headersLabel = request
     ? countLabel(
         "HEADERS",
-        hdrAll.filter((h) => h.enabled).length,
-        hdrAll.length,
+        hdrAll.filter((h) => h.enabled).length + inherited,
+        hdrAll.length + inherited,
       )
     : "HEADERS"
 

@@ -118,7 +118,7 @@ function CookieSection({
             No Cookies
           </p>
         ) : (
-          <table className="w-full border-collapse">
+          <table className="w-full border-collapse selectable-text">
             <tbody>
               {rows.map((row, i) => (
                 // biome-ignore lint/suspicious/noArrayIndexKey: cookies can have duplicate names

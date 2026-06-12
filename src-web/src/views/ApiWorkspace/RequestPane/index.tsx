@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useMemo, useRef, useState } from "react"
+import { useShallow } from "zustand/react/shallow"
 import { FolderScopeProvider } from "@/components/TemplateInput/folderScope"
 import type { CommandImportResult } from "@/lib/commandImport"
 import type { AuthConfig } from "@/store/requests"
@@ -8,6 +9,7 @@ import { useUiStore } from "@/store/workspace"
 import { EnvironmentsModal } from "@/views/EnvironmentsModal"
 import { useAuthEditor } from "../AuthTab/useAuthEditor"
 import { useBodyEditor } from "../BodyTab/useBodyEditor"
+import { computeInheritedHeaders } from "../HeadersTab/computeInheritedHeaders"
 import { SentRequestInspector } from "../SentRequestInspector"
 import { RequestActionBar } from "./RequestActionBar"
 import { TabBar } from "./TabBar"
@@ -25,6 +27,18 @@ export function RequestPane() {
   )
   const activeRequest = useRequestStore(selectActiveRequest)
   const updateRequest = useRequestStore((s) => s.updateRequest)
+  const folders = useRequestStore(useShallow((s) => s.folders))
+
+  const inheritedHeaders = useMemo(
+    () =>
+      computeInheritedHeaders(
+        activeRequest?.folderId,
+        activeRequest?.headers ?? [],
+        folders,
+        activeWorkspace,
+      ),
+    [activeRequest?.folderId, activeRequest?.headers, folders, activeWorkspace],
+  )
 
   const [inspectorOpen, setInspectorOpen] = useState(false)
   const headersCommitRef = useRef<() => Promise<void>>(async () => {})
@@ -74,8 +88,6 @@ export function RequestPane() {
   const handleImportCommand = useCallback(
     (result: CommandImportResult) => {
       if (!activeWorkspaceId || !activeRequest) return
-      // Set the URL draft directly so the editor reflects the import immediately;
-      // other tabs rehydrate from the store on their own switching effects.
       draft.setUrlDraft(result.parsed.url)
       void updateRequest(
         activeWorkspaceId,
@@ -97,12 +109,10 @@ export function RequestPane() {
 
   return (
     <>
-      {/* Folder variables of the request's folder are in scope for every
-          template input below — but NOT the EnvironmentsModal (context flows
-          through portals), which must keep env-only suggestions. */}
       <FolderScopeProvider folderId={activeRequest?.folderId ?? null}>
         <RequestActionBar
           method={method}
+          methodLocked={body.bodyKind === "graphql"}
           urlDraft={draft.urlDraft}
           disabled={disabled}
           isSending={send.isSending}
@@ -122,6 +132,7 @@ export function RequestPane() {
           request={activeRequest}
           activeTab={ui.activeTab}
           paramCounts={ui.paramCounts}
+          inheritedHeaders={inheritedHeaders}
           auth={auth}
           bodyKind={body.bodyKind}
           onTabChange={ui.setActiveTab}
@@ -133,6 +144,7 @@ export function RequestPane() {
           activeTab={ui.activeTab}
           request={activeRequest}
           draft={draft}
+          inheritedHeaders={inheritedHeaders}
           headersCommitRef={headersCommitRef}
           auth={auth}
           body={body}

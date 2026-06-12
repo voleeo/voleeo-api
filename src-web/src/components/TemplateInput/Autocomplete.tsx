@@ -32,6 +32,7 @@ const GROUP_LABEL: Record<AutocompleteItem["kind"], string> = {
   func: "Functions",
   namespace: "Namespaces",
   constant: "Suggestions",
+  schema: "Schema",
 }
 
 interface Group {
@@ -178,6 +179,19 @@ function Row({
           </span>
         </>
       )}
+      {item.kind === "schema" && (
+        <>
+          <Badge letter="g" color="var(--base0F)" />
+          <span className="font-mono text-[11px] text-fg flex-1 truncate">
+            <HighlightMatch text={item.label} query={query} />
+          </span>
+          {item.detail && (
+            <span className="font-mono text-[10px] text-muted shrink-0 italic">
+              {item.detail}
+            </span>
+          )}
+        </>
+      )}
       {item.kind === "constant" && (
         <>
           <Badge letter={item.badge} color={badgeColor(item.badge)} />
@@ -232,5 +246,6 @@ function itemKey(item: AutocompleteItem, i: number): string {
   if (item.kind === "var") return `var:${item.name}`
   if (item.kind === "func") return `func:${item.fn.name}`
   if (item.kind === "constant") return `const:${item.value}:${i}`
+  if (item.kind === "schema") return `schema:${item.label}:${i}`
   return `ns:${item.prefix}:${i}`
 }

@@ -21,6 +21,16 @@ function bodyDisplayText(body: RequestBody): string {
         .join("\n")
     case "binary":
       return body.filePath ? `[binary] ${body.filePath}` : "[binary]"
+    case "graphql": {
+      let variables: unknown = null
+      try {
+        if (body.graphqlVariables?.trim())
+          variables = JSON.parse(body.graphqlVariables)
+      } catch {
+        variables = null
+      }
+      return JSON.stringify({ query: body.text ?? "", variables }, null, 2)
+    }
     default:
       return body.text ?? ""
   }

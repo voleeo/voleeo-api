@@ -38,7 +38,7 @@ export function HeadersTab({
 
   return (
     <div className="flex-1 overflow-auto max-h-full">
-      <table className="w-full border-collapse">
+      <table className="w-full border-collapse selectable-text">
         <tbody>
           {response.headers.map((h: HttpResponseHeader) => (
             <tr key={`${h.name}:${h.value}`} className="border-b border-border">

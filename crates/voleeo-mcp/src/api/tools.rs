@@ -46,7 +46,7 @@ pub(super) fn definitions() -> Vec<ToolDef> {
         },
         ToolDef {
             name: "request.update".into(),
-            description: "Update an existing request's method, URL, or name.".into(),
+            description: "Update an existing request's method, URL, or name. Setting `graphqlQuery` turns it into a GraphQL request — a plain HTTP POST with a `{ query, variables }` JSON body; send it with request.send.".into(),
             input_schema: obj_schema(
                 &[
                     ("workspaceId", "Workspace ID", str_schema()),
@@ -56,6 +56,8 @@ pub(super) fn definitions() -> Vec<ToolDef> {
                     ("method", "New HTTP method", str_schema()),
                     ("url", "New URL", str_schema()),
                     ("name", "New name", str_schema()),
+                    ("graphqlQuery", "GraphQL query/mutation document; sets a GraphQL body (auto-switches a GET to POST)", str_schema()),
+                    ("graphqlVariables", "GraphQL variables as a JSON object string; updates the variables of an existing GraphQL body", str_schema()),
                 ],
             ),
         },

@@ -61,6 +61,7 @@ interface TreeUiStore {
   requestRename: (id: string) => void
   /** Tree calls this after starting rename to acknowledge the request. */
   consumePendingRename: () => void
+  focusNewItem: (id: string) => void
 }
 
 export const useTreeUiStore = create<TreeUiStore>((set, get) => ({
@@ -126,4 +127,12 @@ export const useTreeUiStore = create<TreeUiStore>((set, get) => ({
 
   requestRename: (id) => set({ pendingRenameId: id }),
   consumePendingRename: () => set({ pendingRenameId: null }),
+
+  focusNewItem: (id) =>
+    set({
+      focusedNodeId: id,
+      selectedIds: [id],
+      selectionAnchorId: id,
+      pendingRenameId: id,
+    }),
 }))

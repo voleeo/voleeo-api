@@ -129,6 +129,23 @@ impl ApiBackend {
         if let Some(u) = args["url"].as_str() {
             req.url = u.to_string();
         }
+        if let Some(q) = args["graphqlQuery"].as_str() {
+            let variables = args["graphqlVariables"].as_str().map(str::to_string);
+            req.body = Some(voleeo_core::RequestBody {
+                kind: voleeo_core::BodyKind::Graphql,
+                text: q.to_string(),
+                graphql_variables: variables,
+                ..Default::default()
+            });
+            if req.method.eq_ignore_ascii_case("GET") {
+                req.method = "POST".to_string();
+            }
+        } else if let (Some(v), Some(body)) = (args["graphqlVariables"].as_str(), req.body.as_mut())
+        {
+            if matches!(body.kind, voleeo_core::BodyKind::Graphql) {
+                body.graphql_variables = Some(v.to_string());
+            }
+        }
         match self.requests.update_request(
             &ws_id,
             &req_id,

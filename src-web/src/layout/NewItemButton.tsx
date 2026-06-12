@@ -5,6 +5,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { SHORTCUTS } from "@/config/shortcuts"
@@ -15,22 +16,28 @@ import { useUiStore } from "@/store/workspace"
 import { ITEM } from "./gitMenu"
 
 function queueRenameFor(id: string | undefined) {
-  if (id) useTreeUiStore.getState().requestRename(id)
+  if (id) useTreeUiStore.getState().focusNewItem(id)
 }
 
 export function NewItemButton() {
   const [open, setOpen] = useState(false)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const activeWorkspaceId = useUiStore((s) => s.activeWorkspaceId)
-  const { createRequest, createFolder, createConnection, createGrpc } =
-    useRequestStore(
-      useShallow((s) => ({
-        createRequest: s.createRequest,
-        createFolder: s.createFolder,
-        createConnection: s.createConnection,
-        createGrpc: s.createGrpc,
-      })),
-    )
+  const {
+    createRequest,
+    createGraphqlRequest,
+    createFolder,
+    createConnection,
+    createGrpc,
+  } = useRequestStore(
+    useShallow((s) => ({
+      createRequest: s.createRequest,
+      createGraphqlRequest: s.createGraphqlRequest,
+      createFolder: s.createFolder,
+      createConnection: s.createConnection,
+      createGrpc: s.createGrpc,
+    })),
+  )
 
   const openMenu = useCallback(() => {
     wrapperRef.current?.querySelector("button")?.click()
@@ -54,6 +61,17 @@ export function NewItemButton() {
     setOpen(false)
     const folderId = resolveTargetFolderId()
     const created = await createRequest(
+      activeWorkspaceId,
+      folderId ? { folderId } : undefined,
+    )
+    queueRenameFor(created?.id)
+  }
+
+  async function handleCreateGraphql() {
+    if (!activeWorkspaceId) return
+    setOpen(false)
+    const folderId = resolveTargetFolderId()
+    const created = await createGraphqlRequest(
       activeWorkspaceId,
       folderId ? { folderId } : undefined,
     )
@@ -105,14 +123,19 @@ export function NewItemButton() {
             <Glyph kind="send" size={13} color="var(--base04)" />
             HTTP Request
           </DropdownMenuItem>
+          <DropdownMenuItem className={ITEM} onClick={handleCreateGraphql}>
+            <Glyph kind="schema" size={13} color="var(--base04)" />
+            GraphQL
+          </DropdownMenuItem>
           <DropdownMenuItem className={ITEM} onClick={handleCreateConnection}>
             <Glyph kind="plug-charging" size={13} color="var(--base04)" />
             WebSocket
           </DropdownMenuItem>
           <DropdownMenuItem className={ITEM} onClick={handleCreateGrpc}>
-            <Glyph kind="schema" size={13} color="var(--base04)" />
+            <Glyph kind="arrows-left-right" size={13} color="var(--base04)" />
             gRPC
           </DropdownMenuItem>
+          <DropdownMenuSeparator />
           <DropdownMenuItem className={ITEM} onClick={handleCreateFolder}>
             <Glyph kind="folder" size={13} color="var(--base04)" />
             Folder

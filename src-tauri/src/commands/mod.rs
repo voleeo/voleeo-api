@@ -1,6 +1,7 @@
 pub mod cookie;
 pub mod environment;
 pub mod git;
+pub mod graphql;
 pub mod grpc;
 pub mod http;
 pub mod info;

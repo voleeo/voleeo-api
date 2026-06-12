@@ -21,7 +21,9 @@ fn raw_content_type(kind: &BodyKind) -> Option<&'static str> {
 pub(crate) fn has_content(body: &RequestBody) -> bool {
     match body.kind {
         BodyKind::None => false,
-        BodyKind::Json | BodyKind::Xml | BodyKind::Text | BodyKind::Html => !body.text.is_empty(),
+        BodyKind::Json | BodyKind::Xml | BodyKind::Text | BodyKind::Html | BodyKind::Graphql => {
+            !body.text.is_empty()
+        }
         BodyKind::FormUrlEncoded | BodyKind::Multipart => body
             .fields
             .as_ref()
@@ -78,6 +80,23 @@ pub(crate) async fn attach_body(
                 format!("Sending body: {} ({ct})", fmt_bytes(body.text.len())),
             );
             Ok(builder.body(body.text.clone()))
+        }
+
+        BodyKind::Graphql => {
+            if body.text.is_empty() {
+                return Ok(builder);
+            }
+            let payload = body.graphql_payload();
+            if !user_set_ct {
+                builder = builder.header("content-type", "application/json");
+            }
+            push_event(
+                events,
+                started,
+                "send",
+                format!("Sending GraphQL body: {}", fmt_bytes(payload.len())),
+            );
+            Ok(builder.body(payload))
         }
 
         BodyKind::FormUrlEncoded => {
@@ -248,5 +267,12 @@ mod tests {
             ..Default::default()
         };
         assert!(!has_content(&binary_empty));
+
+        let gql = RequestBody {
+            kind: BodyKind::Graphql,
+            text: "query { me }".into(),
+            ..Default::default()
+        };
+        assert!(has_content(&gql));
     }
 }

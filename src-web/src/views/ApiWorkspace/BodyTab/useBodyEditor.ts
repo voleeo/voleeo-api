@@ -1,5 +1,7 @@
 import type { RefObject } from "react"
 import { useCallback, useEffect, useRef, useState } from "react"
+import { MANAGED_CONTENT_TYPE } from "@/lib/contentTypes"
+import { randomId } from "@/lib/ids"
 import type {
   BodyField,
   BodyKind,
@@ -12,24 +14,7 @@ import { useUiStore } from "@/store/workspace"
 
 export type { BodyKind } from "@/store/requests"
 
-/** Content-Type the editor auto-manages per kind. Multipart/binary are absent —
- *  reqwest owns the multipart boundary; binary carries its type on the body. */
-const MANAGED_CONTENT_TYPE: Partial<Record<BodyKind, string>> = {
-  json: "application/json",
-  xml: "application/xml",
-  html: "text/html",
-  form_url_encoded: "application/x-www-form-urlencoded",
-}
-
 const MANAGED_VALUES = new Set(Object.values(MANAGED_CONTENT_TYPE))
-
-function randomId(): string {
-  const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
-  return Array.from(
-    { length: 8 },
-    () => chars[Math.floor(Math.random() * chars.length)],
-  ).join("")
-}
 
 /** Build the persisted RequestBody for a given kind + working state. */
 function composeBody(
@@ -38,6 +23,7 @@ function composeBody(
   fields: BodyField[],
   filePath: string | null,
   contentType: string | null,
+  graphqlVariables: string,
 ): RequestBody | null {
   switch (kind) {
     case "none":
@@ -52,6 +38,12 @@ function composeBody(
         filePath: filePath ?? undefined,
         contentType: contentType ?? undefined,
       }
+    case "graphql":
+      return {
+        kind,
+        text,
+        graphqlVariables: graphqlVariables || undefined,
+      }
     default:
       return { kind, text }
   }
@@ -63,10 +55,12 @@ export interface UseBodyEditorResult {
   bodyFields: BodyField[]
   binaryPath: string | null
   binaryContentType: string | null
+  graphqlVariables: string
   setBodyKind: (kind: BodyKind) => void
   setBodyText: (text: string) => void
   setBodyFields: (fields: BodyField[]) => void
   setBinary: (filePath: string | null, contentType?: string | null) => void
+  setGraphqlVariables: (variables: string) => void
 }
 
 export function useBodyEditor(
@@ -89,6 +83,9 @@ export function useBodyEditor(
   )
   const [binaryContentType, setBinaryContentType] = useState<string | null>(
     stored?.contentType ?? null,
+  )
+  const [graphqlVariables, setGraphqlVariablesState] = useState(
+    stored?.graphqlVariables ?? "",
   )
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -123,6 +120,7 @@ export function useBodyEditor(
           bodyFields,
           binaryPath,
           binaryContentType,
+          graphqlVariables,
         ),
       )
     }
@@ -145,6 +143,7 @@ export function useBodyEditor(
     setBodyFieldsState(b?.fields ?? [])
     setBinaryPath(b?.filePath ?? null)
     setBinaryContentType(b?.contentType ?? null)
+    setGraphqlVariablesState(b?.graphqlVariables ?? "")
   }, [request?.id])
 
   const debouncedSave = useCallback(
@@ -162,20 +161,72 @@ export function useBodyEditor(
     (text: string) => {
       setBodyTextState(text)
       debouncedSave(
-        composeBody(bodyKind, text, bodyFields, binaryPath, binaryContentType),
+        composeBody(
+          bodyKind,
+          text,
+          bodyFields,
+          binaryPath,
+          binaryContentType,
+          graphqlVariables,
+        ),
       )
     },
-    [bodyKind, bodyFields, binaryPath, binaryContentType, debouncedSave],
+    [
+      bodyKind,
+      bodyFields,
+      binaryPath,
+      binaryContentType,
+      graphqlVariables,
+      debouncedSave,
+    ],
+  )
+
+  const setGraphqlVariables = useCallback(
+    (variables: string) => {
+      setGraphqlVariablesState(variables)
+      debouncedSave(
+        composeBody(
+          bodyKind,
+          bodyText,
+          bodyFields,
+          binaryPath,
+          binaryContentType,
+          variables,
+        ),
+      )
+    },
+    [
+      bodyKind,
+      bodyText,
+      bodyFields,
+      binaryPath,
+      binaryContentType,
+      debouncedSave,
+    ],
   )
 
   const setBodyFields = useCallback(
     (fields: BodyField[]) => {
       setBodyFieldsState(fields)
       debouncedSave(
-        composeBody(bodyKind, bodyText, fields, binaryPath, binaryContentType),
+        composeBody(
+          bodyKind,
+          bodyText,
+          fields,
+          binaryPath,
+          binaryContentType,
+          graphqlVariables,
+        ),
       )
     },
-    [bodyKind, bodyText, binaryPath, binaryContentType, debouncedSave],
+    [
+      bodyKind,
+      bodyText,
+      binaryPath,
+      binaryContentType,
+      graphqlVariables,
+      debouncedSave,
+    ],
   )
 
   const setBinary = useCallback(
@@ -183,7 +234,9 @@ export function useBodyEditor(
       const ct = contentType === undefined ? binaryContentType : contentType
       setBinaryPath(filePath)
       setBinaryContentType(ct)
-      debouncedSave(composeBody("binary", bodyText, bodyFields, filePath, ct))
+      debouncedSave(
+        composeBody("binary", bodyText, bodyFields, filePath, ct, ""),
+      )
     },
     [bodyText, bodyFields, binaryContentType, debouncedSave],
   )
@@ -234,11 +287,15 @@ export function useBodyEditor(
         bodyFields,
         binaryPath,
         binaryContentType,
+        graphqlVariables,
       )
+      // GraphQL over HTTP is sent as POST (our only GraphQL send path), so the
+      // method is forced and the picker locks while this body kind is active.
+      const nextMethod = kind === "graphql" ? "POST" : request.method
       void updateRequest(
         activeWorkspaceId,
         request.id,
-        request.method,
+        nextMethod,
         request.url,
         request.parameters ?? [],
         nextHeaders,
@@ -252,6 +309,7 @@ export function useBodyEditor(
       bodyFields,
       binaryPath,
       binaryContentType,
+      graphqlVariables,
       updateRequest,
     ],
   )
@@ -262,9 +320,11 @@ export function useBodyEditor(
     bodyFields,
     binaryPath,
     binaryContentType,
+    graphqlVariables,
     setBodyKind,
     setBodyText,
     setBodyFields,
     setBinary,
+    setGraphqlVariables,
   }
 }

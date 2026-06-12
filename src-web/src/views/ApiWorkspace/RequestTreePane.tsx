@@ -160,6 +160,7 @@ export function RequestTreePane() {
           state={actions.ctxMenu}
           onClose={actions.closeCtxMenu}
           onCreateRequest={actions.handleCreateRequest}
+          onCreateGraphql={actions.handleCreateGraphql}
           onCreateFolder={actions.handleCreateFolder}
           onCreateConnection={actions.handleCreateConnection}
           onCreateGrpc={actions.handleCreateGrpc}

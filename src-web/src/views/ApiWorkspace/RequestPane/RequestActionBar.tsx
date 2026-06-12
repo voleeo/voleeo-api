@@ -36,6 +36,7 @@ function displayMethod(m: string): string {
 
 interface Props {
   method: string
+  methodLocked?: boolean
   urlDraft: string
   disabled: boolean
   isSending: boolean
@@ -53,6 +54,7 @@ interface Props {
 
 export function RequestActionBar({
   method,
+  methodLocked,
   urlDraft,
   disabled,
   isSending,
@@ -88,7 +90,15 @@ export function RequestActionBar({
           disabled && "opacity-50",
         )}
       >
-        {customMode ? (
+        {methodLocked ? (
+          <div
+            title="GraphQL is sent over POST"
+            className="self-stretch px-2.5 editor-font font-semibold flex items-center cursor-default outline-none border-0 bg-transparent border-r border-border shrink-0"
+            style={{ color: methodColor("POST"), fontSize: "0.786rem" }}
+          >
+            POST
+          </div>
+        ) : customMode ? (
           <input
             autoFocus
             value={customValue}

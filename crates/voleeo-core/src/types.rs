@@ -143,6 +143,7 @@ pub enum BodyKind {
     FormUrlEncoded,
     Multipart,
     Binary,
+    Graphql,
 }
 
 /// One field of a form-urlencoded or multipart body. `is_file` (multipart only)
@@ -175,6 +176,21 @@ pub struct RequestBody {
     pub file_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub content_type: Option<String>,
+    /// GraphQL variables (JSON object string). Only meaningful for `Graphql`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub graphql_variables: Option<String>,
+}
+
+impl RequestBody {
+    pub fn graphql_payload(&self) -> String {
+        let variables: serde_json::Value = self
+            .graphql_variables
+            .as_deref()
+            .filter(|s| !s.trim().is_empty())
+            .and_then(|s| serde_json::from_str(s).ok())
+            .unwrap_or(serde_json::Value::Null);
+        serde_json::json!({ "query": self.text, "variables": variables }).to_string()
+    }
 }
 
 #[derive(Type, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -607,4 +623,33 @@ pub fn new_workspace_id() -> String {
     (0..10)
         .map(|_| charset[rng.random_range(0..charset.len())])
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn graphql_payload_wraps_query_and_variables() {
+        let with_vars = RequestBody {
+            kind: BodyKind::Graphql,
+            text: "query Q($c: ID!) { country(code: $c) { name } }".into(),
+            graphql_variables: Some(r#"{"c":"UA"}"#.into()),
+            ..Default::default()
+        };
+        let v: serde_json::Value = serde_json::from_str(&with_vars.graphql_payload()).unwrap();
+        assert_eq!(
+            v["query"],
+            "query Q($c: ID!) { country(code: $c) { name } }"
+        );
+        assert_eq!(v["variables"]["c"], "UA");
+
+        let no_vars = RequestBody {
+            kind: BodyKind::Graphql,
+            text: "{ me }".into(),
+            ..Default::default()
+        };
+        let v: serde_json::Value = serde_json::from_str(&no_vars.graphql_payload()).unwrap();
+        assert!(v["variables"].is_null());
+    }
 }

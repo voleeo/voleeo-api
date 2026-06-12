@@ -66,6 +66,7 @@ interface UiStore {
   workspaceWindowMap: Record<string, string>
   panelLayout: PanelLayout
   treeVisible: boolean
+  graphqlDocsOpen: boolean
   pendingSettingsSection: WorkspaceSettingsSection | null
   pendingSettingsFocusKey: string | null
   setActiveTool: (tool: Tool) => void
@@ -73,6 +74,7 @@ interface UiStore {
   loadWorkspaces: () => Promise<void>
   togglePanelLayout: () => void
   toggleTreeVisible: () => void
+  setGraphqlDocsOpen: (open: boolean) => void
   requestWorkspaceSettings: (
     section: WorkspaceSettingsSection,
     focusKey?: string,
@@ -102,6 +104,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   workspaceWindowMap: {},
   panelLayout: "columns",
   treeVisible: true,
+  graphqlDocsOpen: false,
   pendingSettingsSection: null,
   pendingSettingsFocusKey: null,
   setActiveTool: (tool) => {
@@ -123,6 +126,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   clearPendingCookies: () => set({ pendingCookies: null }),
   requestEnvironments: (envId) => set({ pendingEnv: { envId } }),
   clearPendingEnv: () => set({ pendingEnv: null }),
+  setGraphqlDocsOpen: (open) => set({ graphqlDocsOpen: open }),
   togglePanelLayout: () =>
     set((s) => {
       const next: PanelLayout = s.panelLayout === "columns" ? "rows" : "columns"

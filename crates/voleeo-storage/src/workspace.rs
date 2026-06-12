@@ -1,6 +1,23 @@
 use chrono::Utc;
 use std::path::{Path, PathBuf};
-use voleeo_core::{new_workspace_id, AuthConfig, VoleeoError, Workspace};
+use voleeo_core::{new_workspace_id, AuthConfig, RequestParameter, VoleeoError, Workspace};
+
+fn default_workspace_headers() -> Vec<RequestParameter> {
+    vec![
+        RequestParameter {
+            id: "default-user-agent".to_string(),
+            name: "User-Agent".to_string(),
+            value: "voleeo".to_string(),
+            enabled: true,
+        },
+        RequestParameter {
+            id: "default-accept".to_string(),
+            name: "Accept".to_string(),
+            value: "*/*".to_string(),
+            enabled: true,
+        },
+    ]
+}
 
 #[derive(Clone)]
 pub struct WorkspaceStore {
@@ -63,7 +80,7 @@ impl WorkspaceStore {
             encrypted,
             sync_dir: None,
             key_check: None,
-            headers: vec![],
+            headers: default_workspace_headers(),
             auth: AuthConfig::None,
             dns_overrides: vec![],
             created_at: now.clone(),

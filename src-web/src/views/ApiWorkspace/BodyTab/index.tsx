@@ -1,9 +1,4 @@
-import { useMemo, useRef } from "react"
-import { createPortal } from "react-dom"
-import { useShallow } from "zustand/react/shallow"
-import { Autocomplete } from "@/components/TemplateInput/Autocomplete"
-import { useTemplateFunctions } from "@/plugins/hooks"
-import { useEnvironmentStore } from "@/store/environment"
+import { useRef } from "react"
 import { BinaryBody } from "./BinaryBody"
 import {
   BodyEditor,
@@ -12,8 +7,9 @@ import {
   beautifyXml,
 } from "./BodyEditor"
 import { FieldsBody } from "./FieldsBody"
+import { GraphqlBody } from "./GraphqlBody"
 import type { UseBodyEditorResult } from "./useBodyEditor"
-import { useBodyOverlay } from "./useBodyOverlay"
+import { EditorOverlayPortal, useEditorOverlay } from "./useEditorOverlay"
 
 interface Props {
   body: UseBodyEditorResult
@@ -24,33 +20,7 @@ const RAW_KINDS = new Set(["json", "xml", "text", "html"])
 
 export function BodyTab({ body, onVarClick }: Props) {
   const { bodyKind, bodyText, setBodyText } = body
-  const { environments, activeEnvId } = useEnvironmentStore(
-    useShallow((s) => ({
-      environments: s.environments,
-      activeEnvId: s.activeEnvId,
-    })),
-  )
-
-  const activeVars = useMemo(() => {
-    const globalVars =
-      environments
-        .find((e) => e.kind === "global")
-        ?.variables.filter((v) => v.enabled) ?? []
-    const personalVars =
-      environments
-        .find((e) => e.id === activeEnvId)
-        ?.variables.filter((v) => v.enabled) ?? []
-    const personalKeys = new Set(personalVars.map((v) => v.key))
-    return [
-      ...personalVars,
-      ...globalVars.filter((v) => !personalKeys.has(v.key)),
-    ]
-  }, [environments, activeEnvId])
-
-  const fns = useTemplateFunctions()
-  const varKeys = useMemo(() => activeVars.map((v) => v.key), [activeVars])
-
-  const overlay = useBodyOverlay(varKeys, fns)
+  const { overlay, funcModal } = useEditorOverlay(setBodyText)
 
   // Stable ref so the CM chip-click handler never captures a stale callback.
   const onVarClickRef = useRef<((name: string) => void) | null>(onVarClick)
@@ -83,11 +53,22 @@ export function BodyTab({ body, onVarClick }: Props) {
             bodyKind={bodyKind}
             bodyText={bodyText}
             onVarClickRef={onVarClickRef}
+            onFuncClickRef={funcModal.onFuncClickRef}
             overlay={overlay}
             onChange={setBodyText}
             onBeautify={handleBeautify}
           />
         </div>
+      )}
+
+      {bodyKind === "graphql" && (
+        <GraphqlBody
+          query={bodyText}
+          onQueryChange={setBodyText}
+          variables={body.graphqlVariables}
+          onVariablesChange={body.setGraphqlVariables}
+          onVarClick={onVarClick}
+        />
       )}
 
       {(bodyKind === "form_url_encoded" || bodyKind === "multipart") && (
@@ -113,21 +94,8 @@ export function BodyTab({ body, onVarClick }: Props) {
         </div>
       )}
 
-      {/* Autocomplete overlay — same component as TemplateInput */}
-      {overlay.overlayState.open &&
-        overlay.overlayState.anchorRect &&
-        overlay.overlayState.items.length > 0 &&
-        createPortal(
-          <Autocomplete
-            items={overlay.overlayState.items}
-            selectedIndex={overlay.overlayState.selectedIndex}
-            anchorRect={overlay.overlayState.anchorRect}
-            query={overlay.overlayState.query}
-            onSelect={overlay.selectItem}
-            onClose={overlay.close}
-          />,
-          document.body,
-        )}
+      <EditorOverlayPortal overlay={overlay} />
+      {funcModal.modal}
     </div>
   )
 }

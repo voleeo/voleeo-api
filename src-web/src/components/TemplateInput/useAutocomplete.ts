@@ -219,6 +219,8 @@ export function useAutocomplete({
       return
     }
 
+    // Schema items are never produced here (buildItems doesn't emit them).
+    if (item.kind !== "func") return
     // func — delegate to caller (modal vs. encryption dialog decision)
     const el = divRef.current
     if (!el) return

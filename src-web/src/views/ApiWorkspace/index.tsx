@@ -9,6 +9,7 @@ import { WsPane } from "@/views/WsWorkspace/WsPane"
 import { WsTranscriptPane } from "@/views/WsWorkspace/WsTranscriptPane"
 import { FolderPane } from "./FolderPane"
 import { FolderRunPanel } from "./FolderRunPanel"
+import { GraphqlDocsRail } from "./GraphqlDocsRail"
 import { PaneSeparator } from "./PaneSeparator"
 import { RequestPane } from "./RequestPane"
 import { RequestTreePane } from "./RequestTreePane"
@@ -57,59 +58,52 @@ export function ApiWorkspace() {
     onRowInnerSepDown,
   } = usePaneDrag(wsId, colRef, rowRef, innerRef)
 
-  if (isColumns) {
-    // Flat 3-pane layout: Tree | Request | Response
-    // sep1 locks pane3 (only Tree ↔ Request resize); sep2 locks pane1 (only Request ↔ Response resize)
-    return (
-      <div ref={colRef} className="h-full flex overflow-hidden bg-bg">
-        {treeVisible && (
-          <>
-            <div
-              style={{ width: `${sizes.colPane1}%` }}
-              className="shrink-0 h-full overflow-hidden"
-            >
-              <RequestTreePane />
-            </div>
-            <PaneSeparator dir="col" onMouseDown={onColSep1Down} />
-          </>
+  const layout = isColumns ? (
+    <div ref={colRef} className="h-full flex overflow-hidden bg-bg">
+      {treeVisible && (
+        <>
+          <div
+            style={{ width: `${sizes.colPane1}%` }}
+            className="shrink-0 h-full overflow-hidden"
+          >
+            <RequestTreePane />
+          </div>
+          <PaneSeparator dir="col" onMouseDown={onColSep1Down} />
+        </>
+      )}
+
+      <div className="flex-1 min-w-0 h-full overflow-hidden flex flex-col">
+        {activeFolderId ? (
+          <FolderPane />
+        ) : activeConnectionId ? (
+          <WsPane key={activeConnectionId} />
+        ) : activeGrpcId ? (
+          <GrpcPane key={activeGrpcId} />
+        ) : hasRequests ? (
+          <RequestPane />
+        ) : (
+          <EmptyWorkspace />
         )}
-
-        <div className="flex-1 min-w-0 h-full overflow-hidden flex flex-col">
-          {activeFolderId ? (
-            <FolderPane />
-          ) : activeConnectionId ? (
-            <WsPane key={activeConnectionId} />
-          ) : activeGrpcId ? (
-            <GrpcPane key={activeGrpcId} />
-          ) : hasRequests ? (
-            <RequestPane />
-          ) : (
-            <EmptyWorkspace />
-          )}
-        </div>
-
-        <PaneSeparator dir="col" onMouseDown={onColSep2Down} />
-
-        <div
-          style={{ width: `${sizes.colPane3}%` }}
-          className="shrink-0 h-full overflow-hidden"
-        >
-          {activeFolderId ? (
-            <FolderRunPanel />
-          ) : activeConnectionId ? (
-            <WsTranscriptPane />
-          ) : activeGrpcId ? (
-            <GrpcResponsePane key={activeGrpcId} />
-          ) : (
-            <ResponsePane />
-          )}
-        </div>
       </div>
-    )
-  }
 
-  // Rows layout: Tree side-by-side with vertically stacked Request / Response
-  return (
+      <PaneSeparator dir="col" onMouseDown={onColSep2Down} />
+
+      <div
+        style={{ width: `${sizes.colPane3}%` }}
+        className="shrink-0 h-full overflow-hidden"
+      >
+        {activeFolderId ? (
+          <FolderRunPanel />
+        ) : activeConnectionId ? (
+          <WsTranscriptPane />
+        ) : activeGrpcId ? (
+          <GrpcResponsePane key={activeGrpcId} />
+        ) : (
+          <ResponsePane />
+        )}
+      </div>
+    </div>
+  ) : (
     <div ref={rowRef} className="h-full flex overflow-hidden bg-bg">
       {treeVisible && (
         <>
@@ -191,6 +185,13 @@ export function ApiWorkspace() {
           <EmptyWorkspace />
         )}
       </div>
+    </div>
+  )
+
+  return (
+    <div className="h-full flex overflow-hidden bg-bg">
+      <div className="flex-1 min-w-0 h-full overflow-hidden">{layout}</div>
+      <GraphqlDocsRail />
     </div>
   )
 }

@@ -74,7 +74,7 @@ export function useTreeActions(
   // Queue inline-rename for the freshly-created entity. Same pattern
   // NewItemButton uses — the tree picks it up on next render.
   function queueRenameFor(id: string | undefined) {
-    if (id) useTreeUiStore.getState().requestRename(id)
+    if (id) useTreeUiStore.getState().focusNewItem(id)
   }
 
   async function handleCreateRequest(folderId?: string) {
@@ -94,6 +94,19 @@ export function useTreeActions(
     const created = await useRequestStore
       .getState()
       .createFolder(activeWorkspaceId, folderId ? { folderId } : undefined)
+    queueRenameFor(created?.id)
+  }
+
+  async function handleCreateGraphql(folderId?: string) {
+    setCtxMenu(null)
+    if (!activeWorkspaceId) return
+    if (folderId) useTreeUiStore.getState().ensureFoldersOpen([folderId])
+    const created = await useRequestStore
+      .getState()
+      .createGraphqlRequest(
+        activeWorkspaceId,
+        folderId ? { folderId } : undefined,
+      )
     queueRenameFor(created?.id)
   }
 
@@ -255,6 +268,7 @@ export function useTreeActions(
     closeCtxMenu,
     handleContextMenu,
     handleCreateRequest,
+    handleCreateGraphql,
     handleCreateFolder,
     handleCreateConnection,
     handleCreateGrpc,

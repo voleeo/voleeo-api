@@ -7,6 +7,7 @@ import {
   ArrowsClockwiseIcon,
   ArrowsLeftRightIcon,
   ArrowUpIcon,
+  BookOpenTextIcon,
   CalendarBlankIcon,
   CaretDoubleLeftIcon,
   CaretDoubleRightIcon,
@@ -83,6 +84,7 @@ interface GlyphProps {
 
 const KIND_MAP: Record<string, Icon> = {
   api: GlobeIcon,
+  book: BookOpenTextIcon,
   plus: PlusIcon,
   minus: MinusIcon,
   search: MagnifyingGlassIcon,

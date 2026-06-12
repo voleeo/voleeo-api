@@ -1,13 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
+import { randomId } from "@/lib/ids"
 import type { BodyField } from "@/store/requests"
-
-function randomId(): string {
-  const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
-  return Array.from(
-    { length: 8 },
-    () => chars[Math.floor(Math.random() * chars.length)],
-  ).join("")
-}
 
 function emptyField(): BodyField {
   return { id: randomId(), name: "", value: "", enabled: true, isFile: false }

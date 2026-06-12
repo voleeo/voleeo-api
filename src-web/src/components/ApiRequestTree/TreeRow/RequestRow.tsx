@@ -1,6 +1,6 @@
 import { useContext } from "react"
 import { Ctx } from "@/components/ApiRequestTree/types"
-import { methodColor, statusDotClass } from "@/components/tokens"
+import { C_GQL, methodColor, statusDotClass } from "@/components/tokens"
 import { cn } from "@/lib/utils"
 import type { TreeNode } from "@/store/requests"
 import { LeafRow } from "./LeafRow"
@@ -15,6 +15,7 @@ export function RequestRow({
   const { lastStatuses } = useContext(Ctx)
   const { request } = node
   const lastStatus = lastStatuses[request.id] ?? null
+  const isGraphql = request.body?.kind === "graphql"
 
   return (
     <LeafRow
@@ -26,11 +27,11 @@ export function RequestRow({
       onActivate={() => onSelectRequest(request.id)}
       badge={
         <span
-          title={request.method}
+          title={isGraphql ? "GraphQL" : request.method}
           className="font-mono text-[0.857rem] font-semibold w-9 text-right shrink-0 tracking-wide overflow-hidden"
-          style={{ color: methodColor(request.method) }}
+          style={{ color: isGraphql ? C_GQL : methodColor(request.method) }}
         >
-          {abbrev(request.method)}
+          {isGraphql ? "GQL" : abbrev(request.method)}
         </span>
       }
       statusDot={

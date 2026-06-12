@@ -26,6 +26,22 @@ function resolveFocusEnvId(
   return environments.find(has)?.id ?? null
 }
 
+function resolveInitialEnvId(
+  environments: Environment[],
+  activeEnvId: string | null,
+  focusVariable: Props["focusVariable"],
+): string | null {
+  if (focusVariable) {
+    const { envId, key } = focusVariable
+    if (envId) return envId
+    const found = resolveFocusEnvId(environments, activeEnvId, key)
+    if (found) return found
+  }
+  const active = environments.find((e) => e.id === activeEnvId)
+  const global = environments.find((e) => e.kind === "global")
+  return active?.id ?? global?.id ?? environments[0]?.id ?? null
+}
+
 export function EnvironmentsModal({
   workspaceId,
   onClose,
@@ -41,19 +57,9 @@ export function EnvironmentsModal({
 
   const globalEnv = environments.find((e) => e.kind === "global") ?? null
 
-  // When focusVariable is provided, start on the env whose value resolves —
-  // active env first, then global (searching all envs if envId is omitted).
-  const initialId = (() => {
-    if (focusVariable) {
-      const { envId, key } = focusVariable
-      if (envId) return envId
-      const found = resolveFocusEnvId(environments, activeEnvId, key)
-      if (found) return found
-    }
-    return globalEnv?.id ?? environments[0]?.id ?? null
-  })()
-
-  const [selectedId, setSelectedId] = useState<string | null>(initialId)
+  const [selectedId, setSelectedId] = useState<string | null>(() =>
+    resolveInitialEnvId(environments, activeEnvId, focusVariable),
+  )
 
   // Re-select when focusVariable changes after mount.
   useEffect(() => {

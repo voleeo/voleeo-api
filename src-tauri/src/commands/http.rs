@@ -81,11 +81,17 @@ pub async fn send_request(
     };
 
     // DNS overrides come from the workspace; empty list = system DNS only.
-    let dns_overrides = state
-        .workspaces
-        .get(&workspace_id)
-        .map(|w| w.dns_overrides)
-        .unwrap_or_default();
+    // Workspace read is sync fs — keep it off the async runtime.
+    let workspaces = state.workspaces.clone();
+    let ws_for_dns = workspace_id.clone();
+    let dns_overrides = tokio::task::spawn_blocking(move || {
+        workspaces
+            .get(&ws_for_dns)
+            .map(|w| w.dns_overrides)
+            .unwrap_or_default()
+    })
+    .await
+    .map_err(|e| VoleeoError::Storage(e.to_string()))?;
     let mut resp = state
         .executor
         .send(&req, attach_cookies, dns_overrides)

@@ -11,10 +11,11 @@ export const GROUP_ORDER = [
   "Headers",
   "Metadata",
   "Body",
+  "Query",
+  "Variables",
   "Message",
   "Authentication",
   "DNS Overrides",
-  "Variables",
   "Value",
 ] as const
 export type FieldGroup = (typeof GROUP_ORDER)[number]

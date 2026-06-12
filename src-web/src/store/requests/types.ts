@@ -45,7 +45,18 @@ export interface RequestStore {
   consumePendingFolderFocus: () => void
   createRequest: (
     workspaceId: string,
-    opts?: { folderId?: string; name?: string; method?: string; url?: string },
+    opts?: {
+      folderId?: string
+      name?: string
+      method?: string
+      url?: string
+      body?: RequestBody | null
+      headers?: RequestParameter[]
+    },
+  ) => Promise<HttpRequest | null>
+  createGraphqlRequest: (
+    workspaceId: string,
+    opts?: { folderId?: string; name?: string },
   ) => Promise<HttpRequest | null>
   createFolder: (
     workspaceId: string,

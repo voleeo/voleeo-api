@@ -1,6 +1,5 @@
 import type React from "react"
-import { useCallback, useMemo } from "react"
-import { useShallow } from "zustand/react/shallow"
+import { useCallback } from "react"
 import type {
   AuthConfig,
   HttpRequest,
@@ -13,7 +12,7 @@ import type { SetAuth } from "../AuthTab/useAuthEditor"
 import { BodyTab } from "../BodyTab"
 import type { UseBodyEditorResult } from "../BodyTab/useBodyEditor"
 import { HeadersTab } from "../HeadersTab"
-import { computeInheritedHeaders } from "../HeadersTab/computeInheritedHeaders"
+import type { InheritedHeader } from "../HeadersTab/InheritedHeaders"
 import { navigateToInheritedHeader } from "../HeadersTab/navigateInheritedHeader"
 import { ParamsTab } from "../ParamsTab"
 import type { RequestTab } from "./TabBar"
@@ -23,6 +22,7 @@ interface Props {
   activeTab: RequestTab
   request: HttpRequest | null
   draft: RequestDraft
+  inheritedHeaders: InheritedHeader[]
   headersCommitRef: React.RefObject<() => Promise<void>>
   auth: AuthConfig
   body: UseBodyEditorResult
@@ -39,6 +39,7 @@ export function TabContent({
   activeTab,
   request,
   draft,
+  inheritedHeaders,
   headersCommitRef,
   auth,
   body,
@@ -51,22 +52,7 @@ export function TabContent({
   onAuthChange,
 }: Props) {
   const workspaceId = useUiStore((s) => s.activeWorkspaceId)
-  const workspace = useUiStore((s) =>
-    s.workspaces.find((w) => w.id === s.activeWorkspaceId),
-  )
-  const folders = useRequestStore(useShallow((s) => s.folders))
   const updateRequest = useRequestStore((s) => s.updateRequest)
-
-  const inheritedHeaders = useMemo(
-    () =>
-      computeInheritedHeaders(
-        request?.folderId,
-        request?.headers ?? [],
-        folders,
-        workspace,
-      ),
-    [request?.folderId, request?.headers, folders, workspace],
-  )
 
   const headersCommit = useCallback(
     async (hdrs: RequestParameter[]) => {

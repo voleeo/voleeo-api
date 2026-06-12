@@ -10,6 +10,9 @@ export const C_WS = "var(--base09)"
 // Deliberately shares base0E with C_PATCH and the bidi kind in
 // GrpcWorkspace/GrpcPane/methodKind.ts — purple is the gRPC accent.
 export const C_GRPC = "var(--base0E)"
+// Tree badge for requests with a GraphQL body. base0F is the only palette slot
+// no other badge uses — the nearest base16 fit for GraphQL's pink brand.
+export const C_GQL = "var(--base0F)"
 
 export function methodColor(method: string): string {
   switch (method.toUpperCase()) {

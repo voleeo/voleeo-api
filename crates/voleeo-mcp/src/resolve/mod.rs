@@ -261,6 +261,9 @@ pub fn apply_to_request(req: &mut HttpRequest, vars: &HashMap<String, String>) {
     if let Some(body) = &mut req.body {
         if !matches!(body.kind, voleeo_core::BodyKind::None) {
             body.text = resolve_str(&body.text, vars);
+            if let Some(vars_text) = body.graphql_variables.as_mut() {
+                *vars_text = resolve_str(vars_text, vars);
+            }
             if let Some(fields) = body.fields.as_mut() {
                 for f in fields.iter_mut() {
                     f.name = resolve_str(&f.name, vars);

@@ -23,6 +23,7 @@ const BODY_KIND_LABEL: Record<RequestBody["kind"], string> = {
   form_url_encoded: "Form URL Encoded",
   multipart: "Multipart Form",
   binary: "Binary",
+  graphql: "GraphQL",
 }
 
 function serializeBody(b?: RequestBody | null): string {
@@ -43,16 +44,32 @@ function serializeBody(b?: RequestBody | null): string {
   }
 }
 
+// GraphQL renders as its own Query + Variables sections (below), so the generic
+// body field treats it as empty here.
+const isGraphql = (b?: RequestBody | null) => b?.kind === "graphql"
+
 export const bodyText = (b?: RequestBody | null) =>
-  b && b.kind !== "none" ? `${b.kind}\n${serializeBody(b)}` : ""
+  b && b.kind !== "none" && !isGraphql(b)
+    ? `${b.kind}\n${serializeBody(b)}`
+    : ""
 
 // Lead with the body type so the diff doesn't read as anonymous text.
 export const bodyShow = (b?: RequestBody | null) => {
-  if (!b || b.kind === "none") return "(empty)"
+  if (!b || b.kind === "none" || isGraphql(b)) return "(empty)"
   const body = serializeBody(b)
   const label = BODY_KIND_LABEL[b.kind]
   return body ? `${label}\n${body}` : label
 }
+
+export const gqlQueryText = (b?: RequestBody | null) =>
+  isGraphql(b) ? (b?.text ?? "") : ""
+export const gqlQueryShow = (b?: RequestBody | null) =>
+  isGraphql(b) && b?.text?.trim() ? b.text : "(empty)"
+
+export const gqlVarsText = (b?: RequestBody | null) =>
+  isGraphql(b) ? (b?.graphqlVariables ?? "") : ""
+export const gqlVarsShow = (b?: RequestBody | null) =>
+  isGraphql(b) && b?.graphqlVariables?.trim() ? b.graphqlVariables : "(empty)"
 
 const NONE_AUTH: AuthConfig = { kind: "none" }
 

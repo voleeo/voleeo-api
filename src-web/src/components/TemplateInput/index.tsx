@@ -197,7 +197,9 @@ export function TemplateInput({
         onCut={handleCut}
         onPaste={handlePaste}
         onBlur={() => {
-          if (!acOpen) onCommit?.()
+          if (acOpen) return
+          onCommit?.()
+          if (!multiline && divRef.current) divRef.current.scrollLeft = 0
         }}
         onKeyDown={handleKeyDown}
         onClick={handleClick}
