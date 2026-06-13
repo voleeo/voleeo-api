@@ -38,6 +38,63 @@ pub enum ApiKeyLocation {
     Query,
 }
 
+/// OAuth 1.0 signature method (RFC 5849 §3.4). `Hmac*` use the consumer/token
+/// secrets; `Rsa*` sign with the consumer's RSA private key; `PlainText` skips
+/// hashing and is only safe over TLS.
+#[derive(Type, Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum OAuth1Signature {
+    #[default]
+    HmacSha1,
+    HmacSha256,
+    HmacSha512,
+    RsaSha1,
+    RsaSha256,
+    RsaSha512,
+    PlainText,
+}
+
+/// OAuth 2.0 grant type (RFC 6749). `AuthorizationCode` is interactive (browser
+/// + loopback); the others fetch a token directly.
+#[derive(Type, Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum OAuth2Grant {
+    #[default]
+    ClientCredentials,
+    AuthorizationCode,
+    Password,
+}
+
+/// How client credentials reach the token endpoint: HTTP Basic header (default)
+/// or in the request body.
+#[derive(Type, Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum OAuth2ClientAuth {
+    #[default]
+    BasicHeader,
+    RequestBody,
+}
+
+/// PKCE code-challenge method: SHA-256 (default, recommended) or plain (the
+/// verifier is sent as-is). Authorization-code grant only.
+#[derive(Type, Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum OAuth2PkceMethod {
+    #[default]
+    S256,
+    Plain,
+}
+
+/// Where OAuth 1.0 puts its `oauth_*` params: the `Authorization` header
+/// (default) or the URL query string.
+#[derive(Type, Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum OAuth1Location {
+    #[default]
+    Header,
+    Query,
+}
+
 /// `enabled` defaults to true and is omitted from YAML when true, so toggling a
 /// scheme off (per scope) writes a single `enabled: false` and absence reads as
 /// on.
@@ -47,6 +104,10 @@ fn default_true() -> bool {
 
 fn is_true(b: &bool) -> bool {
     *b
+}
+
+fn is_default_pkce_method(m: &OAuth2PkceMethod) -> bool {
+    *m == OAuth2PkceMethod::default()
 }
 
 #[derive(Type, Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq)]
@@ -101,6 +162,83 @@ pub enum AuthConfig {
         #[serde(default = "default_true", skip_serializing_if = "is_true")]
         enabled: bool,
     },
+    /// OAuth 1.0 (RFC 5849), signed into the `Authorization` header at send time.
+    /// `token`/`token_secret` empty = two-legged (consumer-only) flow.
+    #[serde(rename = "oauth1")]
+    OAuth1 {
+        consumer_key: String,
+        consumer_secret: String,
+        #[serde(default)]
+        consumer_secret_encrypted: bool,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        token: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        token_secret: String,
+        #[serde(default)]
+        token_secret_encrypted: bool,
+        #[serde(default)]
+        signature_method: OAuth1Signature,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        realm: String,
+        /// PEM-encoded RSA private key — only used by the `Rsa*` methods.
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        private_key: String,
+        #[serde(default)]
+        private_key_encrypted: bool,
+        /// Where the `oauth_*` params go (header vs query).
+        #[serde(default)]
+        params_location: OAuth1Location,
+        // Advanced overrides — empty means "use the default / omit".
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        callback: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        verifier: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        timestamp: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        nonce: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        version: String,
+        #[serde(default = "default_true", skip_serializing_if = "is_true")]
+        enabled: bool,
+    },
+    /// OAuth 2.0 (RFC 6749). Resolves to a `Bearer` header from a machine-local
+    /// token cache at send time — `client_secret`/`password` are the only at-rest
+    /// secrets; the token itself never lives in the synced config.
+    #[serde(rename = "oauth2")]
+    OAuth2 {
+        grant_type: OAuth2Grant,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        auth_url: String,
+        token_url: String,
+        client_id: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        client_secret: String,
+        #[serde(default)]
+        client_secret_encrypted: bool,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        scope: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        audience: String,
+        #[serde(default)]
+        client_auth: OAuth2ClientAuth,
+        #[serde(default = "default_true", skip_serializing_if = "is_true")]
+        use_pkce: bool,
+        #[serde(default, skip_serializing_if = "is_default_pkce_method")]
+        code_challenge_method: OAuth2PkceMethod,
+        /// Optional PKCE verifier override — empty means generate a fresh one per
+        /// authorization. Advanced/debug use only.
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        code_verifier: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        username: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        password: String,
+        #[serde(default)]
+        password_encrypted: bool,
+        #[serde(default = "default_true", skip_serializing_if = "is_true")]
+        enabled: bool,
+    },
 }
 
 impl AuthConfig {
@@ -134,6 +272,29 @@ impl AuthConfig {
                 (secret_key, *secret_key_encrypted),
                 (session_token, *session_token_encrypted),
             ],
+            AuthConfig::OAuth1 {
+                consumer_secret,
+                consumer_secret_encrypted,
+                token_secret,
+                token_secret_encrypted,
+                private_key,
+                private_key_encrypted,
+                ..
+            } => vec![
+                (consumer_secret, *consumer_secret_encrypted),
+                (token_secret, *token_secret_encrypted),
+                (private_key, *private_key_encrypted),
+            ],
+            AuthConfig::OAuth2 {
+                client_secret,
+                client_secret_encrypted,
+                password,
+                password_encrypted,
+                ..
+            } => vec![
+                (client_secret, *client_secret_encrypted),
+                (password, *password_encrypted),
+            ],
             AuthConfig::None | AuthConfig::Inherit { .. } => Vec::new(),
         }
     }
@@ -146,7 +307,9 @@ impl AuthConfig {
             AuthConfig::Bearer { enabled, .. }
             | AuthConfig::Basic { enabled, .. }
             | AuthConfig::ApiKey { enabled, .. }
-            | AuthConfig::AwsSigV4 { enabled, .. } => *enabled,
+            | AuthConfig::AwsSigV4 { enabled, .. }
+            | AuthConfig::OAuth1 { enabled, .. }
+            | AuthConfig::OAuth2 { enabled, .. } => *enabled,
             AuthConfig::None | AuthConfig::Inherit { .. } => true,
         }
     }
@@ -161,15 +324,21 @@ impl AuthConfig {
     /// need the method/URL/body/timestamp), not injected as a static header at
     /// resolve time. Their resolved config rides on `HttpRequest.auth`.
     pub fn is_dynamic(&self) -> bool {
-        matches!(self, AuthConfig::AwsSigV4 { .. })
+        matches!(
+            self,
+            AuthConfig::AwsSigV4 { .. } | AuthConfig::OAuth1 { .. }
+        )
     }
 
     /// Whether this scheme can apply to `protocol`. HTTP supports every scheme;
-    /// WS/gRPC only the schemes reducible to a metadata header.
+    /// WS/gRPC only the static header schemes. The signing schemes are HTTP-only,
+    /// and OAuth 2.0's token flow is HTTP-only for now.
     pub fn supports(&self, protocol: Protocol) -> bool {
         match protocol {
             Protocol::Http => true,
-            Protocol::Ws | Protocol::Grpc => !matches!(self, AuthConfig::AwsSigV4 { .. }),
+            Protocol::Ws | Protocol::Grpc => {
+                !self.is_dynamic() && !matches!(self, AuthConfig::OAuth2 { .. })
+            }
         }
     }
 }

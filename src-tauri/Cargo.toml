@@ -32,7 +32,11 @@ voleeo-grpc = { path = "../crates/voleeo-grpc" }
 voleeo-git = { path = "../crates/voleeo-git" }
 voleeo-mcp = { path = "../crates/voleeo-mcp" }
 voleeo-storage = { path = "../crates/voleeo-storage" }
+voleeo-auth = { path = "../crates/voleeo-auth" }
+voleeo-oauth = { path = "../crates/voleeo-oauth" }
 chrono = { workspace = true }
+reqwest = { workspace = true }
+open = "5"
 keyring = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
@@ -52,3 +56,6 @@ voleeo-mac-window = { path = "../crates-tauri/voleeo-mac-window" }
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+
+[dev-dependencies]
+tempfile = "3"

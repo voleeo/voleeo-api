@@ -62,7 +62,7 @@ function Line({
         <div className="flex items-baseline gap-2 min-w-0">
           <span
             className={cn(
-              "flex-1 font-mono text-[0.857rem] text-muted break-words leading-[1.5]",
+              "flex-1 min-w-0 font-mono text-[0.857rem] text-muted break-all leading-[1.5]",
               hidden && "tracking-[1px]",
             )}
           >
@@ -206,6 +206,10 @@ export function SentRequestSummary({
         return "API key"
       case "aws_sig_v4":
         return "AWS SigV4"
+      case "oauth1":
+        return "OAuth 1.0"
+      case "oauth2":
+        return "OAuth 2.0"
       case "inherit":
         return "Inherit"
     }

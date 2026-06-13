@@ -1,4 +1,6 @@
+import { isAuthEnabled } from "@/lib/authSchemes"
 import type { ResolutionLog } from "@/lib/template"
+import { oauth2EnsureToken, resolveOAuth2Templates } from "@/store/oauth2"
 import {
   mergeInheritedHeadersAnnotated,
   mergeInheritedVariables,
@@ -57,6 +59,17 @@ export async function resolveSendPayload(
   headers.push(...applied.headers)
   if (applied.query)
     fullUrl += (fullUrl.includes("?") ? "&" : "?") + applied.query
+
+  if (input.forSend && auth.kind === "oauth2" && isAuthEnabled(auth)) {
+    const resolved = await resolveOAuth2Templates(auth, ctx.vars, ctx.fns)
+    const token = await oauth2EnsureToken(workspace.id, resolved)
+    headers.push({
+      id: "__auth",
+      name: "Authorization",
+      value: `Bearer ${token}`,
+      enabled: true,
+    })
+  }
 
   const cookies = await resolveCookies(ctx, activeJar, workspace.id)
 

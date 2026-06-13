@@ -1,9 +1,7 @@
 import { useEffect, useState } from "react"
 import { useShallow } from "zustand/react/shallow"
-import { Glyph } from "@/components/Glyph"
 import { ManagementModal } from "@/components/ManagementModal"
 import { isAbortError } from "@/lib/abort"
-import { cn } from "@/lib/utils"
 import { useTemplateFunctions } from "@/plugins/hooks"
 import { useCookiesStore } from "@/store/cookies"
 import { useEnvironmentStore } from "@/store/environment"
@@ -16,7 +14,6 @@ import {
   mergeEnvVars,
   resolveSendPayload,
 } from "../sendResolution"
-import { buildCurl } from "./buildCurl"
 import { SentRequestSummary } from "./SentRequestSummary"
 import type { SentRequestSnapshot } from "./types"
 
@@ -55,7 +52,6 @@ export function SentRequestInspector({ onClose }: Props) {
   const [preview, setPreview] = useState<SentRequestSnapshot | null>(null)
   const [previewing, setPreviewing] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
 
   // Compute preview against the current draft.
   useEffect(() => {
@@ -85,19 +81,38 @@ export function SentRequestInspector({ onClose }: Props) {
         })
         if (cancelled) return
         let signedAuthHeaders: { name: string; value: string }[] = []
+        let signedAuthQuery: { name: string; value: string }[] = []
         if (payload.dynamicAuthOverride) {
-          signedAuthHeaders = await signAuthHeaders(
+          const signed = await signAuthHeaders(
             payload.dynamicAuthOverride,
             activeRequest.method,
             payload.fullUrl,
             payload.body,
           )
           if (cancelled) return
+          signedAuthHeaders = signed.headers
+          signedAuthQuery = signed.query
         }
+        // OAuth 1.0 query placement appends to the URL.
+        const previewPayload =
+          signedAuthQuery.length > 0
+            ? {
+                ...payload,
+                fullUrl:
+                  payload.fullUrl +
+                  (payload.fullUrl.includes("?") ? "&" : "?") +
+                  signedAuthQuery
+                    .map(
+                      (p) =>
+                        `${encodeURIComponent(p.name)}=${encodeURIComponent(p.value)}`,
+                    )
+                    .join("&"),
+              }
+            : payload
         setPreview(
           buildSentSnapshot({
             request: activeRequest,
-            payload,
+            payload: previewPayload,
             capturedAt: null,
             signedAuthHeaders,
           }),
@@ -124,17 +139,6 @@ export function SentRequestInspector({ onClose }: Props) {
     templateFns,
   ])
 
-  const handleCopyCurl = async () => {
-    if (!preview) return
-    try {
-      await navigator.clipboard.writeText(buildCurl(preview))
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1300)
-    } catch {
-      /* no-op */
-    }
-  }
-
   return (
     <ManagementModal
       width={680}
@@ -159,29 +163,6 @@ export function SentRequestInspector({ onClose }: Props) {
               {previewing ? "Resolving…" : "Nothing to show."}
             </div>
           )}
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center px-4 py-3 border-t border-border shrink-0">
-          <button
-            type="button"
-            onClick={handleCopyCurl}
-            disabled={!preview}
-            className={cn(
-              "ml-auto inline-flex items-center gap-1.5 h-7 px-2.5 rounded-[5px] border bg-bg font-sans text-[0.786rem] cursor-pointer transition-colors outline-none",
-              copied
-                ? "border-success/40 text-success"
-                : "border-border text-muted hover:text-fg",
-              !preview && "opacity-50 cursor-not-allowed",
-            )}
-          >
-            <Glyph
-              kind={copied ? "check" : "copy"}
-              size={11}
-              color="currentColor"
-            />
-            {copied ? "Copied" : "Copy as cURL"}
-          </button>
         </div>
       </div>
     </ManagementModal>

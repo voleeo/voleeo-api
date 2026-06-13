@@ -9,3 +9,10 @@ edition = "2021"
 chrono = { workspace = true }
 hmac = "0.12"
 sha2 = "0.10"
+sha1 = "0.10"
+base64 = "0.22"
+rand = { workspace = true }
+rsa = { version = "0.9", features = ["sha1", "sha2"] }
+
+[dev-dependencies]
+rand_core = { version = "0.6", features = ["getrandom"] }

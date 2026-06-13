@@ -54,12 +54,34 @@ impl HttpExecutor {
         attached_sink: &Arc<Mutex<Vec<StoredCookie>>>,
     ) -> Result<HttpResponse, VoleeoError> {
         let request_id = request.id.clone();
-        let url = normalize_url(&request.url)?;
+        let mut url = normalize_url(&request.url)?;
         let method = effective_method(request)?;
         let method_str = method.to_string();
 
-        let parsed_url = reqwest::Url::parse(&url)
+        let mut parsed_url = reqwest::Url::parse(&url)
             .map_err(|e| VoleeoError::Http(format!("Invalid URL: {e}")))?;
+
+        // Dynamic auth (SigV4, OAuth 1.0) signs the final request. Compute it here
+        // so OAuth 1.0's query placement can append `oauth_*` to the URL before
+        // the request is built; its headers/notes are applied below.
+        let dynamic_auth = if request.auth.is_dynamic() {
+            let signed = crate::auth::sign_dynamic_auth(
+                &request.auth,
+                &method_str,
+                &parsed_url,
+                request.body.as_ref(),
+            )?;
+            if !signed.query.is_empty() {
+                for (k, v) in &signed.query {
+                    parsed_url.query_pairs_mut().append_pair(k, v);
+                }
+                url = parsed_url.to_string();
+            }
+            Some(signed)
+        } else {
+            None
+        };
+
         let host = parsed_url.host_str().unwrap_or("").to_string();
         let port = parsed_url.port_or_known_default().unwrap_or(0);
         let path = {
@@ -164,19 +186,13 @@ impl HttpExecutor {
                     .await?;
         }
 
-        // Dynamic auth (e.g. AWS SigV4) signs the final request — method, URL,
-        // and body — so it runs here, after the body is assembled. Static
-        // schemes were already turned into headers by the resolve layer.
-        if request.auth.is_dynamic() {
-            let auth_headers = crate::auth::dynamic_auth_headers(
-                &request.auth,
-                &method_str,
-                &parsed_url,
-                request.body.as_ref(),
-                &mut events,
-                started,
-            )?;
-            for (name, value) in auth_headers {
+        // Apply the dynamic-auth result computed above: notes → timeline, headers
+        // → request. (Query params were already appended to the URL.)
+        if let Some(signed) = dynamic_auth {
+            for note in signed.notes {
+                push_event(&mut events, started, "auth", note);
+            }
+            for (name, value) in signed.headers {
                 let header_name = reqwest::header::HeaderName::from_bytes(name.as_bytes())
                     .map_err(|_| VoleeoError::Http(format!("Invalid auth header name: {name}")))?;
                 let header_value =

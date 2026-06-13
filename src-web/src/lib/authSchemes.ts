@@ -74,6 +74,47 @@ export const AUTH_SCHEMES: Record<AuthKind, AuthScheme> = {
       service: "",
     }),
   },
+  oauth1: {
+    kind: "oauth1",
+    label: "OAuth 1.0",
+    description:
+      "Signs the request with OAuth 1.0 credentials into the Authorization header at send time.",
+    protocols: HTTP_ONLY,
+    dynamic: true,
+    fresh: () => ({
+      kind: "oauth1",
+      consumer_key: "",
+      consumer_secret: "",
+      token: "",
+      token_secret: "",
+      signature_method: "hmac_sha1",
+      realm: "",
+    }),
+  },
+  oauth2: {
+    kind: "oauth2",
+    label: "OAuth 2.0",
+    description:
+      "Fetches and caches an access token, then sends it as a Bearer header.",
+    protocols: HTTP_ONLY,
+    dynamic: false,
+    fresh: () => ({
+      kind: "oauth2",
+      grant_type: "client_credentials",
+      auth_url: "",
+      token_url: "",
+      client_id: "",
+      client_secret: "",
+      scope: "",
+      audience: "",
+      client_auth: "basic_header",
+      use_pkce: true,
+      code_challenge_method: "s256",
+      code_verifier: "",
+      username: "",
+      password: "",
+    }),
+  },
 }
 
 export const SELECTABLE_AUTH_KINDS: readonly AuthKind[] = [
@@ -82,6 +123,8 @@ export const SELECTABLE_AUTH_KINDS: readonly AuthKind[] = [
   "bearer",
   "api_key",
   "aws_sig_v4",
+  "oauth1",
+  "oauth2",
 ]
 
 export function freshAuth(kind: AuthKind): AuthConfig {
@@ -117,6 +160,8 @@ export function isAuthEnabled(auth: AuthConfig): boolean {
     case "basic":
     case "api_key":
     case "aws_sig_v4":
+    case "oauth1":
+    case "oauth2":
       return auth.enabled ?? true
     default:
       return true
@@ -129,6 +174,8 @@ export function setAuthEnabled(auth: AuthConfig, enabled: boolean): AuthConfig {
     case "basic":
     case "api_key":
     case "aws_sig_v4":
+    case "oauth1":
+    case "oauth2":
       return { ...auth, enabled }
     default:
       return auth

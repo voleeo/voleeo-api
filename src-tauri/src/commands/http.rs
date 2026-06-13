@@ -189,11 +189,20 @@ pub async fn cancel_request(
     Ok(())
 }
 
-/// Sign a dynamic auth scheme (AWS SigV4) over a resolved request and return the
-/// headers it would add — so preview and "Copy as …" can show the real
-/// signature without sending. `auth` must already be resolved (templates
-/// expanded, secrets decrypted); static/no auth yields an empty list. Pure, so
-/// no app state is touched.
+/// Signed contributions for preview / "Copy as …": header params and/or query
+/// params (OAuth 1.0 can place its params in either).
+#[derive(Debug, serde::Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SignedAuthParts {
+    pub headers: Vec<RequestParameter>,
+    pub query: Vec<RequestParameter>,
+}
+
+/// Sign a dynamic auth scheme (AWS SigV4, OAuth 1.0) over a resolved request and
+/// return the headers/query it would add — so preview and "Copy as …" can show
+/// the real signature without sending. `auth` must already be resolved (templates
+/// expanded, secrets decrypted); static/no auth yields empty lists. Pure, so no
+/// app state is touched.
 #[tauri::command]
 #[specta::specta]
 pub async fn sign_auth_headers(
@@ -201,15 +210,21 @@ pub async fn sign_auth_headers(
     method: String,
     url: String,
     body: Option<RequestBody>,
-) -> Result<Vec<RequestParameter>, VoleeoError> {
-    let headers = voleeo_http::sign_dynamic_auth_url(&auth, &method, &url, body.as_ref())?;
-    Ok(headers
-        .into_iter()
-        .map(|(name, value)| RequestParameter {
-            id: "__auth".into(),
-            name,
-            value,
-            enabled: true,
-        })
-        .collect())
+) -> Result<SignedAuthParts, VoleeoError> {
+    let (headers, query) = voleeo_http::sign_dynamic_auth_url(&auth, &method, &url, body.as_ref())?;
+    let to_params = |pairs: Vec<(String, String)>| {
+        pairs
+            .into_iter()
+            .map(|(name, value)| RequestParameter {
+                id: "__auth".into(),
+                name,
+                value,
+                enabled: true,
+            })
+            .collect()
+    };
+    Ok(SignedAuthParts {
+        headers: to_params(headers),
+        query: to_params(query),
+    })
 }

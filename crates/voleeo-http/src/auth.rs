@@ -3,10 +3,11 @@
 //! here; dynamic schemes need the *final* request (method, URL, body) and so are
 //! applied at send time, after the body is assembled. Phase 1: AWS SigV4.
 
-use crate::fmt::push_event;
-use std::time::Instant;
+use voleeo_auth::oauth1;
 use voleeo_auth::sigv4::{self, SigV4Request};
-use voleeo_core::{AuthConfig, BodyKind, RequestBody, TimelineEvent, VoleeoError};
+use voleeo_core::{
+    AuthConfig, BodyKind, OAuth1Location, OAuth1Signature, RequestBody, VoleeoError,
+};
 
 /// Compute the SHA-256 the signer needs over the body bytes reqwest will send.
 /// Multipart/binary aren't cheaply reproducible (boundaries, large files) → sign
@@ -40,12 +41,22 @@ fn payload_sha256(body: Option<&RequestBody>) -> (String, bool) {
     }
 }
 
-/// Signed headers for a dynamic scheme plus human-readable timeline notes. The
-/// executor surfaces the notes as `auth` events; preview/copy-as use just the
-/// headers.
+/// Signed headers and/or query params for a dynamic scheme, plus human-readable
+/// timeline notes. The executor surfaces the notes as `auth` events.
 pub struct DynamicAuth {
     pub headers: Vec<(String, String)>,
+    pub query: Vec<(String, String)>,
     pub notes: Vec<String>,
+}
+
+impl DynamicAuth {
+    fn empty() -> Self {
+        DynamicAuth {
+            headers: Vec::new(),
+            query: Vec::new(),
+            notes: Vec::new(),
+        }
+    }
 }
 
 /// Sign a dynamic scheme (AWS SigV4) over the final request. Pure — no side
@@ -60,10 +71,7 @@ pub fn sign_dynamic_auth(
     // A disabled (toggled-off) scheme contributes nothing — the single home for
     // dynamic-auth gating, so every caller (send/preview/copy-as) agrees.
     if !auth.is_active() {
-        return Ok(DynamicAuth {
-            headers: Vec::new(),
-            notes: Vec::new(),
-        });
+        return Ok(DynamicAuth::empty());
     }
     match auth {
         AuthConfig::AwsSigV4 {
@@ -109,45 +117,112 @@ pub fn sign_dynamic_auth(
             ));
             Ok(DynamicAuth {
                 headers: signed.headers,
+                query: Vec::new(),
                 notes,
             })
         }
+        AuthConfig::OAuth1 {
+            consumer_key,
+            consumer_secret,
+            token,
+            token_secret,
+            signature_method,
+            realm,
+            private_key,
+            params_location,
+            callback,
+            verifier,
+            timestamp,
+            nonce,
+            version,
+            ..
+        } => {
+            if consumer_key.trim().is_empty() {
+                return Err(VoleeoError::Http(
+                    "OAuth 1.0 requires a consumer key".into(),
+                ));
+            }
+            // base string URL: scheme://host[:port]/path, no query.
+            let base_url = format!(
+                "{}://{}{}",
+                parsed_url.scheme(),
+                host_header(parsed_url),
+                parsed_url.path(),
+            );
+            let method_sig = match signature_method {
+                OAuth1Signature::HmacSha1 => oauth1::SignatureMethod::HmacSha1,
+                OAuth1Signature::HmacSha256 => oauth1::SignatureMethod::HmacSha256,
+                OAuth1Signature::HmacSha512 => oauth1::SignatureMethod::HmacSha512,
+                OAuth1Signature::RsaSha1 => oauth1::SignatureMethod::RsaSha1,
+                OAuth1Signature::RsaSha256 => oauth1::SignatureMethod::RsaSha256,
+                OAuth1Signature::RsaSha512 => oauth1::SignatureMethod::RsaSha512,
+                OAuth1Signature::PlainText => oauth1::SignatureMethod::PlainText,
+            };
+            let nonce = if nonce.trim().is_empty() {
+                oauth1::gen_nonce()
+            } else {
+                nonce.trim().to_string()
+            };
+            let signed = oauth1::sign(
+                &oauth1::OAuth1Request {
+                    method,
+                    base_url: &base_url,
+                    query: parsed_url.query().unwrap_or(""),
+                    consumer_key: consumer_key.trim(),
+                    consumer_secret,
+                    token: token.trim(),
+                    token_secret,
+                    signature_method: method_sig,
+                    realm: realm.trim(),
+                    private_key,
+                    callback: callback.trim(),
+                    verifier: verifier.trim(),
+                    timestamp: timestamp.trim(),
+                    version: version.trim(),
+                },
+                &nonce,
+                chrono::Utc::now(),
+            )
+            .map_err(VoleeoError::Http)?;
+            let note = format!(
+                "OAuth 1.0 {} — consumer key {} ({})",
+                signed.method_label,
+                consumer_key.trim(),
+                match params_location {
+                    OAuth1Location::Header => "header",
+                    OAuth1Location::Query => "query",
+                },
+            );
+            let (headers, query) = match params_location {
+                OAuth1Location::Header => (vec![signed.header], Vec::new()),
+                OAuth1Location::Query => (Vec::new(), signed.params),
+            };
+            Ok(DynamicAuth {
+                headers,
+                query,
+                notes: vec![note],
+            })
+        }
         // Static schemes resolve to headers upstream; nothing to do here.
-        _ => Ok(DynamicAuth {
-            headers: Vec::new(),
-            notes: Vec::new(),
-        }),
+        _ => Ok(DynamicAuth::empty()),
     }
 }
 
 /// String-URL variant for callers without a parsed `reqwest::Url` (the
-/// preview/copy-as command). Normalizes the URL the same way a send does.
+/// preview/copy-as command). Returns `(headers, query)`. Normalizes the URL the
+/// same way a send does.
+#[allow(clippy::type_complexity)]
 pub fn sign_dynamic_auth_url(
     auth: &AuthConfig,
     method: &str,
     url: &str,
     body: Option<&RequestBody>,
-) -> Result<Vec<(String, String)>, VoleeoError> {
+) -> Result<(Vec<(String, String)>, Vec<(String, String)>), VoleeoError> {
     let normalized = crate::executor::normalize_url(url)?;
     let parsed = reqwest::Url::parse(&normalized)
         .map_err(|e| VoleeoError::Http(format!("Invalid URL: {e}")))?;
-    Ok(sign_dynamic_auth(auth, method, &parsed, body)?.headers)
-}
-
-/// Executor path: sign and push the timeline notes as `auth` events.
-pub(crate) fn dynamic_auth_headers(
-    auth: &AuthConfig,
-    method: &str,
-    parsed_url: &reqwest::Url,
-    body: Option<&RequestBody>,
-    events: &mut Vec<TimelineEvent>,
-    started: Instant,
-) -> Result<Vec<(String, String)>, VoleeoError> {
-    let result = sign_dynamic_auth(auth, method, parsed_url, body)?;
-    for note in result.notes {
-        push_event(events, started, "auth", note);
-    }
-    Ok(result.headers)
+    let result = sign_dynamic_auth(auth, method, &parsed, body)?;
+    Ok((result.headers, result.query))
 }
 
 /// The `Host` header value reqwest will send: host plus `:port` only when the

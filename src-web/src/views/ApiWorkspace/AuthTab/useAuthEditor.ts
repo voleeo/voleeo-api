@@ -40,6 +40,7 @@ export function useAuthEditor({
   })
 
   const prevIdRef = useRef(sourceId)
+  const lastSeenAuthRef = useRef(sourceAuth)
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional — fires on id change only
   useEffect(() => {
     if (sourceId === prevIdRef.current) return
@@ -48,8 +49,16 @@ export function useAuthEditor({
       clearTimeout(debounceRef.current)
       debounceRef.current = null
     }
+    lastSeenAuthRef.current = sourceAuth
     setAuthState(sourceAuth ?? NO_AUTH)
   }, [sourceId])
+
+  useEffect(() => {
+    if (sourceAuth === lastSeenAuthRef.current) return
+    lastSeenAuthRef.current = sourceAuth
+    if (debounceRef.current) return
+    setAuthState(sourceAuth ?? NO_AUTH)
+  }, [sourceAuth])
 
   const setAuth = useCallback<SetAuth>(
     (update) => {

@@ -86,6 +86,10 @@ export function buildSentSnapshot(args: {
             : auth
         return `AWS SigV4 (${sig.region || "—"}/${sig.service || "—"})`
       }
+      case "oauth1":
+        return `OAuth 1.0 (${auth.consumer_key || "—"})`
+      case "oauth2":
+        return `OAuth 2.0 (${auth.grant_type})`
       case "inherit":
         return "Inherited (no folder or workspace defined an auth)"
     }

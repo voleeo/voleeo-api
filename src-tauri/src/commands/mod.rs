@@ -5,6 +5,7 @@ pub mod graphql;
 pub mod grpc;
 pub mod http;
 pub mod info;
+pub mod oauth2;
 pub mod plugin_store;
 pub mod request;
 pub mod response;

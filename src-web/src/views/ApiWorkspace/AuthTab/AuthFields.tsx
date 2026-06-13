@@ -12,6 +12,8 @@ import { ApiKeyFields } from "./fields/ApiKeyFields"
 import { AwsSigV4Fields } from "./fields/AwsSigV4Fields"
 import { BasicFields } from "./fields/BasicFields"
 import { BearerFields } from "./fields/BearerFields"
+import { OAuth1Fields } from "./fields/OAuth1Fields"
+import { OAuth2Fields } from "./fields/OAuth2Fields"
 import { AuthToggleButton, WarningBlock } from "./fields/shared"
 import type { SetAuth } from "./useAuthEditor"
 
@@ -39,6 +41,14 @@ function FieldGroup({ auth, setAuth, onVarClick }: Props) {
     case "aws_sig_v4":
       return (
         <AwsSigV4Fields auth={auth} setAuth={setAuth} onVarClick={onVarClick} />
+      )
+    case "oauth1":
+      return (
+        <OAuth1Fields auth={auth} setAuth={setAuth} onVarClick={onVarClick} />
+      )
+    case "oauth2":
+      return (
+        <OAuth2Fields auth={auth} setAuth={setAuth} onVarClick={onVarClick} />
       )
     default:
       return null

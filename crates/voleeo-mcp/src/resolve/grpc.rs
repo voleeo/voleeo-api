@@ -138,7 +138,7 @@ pub fn apply_to_grpc(
         }
         AuthConfig::None | AuthConfig::Inherit { .. } => {}
         // SigV4 is HTTP-only; a gRPC request inheriting it sends no auth.
-        AuthConfig::AwsSigV4 { .. } => {}
+        AuthConfig::AwsSigV4 { .. } | AuthConfig::OAuth1 { .. } | AuthConfig::OAuth2 { .. } => {}
     }
 
     (target, message, metadata)

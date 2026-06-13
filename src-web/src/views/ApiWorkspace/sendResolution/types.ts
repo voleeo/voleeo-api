@@ -24,6 +24,7 @@ export interface ResolveSendInput {
   folders: ApiFolder[]
   workspace: Workspace
   activeJar?: CookieJar | null
+  forSend?: boolean
 }
 
 export interface AnnotatedHeader {

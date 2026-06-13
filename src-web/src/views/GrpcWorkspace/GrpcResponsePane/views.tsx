@@ -1,10 +1,10 @@
+import { JsonView } from "@/components/JsonView"
 import { cn } from "@/lib/utils"
 import type {
   GrpcStreamMessage,
   HttpResponseHeader,
   TimelineEvent,
 } from "../../../../../packages/types/bindings"
-import { JsonView } from "./JsonView"
 
 export function byteLen(s: string | undefined): number {
   return s ? new TextEncoder().encode(s).length : 0

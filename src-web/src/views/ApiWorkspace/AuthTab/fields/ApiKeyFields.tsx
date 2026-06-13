@@ -1,5 +1,10 @@
-import { cn } from "@/lib/utils"
-import { type FieldsProps, PlainField, SecretField } from "./shared"
+import type { ApiKeyLocation } from "../../../../../../packages/types/bindings"
+import { type FieldsProps, PlainField, SecretField, Segmented } from "./shared"
+
+const LOCATIONS: { value: ApiKeyLocation; label: string }[] = [
+  { value: "header", label: "Header" },
+  { value: "query", label: "Query" },
+]
 
 export function ApiKeyFields({
   auth,
@@ -30,30 +35,14 @@ export function ApiKeyFields({
         }
         onVarClick={onVarClick}
       />
-      <div className="flex items-center gap-3">
-        <span className="font-sans text-[0.857rem] text-muted">Add to</span>
-        <div className="flex items-center gap-0.5 rounded-[6px] border border-border bg-bg p-[2px]">
-          {(["header", "query"] as const).map((loc) => (
-            <button
-              key={loc}
-              type="button"
-              onClick={() =>
-                setAuth((p) =>
-                  p.kind === "api_key" ? { ...p, location: loc } : p,
-                )
-              }
-              className={cn(
-                "flex items-center px-2.5 py-0.5 rounded-[4px] border-0 outline-none cursor-pointer font-sans text-[0.857rem] transition-colors capitalize",
-                auth.location === loc
-                  ? "bg-accent/15 text-accent"
-                  : "bg-transparent text-muted hover:text-fg",
-              )}
-            >
-              {loc}
-            </button>
-          ))}
-        </div>
-      </div>
+      <Segmented
+        label="Add to"
+        value={auth.location}
+        options={LOCATIONS}
+        onChange={(location) =>
+          setAuth((p) => (p.kind === "api_key" ? { ...p, location } : p))
+        }
+      />
     </>
   )
 }

@@ -284,6 +284,11 @@ pub fn apply_to_request(req: &mut HttpRequest, vars: &HashMap<String, String>) {
         req.auth = AuthConfig::None;
     } else if req.auth.is_dynamic() {
         resolve_dynamic_auth(&mut req.auth, vars);
+    } else if matches!(req.auth, AuthConfig::OAuth2 { .. }) {
+        // Resolve `{{ }}` in place and leave `req.auth` — the async send handler
+        // exchanges the cached token for a Bearer header (network/cache access
+        // can't happen in this sync resolver).
+        resolve_oauth2_auth(&mut req.auth, vars);
     } else {
         match &req.auth.clone() {
             AuthConfig::Bearer { token, .. } => {
@@ -324,7 +329,8 @@ pub fn apply_to_request(req: &mut HttpRequest, vars: &HashMap<String, String>) {
             // context, so treat unresolved inherit as "no auth".
             AuthConfig::None | AuthConfig::Inherit { .. } => {}
             // Dynamic schemes are handled above; unreachable here.
-            AuthConfig::AwsSigV4 { .. } => {}
+            AuthConfig::AwsSigV4 { .. } | AuthConfig::OAuth1 { .. } | AuthConfig::OAuth2 { .. } => {
+            }
         }
         req.auth = AuthConfig::None;
     }
@@ -425,7 +431,7 @@ pub fn apply_to_connection(
         }
         AuthConfig::None | AuthConfig::Inherit { .. } => {}
         // SigV4 is HTTP-only; a WS connection inheriting it sends no auth.
-        AuthConfig::AwsSigV4 { .. } => {}
+        AuthConfig::AwsSigV4 { .. } | AuthConfig::OAuth1 { .. } | AuthConfig::OAuth2 { .. } => {}
     }
 
     let url = if query_parts.is_empty() {
@@ -440,24 +446,80 @@ pub fn apply_to_connection(
 /// executor signs the request later using the resolved config. Extend the match
 /// as new dynamic schemes are added.
 fn resolve_dynamic_auth(auth: &mut AuthConfig, vars: &HashMap<String, String>) {
-    if let AuthConfig::AwsSigV4 {
-        access_key,
-        secret_key,
-        session_token,
-        region,
-        service,
-        ..
-    } = auth
-    {
-        *access_key = resolve_str(access_key, vars);
-        *secret_key = resolve_str(secret_key, vars);
-        *session_token = resolve_str(session_token, vars);
-        *region = resolve_str(region, vars);
-        *service = resolve_str(service, vars);
+    match auth {
+        AuthConfig::AwsSigV4 {
+            access_key,
+            secret_key,
+            session_token,
+            region,
+            service,
+            ..
+        } => {
+            *access_key = resolve_str(access_key, vars);
+            *secret_key = resolve_str(secret_key, vars);
+            *session_token = resolve_str(session_token, vars);
+            *region = resolve_str(region, vars);
+            *service = resolve_str(service, vars);
+        }
+        AuthConfig::OAuth1 {
+            consumer_key,
+            consumer_secret,
+            token,
+            token_secret,
+            realm,
+            private_key,
+            callback,
+            verifier,
+            timestamp,
+            nonce,
+            version,
+            ..
+        } => {
+            *consumer_key = resolve_str(consumer_key, vars);
+            *consumer_secret = resolve_str(consumer_secret, vars);
+            *token = resolve_str(token, vars);
+            *token_secret = resolve_str(token_secret, vars);
+            *realm = resolve_str(realm, vars);
+            *private_key = resolve_str(private_key, vars);
+            *callback = resolve_str(callback, vars);
+            *verifier = resolve_str(verifier, vars);
+            *timestamp = resolve_str(timestamp, vars);
+            *nonce = resolve_str(nonce, vars);
+            *version = resolve_str(version, vars);
+        }
+        _ => {}
     }
 }
 
-fn auth_header(name: impl Into<String>, value: impl Into<String>) -> RequestParameter {
+/// Resolve `{{ VAR }}` in an OAuth 2.0 config's template fields in place. The
+/// async send handler then exchanges the cached token for a Bearer header.
+fn resolve_oauth2_auth(auth: &mut AuthConfig, vars: &HashMap<String, String>) {
+    if let AuthConfig::OAuth2 {
+        auth_url,
+        token_url,
+        client_id,
+        client_secret,
+        scope,
+        audience,
+        username,
+        password,
+        code_verifier,
+        ..
+    } = auth
+    {
+        *auth_url = resolve_str(auth_url, vars);
+        *token_url = resolve_str(token_url, vars);
+        *client_id = resolve_str(client_id, vars);
+        *client_secret = resolve_str(client_secret, vars);
+        *scope = resolve_str(scope, vars);
+        *audience = resolve_str(audience, vars);
+        *username = resolve_str(username, vars);
+        *password = resolve_str(password, vars);
+        *code_verifier = resolve_str(code_verifier, vars);
+    }
+}
+
+pub(crate) fn auth_header(name: impl Into<String>, value: impl Into<String>) -> RequestParameter {
     RequestParameter {
         id: "__auth".into(),
         name: name.into(),

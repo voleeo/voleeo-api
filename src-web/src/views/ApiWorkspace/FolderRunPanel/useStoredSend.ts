@@ -146,6 +146,7 @@ export async function resolveAndSendStoredRequest(
       folders: ctx.folders,
       workspace: ctx.workspace,
       activeJar: ctx.activeJar,
+      forSend: true,
     })
   } catch (e) {
     if (isAbortError(e)) return "aborted"

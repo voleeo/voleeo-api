@@ -5,7 +5,10 @@ pub mod git;
 pub mod traits;
 pub mod types;
 
-pub use auth::{ApiKeyLocation, AuthConfig, InheritSource, Protocol};
+pub use auth::{
+    ApiKeyLocation, AuthConfig, InheritSource, OAuth1Location, OAuth1Signature, OAuth2ClientAuth,
+    OAuth2Grant, OAuth2PkceMethod, Protocol,
+};
 pub use cookies::{CookieJar, SameSite, StoredCookie};
 pub use error::{GrpcFailure, HttpFailure, VoleeoError};
 pub use git::*;

@@ -53,14 +53,17 @@ export function sendRequestCommand(
   })
 }
 
+/** Sign a resolved dynamic scheme (SigV4, OAuth 1.0); returns the header and/or
+ *  query params it adds (OAuth 1.0 can place its params in either). Empty for
+ *  static/no/disabled auth. Sole entry-point to `commands.signAuthHeaders`. */
 export async function signAuthHeaders(
   auth: AuthConfig,
   method: string,
   url: string,
   body: RequestBody | null,
-): Promise<RequestParameter[]> {
+): Promise<{ headers: RequestParameter[]; query: RequestParameter[] }> {
   const res = await commands.signAuthHeaders(auth, method, url, body)
-  return res.status === "ok" ? res.data : []
+  return res.status === "ok" ? res.data : { headers: [], query: [] }
 }
 
 interface HttpStore {
@@ -83,6 +86,9 @@ interface HttpStore {
   ) => Promise<void>
   cancelRequest: (requestId: string) => Promise<void>
   clearResponse: (requestId: string) => void
+  /** Surface a send-pipeline failure (e.g. a thrown OAuth token fetch) as the
+   *  request's error banner, and clear any stuck loading state. */
+  setError: (requestId: string, message: string) => void
 }
 
 export const useHttpStore = create<HttpStore>((set) => ({
@@ -114,15 +120,29 @@ export const useHttpStore = create<HttpStore>((set) => ({
     const resolveEvents = resolutionToTimelineEvents(resolutionEvents ?? [])
     const resolutionNotes = resolveEvents.map((e) => e.text)
 
-    const res = await sendRequestCommand(workspaceId, requestId, {
-      urlOverride,
-      bodyOverride,
-      headersOverride,
-      resolutionNotes: resolutionNotes.length > 0 ? resolutionNotes : null,
-      environmentId,
-      cookieOverrides,
-      authOverride,
-    })
+    let res: Awaited<ReturnType<typeof sendRequestCommand>>
+    try {
+      res = await sendRequestCommand(workspaceId, requestId, {
+        urlOverride,
+        bodyOverride,
+        headersOverride,
+        resolutionNotes: resolutionNotes.length > 0 ? resolutionNotes : null,
+        environmentId,
+        cookieOverrides,
+        authOverride,
+      })
+    } catch (e) {
+      // An IPC-layer throw (serialization, panic) would otherwise leave
+      // `loading` stuck true, wedging the send button into cancel mode.
+      set((s) => ({
+        loading: { ...s.loading, [requestId]: false },
+        errors: {
+          ...s.errors,
+          [requestId]: e instanceof Error ? e.message : String(e),
+        },
+      }))
+      return
+    }
 
     if (res.status === "ok") {
       const captured = res.data.capturedCookies ?? []
@@ -226,6 +246,12 @@ export const useHttpStore = create<HttpStore>((set) => ({
   cancelRequest: async (requestId) => {
     await commands.cancelRequest(requestId)
   },
+
+  setError: (requestId, message) =>
+    set((s) => ({
+      loading: { ...s.loading, [requestId]: false },
+      errors: { ...s.errors, [requestId]: message },
+    })),
 
   clearResponse: (requestId) => {
     set((s) => {

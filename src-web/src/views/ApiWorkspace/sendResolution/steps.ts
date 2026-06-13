@@ -160,6 +160,54 @@ export async function applyAuth(
     }
     return { headers: [], resolvedAuth }
   }
+  if (auth.kind === "oauth1") {
+    const resolvedAuth: AuthConfig = {
+      kind: "oauth1",
+      consumer_key: await resolve(
+        ctx,
+        auth.consumer_key,
+        "Auth: OAuth1 consumer key",
+      ),
+      consumer_secret: await resolve(
+        ctx,
+        auth.consumer_secret,
+        "Auth: OAuth1 consumer secret",
+      ),
+      consumer_secret_encrypted: false,
+      token: auth.token
+        ? await resolve(ctx, auth.token, "Auth: OAuth1 token")
+        : "",
+      token_secret: auth.token_secret
+        ? await resolve(ctx, auth.token_secret, "Auth: OAuth1 token secret")
+        : "",
+      token_secret_encrypted: false,
+      signature_method: auth.signature_method ?? "hmac_sha1",
+      realm: auth.realm
+        ? await resolve(ctx, auth.realm, "Auth: OAuth1 realm")
+        : "",
+      private_key: auth.private_key
+        ? await resolve(ctx, auth.private_key, "Auth: OAuth1 private key")
+        : "",
+      private_key_encrypted: false,
+      params_location: auth.params_location ?? "header",
+      callback: auth.callback
+        ? await resolve(ctx, auth.callback, "Auth: OAuth1 callback")
+        : "",
+      verifier: auth.verifier
+        ? await resolve(ctx, auth.verifier, "Auth: OAuth1 verifier")
+        : "",
+      timestamp: auth.timestamp
+        ? await resolve(ctx, auth.timestamp, "Auth: OAuth1 timestamp")
+        : "",
+      nonce: auth.nonce
+        ? await resolve(ctx, auth.nonce, "Auth: OAuth1 nonce")
+        : "",
+      version: auth.version
+        ? await resolve(ctx, auth.version, "Auth: OAuth1 version")
+        : "",
+    }
+    return { headers: [], resolvedAuth }
+  }
   return { headers: [] }
 }
 

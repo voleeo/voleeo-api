@@ -8,7 +8,8 @@ import { useMemo } from "react"
 import { useThemeStore } from "@/store/theme"
 import { cmEditorTheme } from "@/views/ApiWorkspace/cmEditorTheme"
 
-/** Read-only, syntax-highlighted JSON viewer for gRPC response/message bodies. */
+/** Read-only, syntax-highlighted JSON viewer. Reused across gRPC bodies and the
+ *  OAuth 2.0 token inspector — CodeMirror gives native select-and-copy. */
 export function JsonView({ value }: { value: string }) {
   const isDark = useThemeStore((s) => s.activeTheme?.kind !== "light")
   const extensions = useMemo(

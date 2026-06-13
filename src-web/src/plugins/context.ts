@@ -101,13 +101,15 @@ export function createContext(meta: PluginMeta): Context {
 
     auth: {
       async signDynamic(auth, req) {
-        const rows = await signAuthHeaders(
+        const signed = await signAuthHeaders(
           auth as AuthConfig,
           req.method,
           req.url,
           (req.body ?? null) as RequestBody | null,
         )
-        return rows.map((h) => ({ name: h.name, value: h.value }))
+        const strip = (rows: { name: string; value: string }[]) =>
+          rows.map((h) => ({ name: h.name, value: h.value }))
+        return { headers: strip(signed.headers), query: strip(signed.query) }
       },
     },
 

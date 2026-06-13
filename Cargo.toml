@@ -8,6 +8,7 @@ members = [
     "crates/voleeo-storage",
     "crates/voleeo-http",
     "crates/voleeo-auth",
+    "crates/voleeo-oauth",
     "crates/voleeo-ws",
     "crates/voleeo-grpc",
     "crates/voleeo-git",

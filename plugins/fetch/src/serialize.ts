@@ -73,6 +73,15 @@ function authDisabled(auth: AuthConfig | undefined): boolean {
   return !!auth && "enabled" in auth && auth.enabled === false
 }
 
+/** Dynamic schemes the host signs over the final request (SigV4, OAuth 1.0). */
+function isSignedScheme(auth: AuthConfig | undefined): boolean {
+  return (
+    !!auth &&
+    (auth.kind === "aws_sig_v4" || auth.kind === "oauth1") &&
+    !authDisabled(auth)
+  )
+}
+
 async function buildAuthParts(
   ctx: Context,
   auth: AuthConfig | undefined,
@@ -176,8 +185,9 @@ export async function serializeAsFetch(
     }
   }
 
-  // Dynamic schemes (AWS SigV4) are signed by the host over the final request.
-  if (request.auth?.kind === "aws_sig_v4" && !authDisabled(request.auth)) {
+  // Dynamic schemes (AWS SigV4, OAuth 1.0) are signed by the host over the final
+  // request — into headers and/or the query string.
+  if (isSignedScheme(request.auth)) {
     const signBody =
       request.body && request.body.kind !== "none" && request.body.text
         ? {
@@ -189,7 +199,17 @@ export async function serializeAsFetch(
       await ctx.templates.render(request.auth),
       { method, url, body: signBody },
     )
-    for (const h of signed) headerPairs.push([h.name, h.value])
+    for (const h of signed.headers) headerPairs.push([h.name, h.value])
+    if (signed.query.length > 0) {
+      url = appendQuery(
+        url,
+        signed.query
+          .map(
+            (q) => `${encodeURIComponent(q.name)}=${encodeURIComponent(q.value)}`,
+          )
+          .join("&"),
+      )
+    }
   }
 
   const lines: string[] = []

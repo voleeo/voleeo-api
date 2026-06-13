@@ -19,10 +19,25 @@ export function NavEnvItem({ env, isActive, onClick, onDeleted }: Props) {
   const colorBtnRef = useRef<HTMLButtonElement>(null)
   const [pickerAnchor, setPickerAnchor] = useState<DOMRect | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [renameDraft, setRenameDraft] = useState<string | null>(null)
   const isGlobal = env.kind === "global"
 
   async function handleColorChange(color: string) {
     await update({ ...env, color }).catch(() => {})
+  }
+
+  function startRename(e: React.MouseEvent) {
+    if (isGlobal) return
+    e.stopPropagation()
+    setRenameDraft(env.name)
+  }
+
+  async function commitRename() {
+    const trimmed = renameDraft?.trim()
+    setRenameDraft(null)
+    if (trimmed && trimmed !== env.name) {
+      await update({ ...env, name: trimmed }).catch(() => {})
+    }
   }
 
   function handleDelete(e: React.MouseEvent) {
@@ -70,14 +85,33 @@ export function NavEnvItem({ env, isActive, onClick, onDeleted }: Props) {
           />
         )}
 
-        <span
-          className={cn(
-            "font-sans text-[0.929rem] truncate flex-1 text-left",
-            isActive ? "text-accent" : "text-muted group-hover:text-fg",
-          )}
-        >
-          {env.name}
-        </span>
+        {renameDraft !== null ? (
+          <input
+            autoFocus
+            value={renameDraft}
+            onChange={(e) => setRenameDraft(e.target.value)}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              e.stopPropagation()
+              if (e.key === "Enter") commitRename()
+              if (e.key === "Escape") setRenameDraft(null)
+            }}
+            onBlur={commitRename}
+            autoComplete="off"
+            spellCheck={false}
+            className="font-sans text-[0.929rem] text-fg bg-transparent border-0 outline-none flex-1 min-w-0 select-text"
+          />
+        ) : (
+          <span
+            onDoubleClick={startRename}
+            className={cn(
+              "font-sans text-[0.929rem] truncate flex-1 text-left",
+              isActive ? "text-accent" : "text-muted group-hover:text-fg",
+            )}
+          >
+            {env.name}
+          </span>
+        )}
 
         {isGlobal ? (
           <Glyph

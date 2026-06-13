@@ -2,9 +2,106 @@ import type { ReactNode } from "react"
 import { EncryptedInput } from "@/components/EncryptedInput"
 import { Glyph } from "@/components/Glyph"
 import { TemplateInput } from "@/components/TemplateInput"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import type { AuthConfig } from "@/store/requests"
 import type { SetAuth } from "../useAuthEditor"
+
+export function Segmented<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string
+  value: T
+  options: readonly { value: T; label: string }[]
+  onChange: (next: T) => void
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="font-sans text-[0.857rem] text-muted">{label}</span>
+      <div className="flex items-center gap-0.5 rounded-[6px] border border-border bg-bg p-[2px]">
+        {options.map((o) => (
+          <button
+            key={o.value}
+            type="button"
+            onClick={() => onChange(o.value)}
+            className={cn(
+              "flex items-center px-2.5 py-0.5 rounded-[4px] border-0 outline-none cursor-pointer font-sans text-[0.857rem] transition-colors",
+              value === o.value
+                ? "bg-accent/15 text-accent"
+                : "bg-transparent text-muted hover:text-fg",
+            )}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+export function LabeledDropdown<T extends string>({
+  label,
+  value,
+  options,
+  mono,
+  onChange,
+}: {
+  label: string
+  value: T
+  options: readonly { value: T; label: string }[]
+  mono?: boolean
+  onChange: (next: T) => void
+}) {
+  const active = options.find((o) => o.value === value)?.label ?? value
+  const textCls = mono
+    ? "font-mono text-[0.786rem]"
+    : "font-sans text-[0.857rem]"
+  return (
+    <div className="flex items-center gap-3">
+      <span className="font-sans text-[0.857rem] text-muted shrink-0">
+        {label}
+      </span>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          className={cn(
+            "flex items-center gap-1 rounded-[5px] border border-border bg-bg px-2.5 py-1 text-fg cursor-pointer outline-none hover:border-accent/50 transition-colors",
+            textCls,
+          )}
+        >
+          {active}
+          <Glyph kind="chevron-down" size={11} color="currentColor" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="min-w-[150px]">
+          {options.map((o) => (
+            <DropdownMenuItem
+              key={o.value}
+              className={cn(
+                "focus:bg-subtle focus:text-fg cursor-pointer grid grid-cols-[1fr_16px] items-center gap-2",
+                textCls,
+              )}
+              onClick={() => onChange(o.value)}
+            >
+              <span>{o.label}</span>
+              <span className="flex items-center justify-center">
+                {value === o.value && (
+                  <Glyph kind="check" size={11} color="var(--base04)" />
+                )}
+              </span>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  )
+}
 
 export interface FieldsProps<K extends AuthConfig["kind"]> {
   auth: Extract<AuthConfig, { kind: K }>

@@ -58,10 +58,16 @@ export interface Context {
 
   /** Resolve dynamic auth schemes that the host signs at send time. */
   auth: {
+    /** Sign a dynamic scheme (AWS SigV4, OAuth 1.0) over the final request and
+     *  return the header and/or query params to add (OAuth 1.0 can place its
+     *  params in either). `auth` must already be template-resolved. */
     signDynamic(
       auth: unknown,
       req: { method: string; url: string; body?: unknown },
-    ): Promise<Array<{ name: string; value: string }>>
+    ): Promise<{
+      headers: Array<{ name: string; value: string }>
+      query: Array<{ name: string; value: string }>
+    }>
   }
 
   /** Structured logging — output is tagged with the plugin id. */

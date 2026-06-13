@@ -70,6 +70,15 @@ function authDisabled(auth: AuthConfig | undefined): boolean {
   return !!auth && "enabled" in auth && auth.enabled === false
 }
 
+/** Dynamic schemes the host signs over the final request (SigV4, OAuth 1.0). */
+function isSignedScheme(auth: AuthConfig | undefined): boolean {
+  return (
+    !!auth &&
+    (auth.kind === "aws_sig_v4" || auth.kind === "oauth1") &&
+    !authDisabled(auth)
+  )
+}
+
 async function buildAuthParts(
   ctx: Context,
   auth: AuthConfig | undefined,
@@ -196,7 +205,7 @@ export async function serializeAsHttpie(
 
   // Dynamic schemes (AWS SigV4) are signed by the host over the final request.
   // HTTPie keeps query params out of the URL, so rebuild the full URL to sign.
-  if (request.auth?.kind === "aws_sig_v4" && !authDisabled(request.auth)) {
+  if (isSignedScheme(request.auth)) {
     const queryForSign = [
       ...queryParams.filter((q) => q.enabled && q.name),
       ...auth.extraQuery,
@@ -221,8 +230,12 @@ export async function serializeAsHttpie(
       await ctx.templates.render(request.auth),
       { method, url: signUrl, body: signBody },
     )
-    for (const h of signed) {
+    for (const h of signed.headers) {
       headerArgs.push(shellQuote(`${h.name}:${h.value}`))
+    }
+    // HTTPie carries query params as positional `name==value` args.
+    for (const q of signed.query) {
+      queryArgs.push(shellQuote(`${q.name}==${q.value}`))
     }
   }
 

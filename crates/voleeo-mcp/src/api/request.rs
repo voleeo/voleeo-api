@@ -2,7 +2,7 @@ use super::ApiBackend;
 use crate::{protocol::ToolResult, resolve};
 use serde_json::Value;
 use std::path::Path;
-use voleeo_core::{EnvironmentKind, StoredCookie, VoleeoError};
+use voleeo_core::{AuthConfig, EnvironmentKind, StoredCookie, VoleeoError};
 use voleeo_storage::{CookieJarStore, WorkspaceStore};
 
 /// Decrypt → upsert captured cookies by RFC 6265 identity → re-encrypt → save.
@@ -302,11 +302,37 @@ impl ApiBackend {
         })
         .await;
 
-        let (req, attach_cookies, jar_id) = match prepared {
+        let (mut req, attach_cookies, jar_id) = match prepared {
             Ok(Ok(r)) => r,
             Ok(Err(msg)) => return ToolResult::error(msg),
             Err(e) => return ToolResult::error(format!("Internal error: {e}")),
         };
+
+        // OAuth 2.0 resolves to a Bearer from the shared token cache: the
+        // non-interactive grants fetch/refresh as needed; authorization_code
+        // reuses a token previously acquired via the UI (it can't open a browser
+        // here). `apply_to_request` already expanded its `{{ }}` fields.
+        if matches!(req.auth, AuthConfig::OAuth2 { .. }) {
+            if req.auth.is_active() {
+                if let Some(config) = voleeo_oauth::OAuth2Config::from_auth(&req.auth) {
+                    let encrypted = self
+                        .workspaces
+                        .get(&ws_id)
+                        .map(|w| w.encrypted)
+                        .unwrap_or(false);
+                    match voleeo_oauth::ensure_token(&self.app_data_dir, &ws_id, encrypted, &config)
+                        .await
+                    {
+                        Ok(token) => req.headers.push(resolve::auth_header(
+                            "Authorization",
+                            format!("Bearer {token}"),
+                        )),
+                        Err(e) => return ToolResult::error(format!("OAuth 2.0: {e}")),
+                    }
+                }
+            }
+            req.auth = AuthConfig::None;
+        }
 
         eprintln!(
             "[mcp] prepared in {:.0}ms — sending {} {} (jar={jar_id}, {} cookie(s))",

@@ -1,5 +1,5 @@
 [package]
-name = "voleeo-mcp"
+name = "voleeo-oauth"
 version = "0.1.0"
 license.workspace = true
 repository.workspace = true
@@ -7,19 +7,14 @@ edition = "2021"
 
 [dependencies]
 voleeo-core = { path = "../voleeo-core" }
-voleeo-storage = { path = "../voleeo-storage" }
-voleeo-http = { path = "../voleeo-http" }
-voleeo-ws = { path = "../voleeo-ws" }
-voleeo-grpc = { path = "../voleeo-grpc" }
+voleeo-auth = { path = "../voleeo-auth" }
 voleeo-crypto = { path = "../voleeo-crypto" }
-voleeo-oauth = { path = "../voleeo-oauth" }
-voleeo-cookies = { path = "../voleeo-cookies" }
+chrono = { workspace = true }
+reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
 tokio = { workspace = true }
-chrono = { workspace = true }
-subtle = "2"
 
 [dev-dependencies]
 tempfile = "3"

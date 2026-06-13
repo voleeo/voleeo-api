@@ -4,6 +4,8 @@
 //! final request.
 
 pub mod encode;
+pub mod oauth1;
+pub mod oauth2;
 pub mod sigv4;
 
 pub use sigv4::{sign as sign_sigv4, SigV4Request, SignedSigV4};

@@ -117,11 +117,15 @@ export function useRequestSend({
         folders: useRequestStore.getState().folders,
         workspace: activeWorkspace,
         activeJar: jarForSend,
+        forSend: true,
       })
     } catch (e) {
       // Cancelled ask() prompt — abort silently.
       if (isAbortError(e)) return
-      throw e
+      useHttpStore
+        .getState()
+        .setError(activeRequest.id, e instanceof Error ? e.message : String(e))
+      return
     }
 
     const preflightEvents = pendingPreflightEvents.splice(0)
