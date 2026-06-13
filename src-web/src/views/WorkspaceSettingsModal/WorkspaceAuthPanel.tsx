@@ -25,24 +25,19 @@ export function WorkspaceAuthPanel({ workspace }: { workspace: Workspace }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-start justify-between gap-3">
-        <PanelHeading
-          title="Auth"
-          description={
-            <>
-              Applies to requests set to{" "}
-              <span className="text-fg">Inherit</span>. Folder auth overrides
-              it.
-            </>
-          }
-        />
+      <PanelHeading
+        title="Auth"
+        description={
+          <>
+            Applies to requests set to <span className="text-fg">Inherit</span>.
+            Folder auth overrides it.
+          </>
+        }
+      />
+      <div className="-ml-2.5">
         <AuthTypeSelect auth={auth} onChange={setAuth} />
       </div>
-      {auth.kind === "none" ? (
-        <div className="font-sans text-[0.857rem] text-muted/70 py-2">
-          No workspace authentication.
-        </div>
-      ) : (
+      {auth.kind !== "none" && (
         <div className="flex flex-col gap-3">
           <AuthFields auth={auth} setAuth={setAuth} onVarClick={() => {}} />
         </div>

@@ -63,13 +63,18 @@ interface AuthParts {
   basicAuth?: { username: string; password: string }
 }
 
+function authDisabled(auth: AuthConfig | undefined): boolean {
+  return !!auth && "enabled" in auth && auth.enabled === false
+}
+
 async function buildAuthParts(
   ctx: Context,
   auth: AuthConfig | undefined,
 ): Promise<AuthParts> {
   const headers: CurlHeader[] = []
   const query: Array<{ name: string; value: string }> = []
-  if (!auth || auth.kind === "none") return { headers, query }
+  if (!auth || auth.kind === "none" || authDisabled(auth))
+    return { headers, query }
   if (auth.kind === "bearer") {
     const token = await resolveStr(ctx, auth.token)
     headers.push({ name: "Authorization", value: `Bearer ${token}` })
@@ -136,10 +141,21 @@ async function resolve(
         }
       : undefined
 
+  const method = (request.method ?? "GET").toUpperCase()
+  // Dynamic schemes (AWS SigV4) are signed by the host over the final request.
+  const signed =
+    request.auth?.kind === "aws_sig_v4" && !authDisabled(request.auth)
+      ? await ctx.auth.signDynamic(await ctx.templates.render(request.auth), {
+          method,
+          url,
+          body,
+        })
+      : []
+
   return {
-    method: (request.method ?? "GET").toUpperCase(),
+    method,
     url,
-    headers: [...headers, ...auth.headers],
+    headers: [...headers, ...auth.headers, ...signed],
     body,
     basicAuth: auth.basicAuth,
   }

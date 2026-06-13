@@ -111,6 +111,15 @@ const AUTH_TYPE_LABEL: Record<string, string> = {
   bearer: "Bearer token",
   basic: "Basic",
   api_key: "API key",
+  aws_sig_v4: "AWS SigV4",
+}
+
+function stateEntry(enabled: boolean | undefined): AuthEntry {
+  return {
+    key: "auth.enabled",
+    label: "State",
+    value: enabled === false ? "Disabled" : "Enabled",
+  }
 }
 
 /** Stable string for equality checks (auth is merged atomically in conflicts). */
@@ -155,6 +164,7 @@ export function authEntries(auth: AuthConfig): AuthEntry[] {
       return [
         type,
         { key: "auth.token", label: "Token", value: auth.token, secret: true },
+        stateEntry(auth.enabled),
       ]
     case "basic":
       return [
@@ -166,6 +176,7 @@ export function authEntries(auth: AuthConfig): AuthEntry[] {
           value: auth.password,
           secret: true,
         },
+        stateEntry(auth.enabled),
       ]
     case "api_key":
       return [
@@ -173,7 +184,38 @@ export function authEntries(auth: AuthConfig): AuthEntry[] {
         { key: "auth.key", label: "Key name", value: auth.key },
         { key: "auth.value", label: "Value", value: auth.value, secret: true },
         { key: "auth.location", label: "Sent in", value: auth.location },
+        stateEntry(auth.enabled),
       ]
+    case "aws_sig_v4": {
+      const entries: AuthEntry[] = [
+        type,
+        {
+          key: "auth.access_key",
+          label: "Access key ID",
+          value: auth.access_key,
+        },
+        {
+          key: "auth.secret_key",
+          label: "Secret access key",
+          value: auth.secret_key,
+          secret: true,
+        },
+      ]
+      if (auth.session_token) {
+        entries.push({
+          key: "auth.session_token",
+          label: "Session token",
+          value: auth.session_token,
+          secret: true,
+        })
+      }
+      entries.push(
+        { key: "auth.region", label: "Region", value: auth.region },
+        { key: "auth.service", label: "Service", value: auth.service },
+        stateEntry(auth.enabled),
+      )
+      return entries
+    }
     default:
       return [type]
   }

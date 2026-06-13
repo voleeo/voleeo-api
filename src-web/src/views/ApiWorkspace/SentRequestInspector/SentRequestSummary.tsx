@@ -204,6 +204,8 @@ export function SentRequestSummary({
         return "Basic"
       case "api_key":
         return "API key"
+      case "aws_sig_v4":
+        return "AWS SigV4"
       case "inherit":
         return "Inherit"
     }

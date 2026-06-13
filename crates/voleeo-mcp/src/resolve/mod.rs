@@ -275,45 +275,58 @@ pub fn apply_to_request(req: &mut HttpRequest, vars: &HashMap<String, String>) {
         }
     }
 
-    // 6: resolve auth and inject as header or query param.
-    match &req.auth.clone() {
-        AuthConfig::Bearer { token, .. } => {
-            let t = resolve_str(token, vars);
-            req.headers
-                .push(auth_header("Authorization", format!("Bearer {t}")));
-        }
-        AuthConfig::Basic {
-            username, password, ..
-        } => {
-            let u = resolve_str(username, vars);
-            let p = resolve_str(password, vars);
-            let encoded = base64_encode(format!("{u}:{p}").as_bytes());
-            req.headers
-                .push(auth_header("Authorization", format!("Basic {encoded}")));
-        }
-        AuthConfig::ApiKey {
-            key,
-            value,
-            location,
-            ..
-        } => {
-            let k = resolve_str(key, vars);
-            let v = resolve_str(value, vars);
-            if !k.trim().is_empty() {
-                match location {
-                    ApiKeyLocation::Header => {
-                        req.headers.push(auth_header(k, v));
-                    }
-                    ApiKeyLocation::Query => {
-                        query_parts.push(format!("{}={}", url_encode(&k), url_encode(&v)));
+    // 6: resolve auth. A disabled (toggled-off) scheme applies nothing. Dynamic
+    // schemes (SigV4) are signed by the executor over the final request, so we
+    // only resolve their `{{ }}` fields in place and leave `req.auth` for the
+    // executor. Static schemes become a header/query param here, then `req.auth`
+    // is cleared so the executor never re-applies.
+    if !req.auth.is_active() {
+        req.auth = AuthConfig::None;
+    } else if req.auth.is_dynamic() {
+        resolve_dynamic_auth(&mut req.auth, vars);
+    } else {
+        match &req.auth.clone() {
+            AuthConfig::Bearer { token, .. } => {
+                let t = resolve_str(token, vars);
+                req.headers
+                    .push(auth_header("Authorization", format!("Bearer {t}")));
+            }
+            AuthConfig::Basic {
+                username, password, ..
+            } => {
+                let u = resolve_str(username, vars);
+                let p = resolve_str(password, vars);
+                let encoded = base64_encode(format!("{u}:{p}").as_bytes());
+                req.headers
+                    .push(auth_header("Authorization", format!("Basic {encoded}")));
+            }
+            AuthConfig::ApiKey {
+                key,
+                value,
+                location,
+                ..
+            } => {
+                let k = resolve_str(key, vars);
+                let v = resolve_str(value, vars);
+                if !k.trim().is_empty() {
+                    match location {
+                        ApiKeyLocation::Header => {
+                            req.headers.push(auth_header(k, v));
+                        }
+                        ApiKeyLocation::Query => {
+                            query_parts.push(format!("{}={}", url_encode(&k), url_encode(&v)));
+                        }
                     }
                 }
             }
+            // Inherit is resolved by the frontend before sending. When the MCP
+            // server sends a stored request directly it has no folder/workspace
+            // context, so treat unresolved inherit as "no auth".
+            AuthConfig::None | AuthConfig::Inherit { .. } => {}
+            // Dynamic schemes are handled above; unreachable here.
+            AuthConfig::AwsSigV4 { .. } => {}
         }
-        // Inherit is resolved by the frontend before sending. When the MCP
-        // server sends a stored request directly it has no folder/workspace
-        // context, so treat unresolved inherit as "no auth".
-        AuthConfig::None | AuthConfig::Inherit { .. } => {}
+        req.auth = AuthConfig::None;
     }
 
     req.url = if query_parts.is_empty() {
@@ -366,7 +379,14 @@ pub fn apply_to_connection(
         .map(|h| (resolve_str(&h.name, vars), resolve_str(&h.value, vars)))
         .collect();
 
-    match &conn.auth {
+    // A disabled (toggled-off) scheme applies nothing.
+    let none = AuthConfig::None;
+    let effective_auth = if conn.auth.is_active() {
+        &conn.auth
+    } else {
+        &none
+    };
+    match effective_auth {
         AuthConfig::Bearer { token, .. } => {
             headers.push((
                 "Authorization".into(),
@@ -404,6 +424,8 @@ pub fn apply_to_connection(
             }
         }
         AuthConfig::None | AuthConfig::Inherit { .. } => {}
+        // SigV4 is HTTP-only; a WS connection inheriting it sends no auth.
+        AuthConfig::AwsSigV4 { .. } => {}
     }
 
     let url = if query_parts.is_empty() {
@@ -412,6 +434,27 @@ pub fn apply_to_connection(
         format!("{}?{}", resolved_base, query_parts.join("&"))
     };
     (url, headers)
+}
+
+/// Resolve `{{ VAR }}` in every field of a dynamic auth scheme in place. The
+/// executor signs the request later using the resolved config. Extend the match
+/// as new dynamic schemes are added.
+fn resolve_dynamic_auth(auth: &mut AuthConfig, vars: &HashMap<String, String>) {
+    if let AuthConfig::AwsSigV4 {
+        access_key,
+        secret_key,
+        session_token,
+        region,
+        service,
+        ..
+    } = auth
+    {
+        *access_key = resolve_str(access_key, vars);
+        *secret_key = resolve_str(secret_key, vars);
+        *session_token = resolve_str(session_token, vars);
+        *region = resolve_str(region, vars);
+        *service = resolve_str(service, vars);
+    }
 }
 
 fn auth_header(name: impl Into<String>, value: impl Into<String>) -> RequestParameter {
@@ -727,6 +770,7 @@ mod tests {
         req.auth = AuthConfig::Bearer {
             token: "{{ TOKEN }}".into(),
             token_encrypted: false,
+            enabled: true,
         };
         apply_to_request(&mut req, &v);
         let auth_header = req.headers.iter().find(|h| h.name == "Authorization");
@@ -738,6 +782,23 @@ mod tests {
     }
 
     #[test]
+    fn apply_disabled_auth_injects_nothing() {
+        let v = vars(&[("TOKEN", "my-secret")]);
+        let mut req = bare_request("https://api.example.com/");
+        req.auth = AuthConfig::Bearer {
+            token: "{{ TOKEN }}".into(),
+            token_encrypted: false,
+            enabled: false,
+        };
+        apply_to_request(&mut req, &v);
+        assert!(
+            req.headers.iter().all(|h| h.name != "Authorization"),
+            "disabled auth must not inject a header"
+        );
+        assert!(matches!(req.auth, AuthConfig::None));
+    }
+
+    #[test]
     fn apply_basic_auth_base64_encodes() {
         let v = vars(&[]);
         let mut req = bare_request("https://api.example.com/");
@@ -745,6 +806,7 @@ mod tests {
             username: "user".into(),
             password: "pass".into(),
             password_encrypted: false,
+            enabled: true,
         };
         apply_to_request(&mut req, &v);
         let auth_header = req
@@ -765,6 +827,7 @@ mod tests {
             value: "secret".into(),
             location: ApiKeyLocation::Header,
             value_encrypted: false,
+            enabled: true,
         };
         apply_to_request(&mut req, &v);
         let h = req.headers.iter().find(|h| h.name == "X-Api-Key").unwrap();
@@ -780,6 +843,7 @@ mod tests {
             value: "tok".into(),
             location: ApiKeyLocation::Query,
             value_encrypted: false,
+            enabled: true,
         };
         apply_to_request(&mut req, &v);
         assert!(

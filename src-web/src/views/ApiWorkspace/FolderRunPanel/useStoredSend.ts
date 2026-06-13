@@ -171,6 +171,7 @@ export async function resolveAndSendStoredRequest(
       [...preflightEvents, ...payload.resolutionEvents],
       ctx.activeEnvId,
       payload.cookies,
+      payload.dynamicAuthOverride,
     )
   return "sent"
 }

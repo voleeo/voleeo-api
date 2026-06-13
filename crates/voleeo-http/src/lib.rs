@@ -1,3 +1,5 @@
+mod auth;
+pub use auth::sign_dynamic_auth_url;
 mod body;
 mod cookie_provider;
 mod dns;

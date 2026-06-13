@@ -1,4 +1,5 @@
 import { useShallow } from "zustand/react/shallow"
+import type { AuthProtocol } from "@/lib/authSchemes"
 import { cn } from "@/lib/utils"
 import {
   type ApiFolder,
@@ -15,6 +16,7 @@ interface Props {
   onVarClick: (varName: string) => void
   folderId?: string | null
   allowSourceSelect?: boolean
+  protocol?: AuthProtocol
 }
 
 function SourceToggle({
@@ -89,6 +91,7 @@ export function AuthTab({
   onVarClick,
   folderId,
   allowSourceSelect = false,
+  protocol,
 }: Props) {
   const folders = useRequestStore(useShallow((s) => s.folders))
   const workspaceAuth = useUiStore((s) => {
@@ -156,7 +159,12 @@ export function AuthTab({
   }
   return (
     <div className="flex flex-col gap-4 px-3.5 py-3">
-      <AuthFields auth={auth} setAuth={setAuth} onVarClick={onVarClick} />
+      <AuthFields
+        auth={auth}
+        setAuth={setAuth}
+        onVarClick={onVarClick}
+        protocol={protocol}
+      />
     </div>
   )
 }

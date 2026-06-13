@@ -41,10 +41,10 @@ function bodyDisplayText(body: RequestBody): string {
 export function buildSentSnapshot(args: {
   request: HttpRequest
   payload: ResolvedSendPayload
-  /** `Date.now()` at send; `null` for a live preview. */
   capturedAt: number | null
+  signedAuthHeaders?: { name: string; value: string }[]
 }): SentRequestSnapshot {
-  const { request, payload, capturedAt } = args
+  const { request, payload, capturedAt, signedAuthHeaders } = args
   const auth = payload.resolvedAuth
 
   // `headerOrigins` is parallel to the merged headers by index; anything past it
@@ -62,6 +62,12 @@ export function buildSentSnapshot(args: {
     headers.push({ name: h.name, value: h.value, origin })
   })
 
+  // Dynamic-auth signature headers (Authorization, x-amz-date, …) are computed
+  // backend-side; surface them as auth-origin rows.
+  for (const h of signedAuthHeaders ?? []) {
+    headers.push({ name: h.name, value: h.value, origin: { kind: "auth" } })
+  }
+
   const authSummary = (() => {
     switch (auth.kind) {
       case "none":
@@ -72,6 +78,14 @@ export function buildSentSnapshot(args: {
         return `Basic (${auth.username || "—"})`
       case "api_key":
         return `API key (${auth.key || "—"} in ${auth.location})`
+      case "aws_sig_v4": {
+        // Prefer the template-resolved config so the summary shows real values.
+        const sig =
+          payload.dynamicAuthOverride?.kind === "aws_sig_v4"
+            ? payload.dynamicAuthOverride
+            : auth
+        return `AWS SigV4 (${sig.region || "—"}/${sig.service || "—"})`
+      }
       case "inherit":
         return "Inherited (no folder or workspace defined an auth)"
     }

@@ -1,17 +1,31 @@
 import { Circle, Colorful } from "@uiw/react-color"
-import { useEffect, useRef } from "react"
+import { useEffect, useMemo, useRef } from "react"
 
-// Palette-aligned presets; no color math is done on these by the library.
-const PRESET_COLORS = [
-  "var(--base08)",
-  "var(--base09)",
-  "var(--base0A)",
-  "var(--base0B)",
-  "var(--base0C)",
-  "var(--base0D)",
-  "var(--base0E)",
-  "var(--base0F)",
+// Palette slots used as presets. They must be resolved to concrete hex before
+// reaching @uiw/react-color — its `hexToHsva` can't parse `var(--…)` and silently
+// returns black, which is the bug this component used to ship (clicking any
+// preset stored #000000). See `resolveCssColor`.
+const PRESET_SLOTS = [
+  "--base08",
+  "--base09",
+  "--base0A",
+  "--base0B",
+  "--base0C",
+  "--base0D",
+  "--base0E",
+  "--base0F",
 ]
+
+function resolveCssColor(value: string): string {
+  const trimmed = value.trim()
+  if (!trimmed.startsWith("var(")) return trimmed
+  const inner = trimmed.slice(4, trimmed.lastIndexOf(")"))
+  const name = inner.split(",")[0].trim()
+  const resolved = getComputedStyle(document.documentElement)
+    .getPropertyValue(name)
+    .trim()
+  return resolved || "#000000"
+}
 
 interface Props {
   color: string
@@ -28,6 +42,12 @@ export function ColorPickerPopover({
   onClose,
 }: Props) {
   const panelRef = useRef<HTMLDivElement>(null)
+
+  const presetHexes = useMemo(
+    () => PRESET_SLOTS.map((slot) => resolveCssColor(`var(${slot})`)),
+    [],
+  )
+  const resolvedColor = useMemo(() => resolveCssColor(color), [color])
 
   useEffect(() => {
     function handlePointerDown(e: PointerEvent) {
@@ -53,8 +73,8 @@ export function ColorPickerPopover({
       style={{ top, left, width: 220 }}
     >
       <Circle
-        colors={PRESET_COLORS}
-        color={color}
+        colors={presetHexes}
+        color={resolvedColor}
         onChange={(c) => onChange(c.hex)}
         pointProps={{
           style: { width: 18, height: 18 },
@@ -63,7 +83,7 @@ export function ColorPickerPopover({
       />
 
       <Colorful
-        color={color}
+        color={resolvedColor}
         disableAlpha
         onChange={(c) => onChange(c.hex)}
         style={{ width: "100%", borderRadius: 6 }}
@@ -72,10 +92,10 @@ export function ColorPickerPopover({
       <div className="flex items-center gap-2">
         <span
           className="w-5 h-5 rounded-full shrink-0 border border-border"
-          style={{ background: color }}
+          style={{ background: resolvedColor }}
         />
         <input
-          value={color.toUpperCase()}
+          value={resolvedColor.toUpperCase()}
           onChange={(e) => {
             const v = e.target.value
             if (/^#[0-9A-Fa-f]{0,6}$/.test(v)) onChange(v)

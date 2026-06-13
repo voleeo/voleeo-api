@@ -237,6 +237,18 @@ impl ApiBackend {
                 &folders,
                 var_key.as_ref(),
             );
+            // Auth secrets are stored as `enc:v1:` ciphertext; the store hands
+            // them back raw. Decrypt in place so static schemes inject plaintext
+            // and dynamic schemes (SigV4) sign with the real key.
+            if let Some(k) = var_key.as_ref() {
+                for (secret, encrypted) in req.auth.secret_fields_mut() {
+                    if encrypted && voleeo_crypto::is_encrypted(secret) {
+                        if let Ok(plain) = voleeo_crypto::decrypt(secret, k) {
+                            *secret = plain;
+                        }
+                    }
+                }
+            }
             resolve::apply_to_request(&mut req, &vars);
 
             if let Some(url) = url_override {

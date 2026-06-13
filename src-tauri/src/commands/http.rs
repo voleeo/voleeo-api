@@ -1,6 +1,7 @@
 use tauri::State;
 use voleeo_core::{
-    HttpResponse, RequestBody, RequestParameter, StoredCookie, TimelineEvent, VoleeoError,
+    AuthConfig, HttpResponse, RequestBody, RequestParameter, StoredCookie, TimelineEvent,
+    VoleeoError,
 };
 
 use crate::commands::cookie::{
@@ -8,22 +9,41 @@ use crate::commands::cookie::{
 };
 use crate::state::AppState;
 
-/// `cookie_overrides`: frontend-resolved cookies (functions only JS can run,
-/// e.g. `{{ uuid.v4() }}`). When `Some`, skip the backend's jar-load pass.
+/// Frontend-resolved send-time overrides. Bundled into one struct because
+/// `tauri_specta` caps command arity at 10 args. `cookie_overrides` /
+/// `auth_override` carry values only JS can resolve (`{{ uuid.v4() }}`, dynamic
+/// signing config); when present the backend skips its own resolution for them.
+#[derive(Debug, Default, serde::Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SendOverrides {
+    pub url: Option<String>,
+    pub body: Option<RequestBody>,
+    pub headers: Option<Vec<RequestParameter>>,
+    pub called_from: Option<String>,
+    pub resolution_notes: Option<Vec<String>>,
+    pub environment_id: Option<String>,
+    pub cookie_overrides: Option<Vec<StoredCookie>>,
+    pub auth_override: Option<AuthConfig>,
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn send_request(
     state: State<'_, AppState>,
     workspace_id: String,
     request_id: String,
-    url_override: Option<String>,
-    body_override: Option<RequestBody>,
-    headers_override: Option<Vec<RequestParameter>>,
-    called_from: Option<String>,
-    resolution_notes: Option<Vec<String>>,
-    environment_id: Option<String>,
-    cookie_overrides: Option<Vec<StoredCookie>>,
+    overrides: SendOverrides,
 ) -> Result<HttpResponse, VoleeoError> {
+    let SendOverrides {
+        url: url_override,
+        body: body_override,
+        headers: headers_override,
+        called_from,
+        resolution_notes,
+        environment_id,
+        cookie_overrides,
+        auth_override,
+    } = overrides;
     let requests = state.requests.clone();
     let ws_id = workspace_id.clone();
     let req_id = request_id.clone();
@@ -41,6 +61,12 @@ pub async fn send_request(
     if let Some(headers) = headers_override {
         req.headers = headers;
     }
+    // The frontend resolves auth: static schemes are already in `headers_override`
+    // (so `auth_override` is `none`), dynamic schemes (SigV4) arrive fully
+    // resolved here for the executor to sign. The executor only ever acts on
+    // `req.auth`, so set it explicitly — `None` when no override (e.g. chained
+    // builtin resends, which carry no resolved auth).
+    req.auth = auth_override.unwrap_or(AuthConfig::None);
 
     // Key load is sync I/O → spawn_blocking. Best-effort: unencrypted
     // workspaces have no key, so any `enc:v1:` prefix passes through to the
@@ -161,4 +187,29 @@ pub async fn cancel_request(
 ) -> Result<(), VoleeoError> {
     state.executor.cancel(&request_id);
     Ok(())
+}
+
+/// Sign a dynamic auth scheme (AWS SigV4) over a resolved request and return the
+/// headers it would add — so preview and "Copy as …" can show the real
+/// signature without sending. `auth` must already be resolved (templates
+/// expanded, secrets decrypted); static/no auth yields an empty list. Pure, so
+/// no app state is touched.
+#[tauri::command]
+#[specta::specta]
+pub async fn sign_auth_headers(
+    auth: voleeo_core::AuthConfig,
+    method: String,
+    url: String,
+    body: Option<RequestBody>,
+) -> Result<Vec<RequestParameter>, VoleeoError> {
+    let headers = voleeo_http::sign_dynamic_auth_url(&auth, &method, &url, body.as_ref())?;
+    Ok(headers
+        .into_iter()
+        .map(|(name, value)| RequestParameter {
+            id: "__auth".into(),
+            name,
+            value,
+            enabled: true,
+        })
+        .collect())
 }

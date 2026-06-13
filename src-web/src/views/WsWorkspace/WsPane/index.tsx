@@ -194,7 +194,12 @@ export function WsPane() {
           )}
           {tab === "auth" && (
             <div className="ml-auto">
-              <AuthTypeSelect auth={auth} onChange={setAuth} allowInherit />
+              <AuthTypeSelect
+                auth={auth}
+                onChange={setAuth}
+                allowInherit
+                protocol="ws"
+              />
             </div>
           )}
         </div>

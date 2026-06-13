@@ -69,6 +69,10 @@ async function resolveParams(
   )
 }
 
+function authDisabled(auth: AuthConfig | undefined): boolean {
+  return !!auth && "enabled" in auth && auth.enabled === false
+}
+
 async function buildAuthParts(
   ctx: Context,
   auth: AuthConfig | undefined,
@@ -80,7 +84,7 @@ async function buildAuthParts(
   const extraHeaders: Array<{ name: string; value: string }> = []
   const extraQuery: Array<{ name: string; value: string }> = []
   let basicAuth: { user: string; pass: string } | null = null
-  if (!auth || auth.kind === "none")
+  if (!auth || auth.kind === "none" || authDisabled(auth))
     return { extraHeaders, extraQuery, basicAuth }
   if (auth.kind === "bearer") {
     const token = await resolveStr(ctx, auth.token)
@@ -170,6 +174,22 @@ export async function serializeAsFetch(
     } else {
       bodyLine = JSON.stringify(rawBody)
     }
+  }
+
+  // Dynamic schemes (AWS SigV4) are signed by the host over the final request.
+  if (request.auth?.kind === "aws_sig_v4" && !authDisabled(request.auth)) {
+    const signBody =
+      request.body && request.body.kind !== "none" && request.body.text
+        ? {
+            kind: request.body.kind,
+            text: await resolveStr(ctx, request.body.text),
+          }
+        : undefined
+    const signed = await ctx.auth.signDynamic(
+      await ctx.templates.render(request.auth),
+      { method, url, body: signBody },
+    )
+    for (const h of signed) headerPairs.push([h.name, h.value])
   }
 
   const lines: string[] = []

@@ -46,32 +46,19 @@ pub(crate) async fn run_blocking<T: Send + 'static>(
         .map_err(|e| VoleeoError::Storage(e.to_string()))?
 }
 
-/// Encrypt/decrypt the auth's secret field (Bearer token, Basic password, or
-/// API-key value) with the workspace key. Mirrors `environment.rs::transform_secrets`.
+/// Encrypt/decrypt every secret field an auth scheme declares (Bearer token,
+/// Basic password, API-key value, SigV4 secret-key + session-token, …) with the
+/// workspace key. New schemes are covered automatically by declaring their
+/// secrets in `AuthConfig::secret_fields_mut`. Mirrors
+/// `environment.rs::transform_secrets`.
 pub(crate) fn transform_auth_secrets(
     auth: &mut AuthConfig,
     workspace_id: &str,
     stores: &Stores,
     direction: Direction,
 ) -> Result<(), VoleeoError> {
-    let (secret, encrypted): (&mut String, bool) = match auth {
-        AuthConfig::Bearer {
-            token,
-            token_encrypted,
-        } => (token, *token_encrypted),
-        AuthConfig::Basic {
-            password,
-            password_encrypted,
-            ..
-        } => (password, *password_encrypted),
-        AuthConfig::ApiKey {
-            value,
-            value_encrypted,
-            ..
-        } => (value, *value_encrypted),
-        AuthConfig::None | AuthConfig::Inherit { .. } => return Ok(()),
-    };
-    if !encrypted {
+    let mut fields = auth.secret_fields_mut();
+    if fields.iter().all(|(_, encrypted)| !encrypted) {
         return Ok(());
     }
     // workspace.yaml can be unparseable mid-merge (conflict markers); we only
@@ -88,16 +75,18 @@ pub(crate) fn transform_auth_secrets(
         ));
     }
     let key = workspace_key::load_key(workspace_id, &stores.app_data_dir)?;
-    match direction {
-        Direction::Decrypt => {
-            // Skip if already plaintext (encryption toggled on but never saved).
-            if workspace_key::is_encrypted(secret) {
-                *secret = workspace_key::decrypt(secret, &key)?;
+    for (secret, _) in fields.iter_mut().filter(|(_, e)| *e) {
+        match direction {
+            Direction::Decrypt => {
+                // Skip if already plaintext (encryption toggled on but never saved).
+                if workspace_key::is_encrypted(secret) {
+                    **secret = workspace_key::decrypt(secret, &key)?;
+                }
             }
-        }
-        Direction::Encrypt => {
-            if !workspace_key::is_encrypted(secret) {
-                *secret = workspace_key::encrypt(secret, &key)?;
+            Direction::Encrypt => {
+                if !workspace_key::is_encrypted(secret) {
+                    **secret = workspace_key::encrypt(secret, &key)?;
+                }
             }
         }
     }

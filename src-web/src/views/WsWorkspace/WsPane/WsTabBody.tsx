@@ -126,6 +126,7 @@ export function WsTabBody({
       onVarClick={onVarClick}
       folderId={connection.folderId}
       allowSourceSelect
+      protocol="ws"
     />
   )
 }

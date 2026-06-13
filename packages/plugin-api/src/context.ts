@@ -56,6 +56,14 @@ export interface Context {
     render<T>(value: T): Promise<T>
   }
 
+  /** Resolve dynamic auth schemes that the host signs at send time. */
+  auth: {
+    signDynamic(
+      auth: unknown,
+      req: { method: string; url: string; body?: unknown },
+    ): Promise<Array<{ name: string; value: string }>>
+  }
+
   /** Structured logging — output is tagged with the plugin id. */
   log: {
     debug(...args: unknown[]): void

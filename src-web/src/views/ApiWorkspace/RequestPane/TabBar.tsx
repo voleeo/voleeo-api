@@ -97,7 +97,12 @@ export function TabBar({
       )}
       {activeTab === "auth" && request && (
         <div className="ml-auto flex items-center">
-          <AuthTypeSelect auth={auth} onChange={onAuthChange} allowInherit />
+          <AuthTypeSelect
+            auth={auth}
+            onChange={onAuthChange}
+            allowInherit
+            protocol="http"
+          />
         </div>
       )}
     </div>

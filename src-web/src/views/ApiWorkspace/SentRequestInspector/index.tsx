@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils"
 import { useTemplateFunctions } from "@/plugins/hooks"
 import { useCookiesStore } from "@/store/cookies"
 import { useEnvironmentStore } from "@/store/environment"
+import { signAuthHeaders } from "@/store/http"
 import { useRequestStore } from "@/store/requests"
 import { useUiStore } from "@/store/workspace"
 import { storedPathParams } from "../paramUtils"
@@ -83,11 +84,22 @@ export function SentRequestInspector({ onClose }: Props) {
           activeJar: jarForSend,
         })
         if (cancelled) return
+        let signedAuthHeaders: { name: string; value: string }[] = []
+        if (payload.dynamicAuthOverride) {
+          signedAuthHeaders = await signAuthHeaders(
+            payload.dynamicAuthOverride,
+            activeRequest.method,
+            payload.fullUrl,
+            payload.body,
+          )
+          if (cancelled) return
+        }
         setPreview(
           buildSentSnapshot({
             request: activeRequest,
             payload,
             capturedAt: null,
+            signedAuthHeaders,
           }),
         )
       } catch (e) {

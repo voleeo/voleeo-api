@@ -8,8 +8,10 @@ edition = "2021"
 [dependencies]
 voleeo-core = { path = "../voleeo-core" }
 voleeo-cookies = { path = "../voleeo-cookies" }
+voleeo-auth = { path = "../voleeo-auth" }
 base64 = "0.22"
 chrono = { workspace = true }
 reqwest = { workspace = true }
 tokio = { workspace = true }
 futures-util = { workspace = true }
+serde_urlencoded = "0.7"

@@ -56,6 +56,7 @@ impl HttpExecutor {
         let request_id = request.id.clone();
         let url = normalize_url(&request.url)?;
         let method = effective_method(request)?;
+        let method_str = method.to_string();
 
         let parsed_url = reqwest::Url::parse(&url)
             .map_err(|e| VoleeoError::Http(format!("Invalid URL: {e}")))?;
@@ -161,6 +162,30 @@ impl HttpExecutor {
             builder =
                 crate::body::attach_body(builder, body, &request.headers, &mut events, started)
                     .await?;
+        }
+
+        // Dynamic auth (e.g. AWS SigV4) signs the final request — method, URL,
+        // and body — so it runs here, after the body is assembled. Static
+        // schemes were already turned into headers by the resolve layer.
+        if request.auth.is_dynamic() {
+            let auth_headers = crate::auth::dynamic_auth_headers(
+                &request.auth,
+                &method_str,
+                &parsed_url,
+                request.body.as_ref(),
+                &mut events,
+                started,
+            )?;
+            for (name, value) in auth_headers {
+                let header_name = reqwest::header::HeaderName::from_bytes(name.as_bytes())
+                    .map_err(|_| VoleeoError::Http(format!("Invalid auth header name: {name}")))?;
+                let header_value =
+                    reqwest::header::HeaderValue::from_str(&value).map_err(|_| {
+                        VoleeoError::Http(format!("Invalid auth header value for {name}"))
+                    })?;
+                builder = builder.header(header_name, header_value);
+                push_event(&mut events, started, "send", format!("{name}: {value}"));
+            }
         }
 
         // Informational lookup so the timeline can show which IP we're hitting;

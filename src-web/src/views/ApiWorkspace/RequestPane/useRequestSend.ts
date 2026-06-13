@@ -147,6 +147,7 @@ export function useRequestSend({
       [...preflightEvents, ...payload.resolutionEvents],
       activeEnvId,
       payload.cookies,
+      payload.dynamicAuthOverride,
     )
   }
 

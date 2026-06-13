@@ -102,7 +102,14 @@ pub fn apply_to_grpc(
         .map(|p| (resolve_str(&p.name, vars), resolve_str(&p.value, vars)))
         .collect();
 
-    match &req.auth {
+    // A disabled (toggled-off) scheme applies nothing.
+    let none = AuthConfig::None;
+    let effective_auth = if req.auth.is_active() {
+        &req.auth
+    } else {
+        &none
+    };
+    match effective_auth {
         AuthConfig::Bearer { token, .. } => {
             metadata.push((
                 "authorization".into(),
@@ -130,6 +137,8 @@ pub fn apply_to_grpc(
             }
         }
         AuthConfig::None | AuthConfig::Inherit { .. } => {}
+        // SigV4 is HTTP-only; a gRPC request inheriting it sends no auth.
+        AuthConfig::AwsSigV4 { .. } => {}
     }
 
     (target, message, metadata)

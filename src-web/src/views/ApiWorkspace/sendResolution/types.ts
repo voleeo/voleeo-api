@@ -40,6 +40,7 @@ export interface ResolvedSendPayload {
   cookies: StoredCookie_Deserialize[] | null
   headerOrigins: AnnotatedHeader[]
   resolvedAuth: AuthConfig
+  dynamicAuthOverride?: AuthConfig
   inheritedAuthFolderId?: string
   inheritedAuthFolderName?: string
   inheritedAuthFromWorkspace?: boolean

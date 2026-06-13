@@ -2,8 +2,10 @@ import { invoke } from "@tauri-apps/api/core"
 import type { Context, PluginMeta } from "@voleeo/plugin-api"
 import { resolveTemplate } from "@/lib/template"
 import { useEnvironmentStore } from "@/store/environment"
+import { signAuthHeaders } from "@/store/http"
 import { useToastStore } from "@/store/toast"
 import { useUiStore } from "@/store/workspace"
+import type { AuthConfig, RequestBody } from "../../../packages/types/bindings"
 import { usePromptStore } from "./promptStore"
 import { registry } from "./registry"
 
@@ -94,6 +96,18 @@ export function createContext(meta: PluginMeta): Context {
         ]
         const fns = registry.templateFunctions()
         return (await renderDeep(value, vars, fns)) as T
+      },
+    },
+
+    auth: {
+      async signDynamic(auth, req) {
+        const rows = await signAuthHeaders(
+          auth as AuthConfig,
+          req.method,
+          req.url,
+          (req.body ?? null) as RequestBody | null,
+        )
+        return rows.map((h) => ({ name: h.name, value: h.value }))
       },
     },
 

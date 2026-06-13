@@ -112,11 +112,18 @@ export async function resolveBody(
   }
 }
 
-/** Auth → a header, or (api_key in query) a `key=value` to append to the URL. */
+/** Auth → a header, or (api_key in query) a `key=value` to append to the URL.
+ *  Dynamic schemes (AWS SigV4) can't be reduced to a header here — they sign the
+ *  final request — so we resolve their `{{ }}` fields and return the resolved
+ *  config in `resolvedAuth` for the backend executor to sign with. */
 export async function applyAuth(
   ctx: ResolveCtx,
   auth: AuthConfig,
-): Promise<{ headers: RequestParameter[]; query?: string }> {
+): Promise<{
+  headers: RequestParameter[]
+  query?: string
+  resolvedAuth?: AuthConfig
+}> {
   if (auth.kind === "bearer") {
     const token = await resolve(ctx, auth.token, "Auth: Bearer token")
     return { headers: [authHeader("Authorization", `Bearer ${token}`)] }
@@ -137,6 +144,21 @@ export async function applyAuth(
           query: `${encodeURIComponent(key)}=${encodeQueryValue(value)}`,
         }
       : { headers: [authHeader(key, value)] }
+  }
+  if (auth.kind === "aws_sig_v4") {
+    const resolvedAuth: AuthConfig = {
+      kind: "aws_sig_v4",
+      access_key: await resolve(ctx, auth.access_key, "Auth: AWS access key"),
+      secret_key: await resolve(ctx, auth.secret_key, "Auth: AWS secret key"),
+      secret_key_encrypted: false,
+      session_token: auth.session_token
+        ? await resolve(ctx, auth.session_token, "Auth: AWS session token")
+        : "",
+      session_token_encrypted: false,
+      region: await resolve(ctx, auth.region, "Auth: AWS region"),
+      service: await resolve(ctx, auth.service, "Auth: AWS service"),
+    }
+    return { headers: [], resolvedAuth }
   }
   return { headers: [] }
 }

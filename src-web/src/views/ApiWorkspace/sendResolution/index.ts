@@ -68,6 +68,7 @@ export async function resolveSendPayload(
     cookies,
     headerOrigins,
     resolvedAuth: auth,
+    dynamicAuthOverride: applied.resolvedAuth,
     inheritedAuthFolderId: inheritedFromFolderId,
     inheritedAuthFolderName: inheritedFromFolderName,
     inheritedAuthFromWorkspace: inheritedFromWorkspace,

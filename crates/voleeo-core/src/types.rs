@@ -1,3 +1,4 @@
+use crate::auth::{is_auth_none, AuthConfig};
 use crate::cookies::StoredCookie;
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -80,55 +81,6 @@ pub struct Environment {
     pub variables: Vec<EnvironmentVariable>,
     pub created_at: String,
     pub updated_at: String,
-}
-
-/// Which scope an `AuthConfig::Inherit` resolves against.
-#[derive(Type, Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum InheritSource {
-    /// Nearest ancestor folder with an auth, else the workspace. Default.
-    #[default]
-    Folder,
-    /// The workspace's own auth, skipping folders entirely.
-    Workspace,
-}
-
-#[derive(Type, Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum AuthConfig {
-    #[default]
-    None,
-    /// Request-only, resolved at send time. `from` picks the scope: nearest
-    /// ancestor folder with an auth (default), or the workspace.
-    Inherit {
-        #[serde(default)]
-        from: InheritSource,
-    },
-    Bearer {
-        token: String,
-        #[serde(default)]
-        token_encrypted: bool,
-    },
-    Basic {
-        username: String,
-        password: String,
-        #[serde(default)]
-        password_encrypted: bool,
-    },
-    ApiKey {
-        key: String,
-        value: String,
-        location: ApiKeyLocation,
-        #[serde(default)]
-        value_encrypted: bool,
-    },
-}
-
-#[derive(Type, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum ApiKeyLocation {
-    Header,
-    Query,
 }
 
 #[derive(Type, Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
@@ -255,10 +207,6 @@ pub struct ApiFolder {
     pub order: f64,
     pub created_at: String,
     pub updated_at: String,
-}
-
-fn is_auth_none(a: &AuthConfig) -> bool {
-    matches!(a, AuthConfig::None)
 }
 
 #[derive(Type, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]

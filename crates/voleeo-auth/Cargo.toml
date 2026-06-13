@@ -1,0 +1,11 @@
+[package]
+name = "voleeo-auth"
+version = "0.1.0"
+license.workspace = true
+repository.workspace = true
+edition = "2021"
+
+[dependencies]
+chrono = { workspace = true }
+hmac = "0.12"
+sha2 = "0.10"

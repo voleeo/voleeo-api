@@ -5,6 +5,7 @@ import type { ResolutionEvent } from "@/lib/template"
 import { useCookiesStore } from "@/store/cookies"
 import type { SentRequestSnapshot } from "@/views/ApiWorkspace/SentRequestInspector/types"
 import type {
+  AuthConfig,
   HttpResponse,
   RequestBody,
   RequestParameter,
@@ -32,27 +33,34 @@ export interface SendRequestOptions {
   resolutionNotes?: string[] | null
   environmentId?: string | null
   cookieOverrides?: StoredCookie_Deserialize[] | null
+  authOverride?: AuthConfig | null
 }
 
-/** Sole entry-point to `commands.sendRequest`. Keeps the 9-arg positional
- *  signature in one place so new params don't desync the chained-response
- *  builtin call-sites that bypass `useHttpStore.sendRequest`. */
 export function sendRequestCommand(
   workspaceId: string,
   requestId: string,
   opts: SendRequestOptions = {},
 ) {
-  return commands.sendRequest(
-    workspaceId,
-    requestId,
-    opts.urlOverride ?? null,
-    opts.bodyOverride ?? null,
-    opts.headersOverride ?? null,
-    opts.calledFrom ?? null,
-    opts.resolutionNotes ?? null,
-    opts.environmentId ?? null,
-    opts.cookieOverrides ?? null,
-  )
+  return commands.sendRequest(workspaceId, requestId, {
+    url: opts.urlOverride ?? null,
+    body: opts.bodyOverride ?? null,
+    headers: opts.headersOverride ?? null,
+    calledFrom: opts.calledFrom ?? null,
+    resolutionNotes: opts.resolutionNotes ?? null,
+    environmentId: opts.environmentId ?? null,
+    cookieOverrides: opts.cookieOverrides ?? null,
+    authOverride: opts.authOverride ?? null,
+  })
+}
+
+export async function signAuthHeaders(
+  auth: AuthConfig,
+  method: string,
+  url: string,
+  body: RequestBody | null,
+): Promise<RequestParameter[]> {
+  const res = await commands.signAuthHeaders(auth, method, url, body)
+  return res.status === "ok" ? res.data : []
 }
 
 interface HttpStore {
@@ -69,12 +77,9 @@ interface HttpStore {
     bodyOverride?: RequestBody | null,
     headersOverride?: RequestParameter[],
     resolutionEvents?: ResolutionEvent[],
-    /** Active env id, used backend-side to resolve `{{ VAR }}` in cookie fields. */
     environmentId?: string | null,
-    /** Active-jar cookies with plugin-function templates already resolved.
-     *  Omit to let the backend load+resolve from disk (env vars + encrypt
-     *  chips only — no plugin functions). */
     cookieOverrides?: StoredCookie_Deserialize[] | null,
+    authOverride?: AuthConfig | null,
   ) => Promise<void>
   cancelRequest: (requestId: string) => Promise<void>
   clearResponse: (requestId: string) => void
@@ -99,6 +104,7 @@ export const useHttpStore = create<HttpStore>((set) => ({
     resolutionEvents,
     environmentId,
     cookieOverrides,
+    authOverride,
   ) => {
     set((s) => ({
       loading: { ...s.loading, [requestId]: true },
@@ -115,6 +121,7 @@ export const useHttpStore = create<HttpStore>((set) => ({
       resolutionNotes: resolutionNotes.length > 0 ? resolutionNotes : null,
       environmentId,
       cookieOverrides,
+      authOverride,
     })
 
     if (res.status === "ok") {

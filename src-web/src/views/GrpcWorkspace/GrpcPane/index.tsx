@@ -211,6 +211,7 @@ function GrpcPaneInner({ request }: { request: GrpcRequest }) {
               setAuth={setAuth}
               onVarClick={handleVarClick}
               folderId={request.folderId ?? null}
+              protocol="grpc"
             />
           )}
         </div>

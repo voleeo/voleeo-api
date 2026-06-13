@@ -7560,6 +7560,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "voleeo-auth"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "hmac",
+ "sha2",
+]
+
+[[package]]
 name = "voleeo-cookies"
 version = "0.1.0"
 dependencies = [
@@ -7633,7 +7642,9 @@ dependencies = [
  "chrono",
  "futures-util",
  "reqwest",
+ "serde_urlencoded",
  "tokio",
+ "voleeo-auth",
  "voleeo-cookies",
  "voleeo-core",
 ]

@@ -45,7 +45,12 @@ export function GrpcTabBar({
       )}
       {tab === "auth" && (
         <div className="ml-auto flex items-center">
-          <AuthTypeSelect auth={auth} onChange={onAuthChange} allowInherit />
+          <AuthTypeSelect
+            auth={auth}
+            onChange={onAuthChange}
+            allowInherit
+            protocol="grpc"
+          />
         </div>
       )}
     </div>

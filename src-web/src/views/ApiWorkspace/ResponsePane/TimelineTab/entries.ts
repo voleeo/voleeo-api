@@ -11,6 +11,7 @@ export type EntryKind =
   | "redirect"
   | "error"
   | "resolve"
+  | "auth"
 
 export interface Entry {
   elapsedMs: number
@@ -40,6 +41,7 @@ function toEntryKind(kind: string): EntryKind {
     case "redirect":
     case "error":
     case "resolve":
+    case "auth":
       return kind
     default:
       return "info"
@@ -71,6 +73,7 @@ export const PREFIX: Record<EntryKind, string> = {
   redirect: "↻",
   error: "✗",
   resolve: "≈",
+  auth: "⚷",
 }
 
 export const TEXT_COLOR: Record<EntryKind, string> = {
@@ -84,6 +87,7 @@ export const TEXT_COLOR: Record<EntryKind, string> = {
   redirect: "var(--base0A)",
   error: "var(--base08)",
   resolve: "var(--base04)",
+  auth: "var(--base0E)",
 }
 
 /**
@@ -97,7 +101,7 @@ export type FilterId = "all" | "sent" | "received" | "body" | "errors"
 export const FILTER_GROUPS: Record<FilterId, ReadonlyArray<EntryKind> | "all"> =
   {
     all: "all",
-    sent: ["send", "config", "resolve", "dns", "info"],
+    sent: ["send", "config", "resolve", "dns", "info", "auth"],
     received: ["recv", "redirect"],
     body: ["chunk", "done"],
     errors: ["error"],

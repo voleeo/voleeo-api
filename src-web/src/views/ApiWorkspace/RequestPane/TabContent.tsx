@@ -134,6 +134,7 @@ export function TabContent({
           onVarClick={onVarClick}
           folderId={request.folderId}
           allowSourceSelect
+          protocol="http"
         />
       )}
       {activeTab === "auth" && !request && <EmptyTabPane />}

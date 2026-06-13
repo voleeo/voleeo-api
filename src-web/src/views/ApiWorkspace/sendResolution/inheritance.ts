@@ -1,3 +1,4 @@
+import { isAuthEnabled } from "@/lib/authSchemes"
 import { ancestorChainRootFirst, inheritedFolderVars } from "@/lib/folderChain"
 import type { EnvironmentVariable } from "@/store/environment"
 import type { ApiFolder, AuthConfig, HttpRequest } from "@/store/requests"
@@ -62,14 +63,21 @@ export function resolveInheritedAuthAnnotated(
   workspace: Workspace,
 ): ResolvedAuth {
   const auth = source.auth ?? { kind: "none" }
-  if (auth.kind !== "inherit") return { auth }
+  if (auth.kind !== "inherit") {
+    return { auth: isAuthEnabled(auth) ? auth : { kind: "none" } }
+  }
 
   const folderAuth = (): ResolvedAuth | null => {
     const chain = ancestorChainRootFirst(source.folderId ?? null, folders)
     for (let i = chain.length - 1; i >= 0; i--) {
       const f = chain[i]
       const fa = f.auth
-      if (fa && fa.kind !== "none" && fa.kind !== "inherit") {
+      if (
+        fa &&
+        fa.kind !== "none" &&
+        fa.kind !== "inherit" &&
+        isAuthEnabled(fa)
+      ) {
         return {
           auth: fa,
           inheritedFromFolderId: f.id,
@@ -81,7 +89,10 @@ export function resolveInheritedAuthAnnotated(
   }
   const workspaceAuth = (): ResolvedAuth | null => {
     const wa = workspace.auth
-    return wa && wa.kind !== "none" && wa.kind !== "inherit"
+    return wa &&
+      wa.kind !== "none" &&
+      wa.kind !== "inherit" &&
+      isAuthEnabled(wa)
       ? { auth: wa, inheritedFromWorkspace: true }
       : null
   }
