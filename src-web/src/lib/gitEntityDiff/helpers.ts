@@ -114,6 +114,7 @@ const AUTH_TYPE_LABEL: Record<string, string> = {
   aws_sig_v4: "AWS SigV4",
   oauth1: "OAuth 1.0",
   oauth2: "OAuth 2.0",
+  digest: "Digest",
 }
 
 const OAUTH1_SIGNATURE_LABEL: Record<string, string> = {
@@ -329,6 +330,18 @@ export function authEntries(auth: AuthConfig): AuthEntry[] {
       entries.push(stateEntry(auth.enabled))
       return entries
     }
+    case "digest":
+      return [
+        type,
+        { key: "auth.username", label: "Username", value: auth.username },
+        {
+          key: "auth.password",
+          label: "Password",
+          value: auth.password ?? "",
+          secret: true,
+        },
+        stateEntry(auth.enabled),
+      ]
     default:
       return [type]
   }

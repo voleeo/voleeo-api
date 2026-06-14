@@ -229,6 +229,18 @@ describe("serializeAsCurl — auth", () => {
     expect(out).not.toContain("Authorization")
   })
 
+  test("digest emits --digest -u, not a header", async () => {
+    const out = await serializeAsCurl(
+      mkRequest({
+        auth: { kind: "digest", username: "alex", password: "secret" },
+      }),
+      ctx,
+    )
+    expect(out).toContain("--digest")
+    expect(out).toContain("-u 'alex:secret'")
+    expect(out).not.toContain("Authorization")
+  })
+
   test("api_key with location=header emits custom header", async () => {
     const out = await serializeAsCurl(
       mkRequest({

@@ -3,11 +3,76 @@
 //! here; dynamic schemes need the *final* request (method, URL, body) and so are
 //! applied at send time, after the body is assembled. Phase 1: AWS SigV4.
 
-use voleeo_auth::oauth1;
 use voleeo_auth::sigv4::{self, SigV4Request};
+use voleeo_auth::{digest, oauth1};
 use voleeo_core::{
-    AuthConfig, BodyKind, OAuth1Location, OAuth1Signature, RequestBody, VoleeoError,
+    AuthConfig, BodyKind, HttpRequest, OAuth1Location, OAuth1Signature, RequestBody, VoleeoError,
 };
+
+/// The request-target (path + query) a Digest response must hash over — matches
+/// what the executor puts on the wire.
+fn request_target(url: &reqwest::Url) -> String {
+    match url.query() {
+        Some(q) if !q.is_empty() => format!("{}?{q}", url.path()),
+        _ => url.path().to_string(),
+    }
+}
+
+/// Bytes the executor will send as the body — needed for Digest `qop=auth-int`.
+/// Non-reproducible bodies (multipart/binary) hash as empty; servers offering
+/// `auth` (preferred by the parser) never reach this.
+fn digest_body(body: Option<&RequestBody>) -> Vec<u8> {
+    let Some(body) = body else { return Vec::new() };
+    match body.kind {
+        BodyKind::Json | BodyKind::Xml | BodyKind::Text | BodyKind::Html => {
+            body.text.clone().into_bytes()
+        }
+        BodyKind::Graphql => body.graphql_payload().into_bytes(),
+        _ => Vec::new(),
+    }
+}
+
+/// Compute the `Authorization: Digest` header answering a `401` challenge, with a
+/// timeline note. `None` when the scheme isn't an active Digest or no usable
+/// challenge was offered.
+pub fn digest_authorization(
+    auth: &AuthConfig,
+    request: &HttpRequest,
+    www_authenticate: &[&str],
+) -> Option<(String, String)> {
+    if !auth.is_active() {
+        return None;
+    }
+    let AuthConfig::Digest {
+        username, password, ..
+    } = auth
+    else {
+        return None;
+    };
+    let challenge = digest::pick_challenge(www_authenticate.iter().copied())?;
+    let normalized = crate::executor::normalize_url(&request.url).ok()?;
+    let parsed = reqwest::Url::parse(&normalized).ok()?;
+    let method = crate::executor::effective_method(request).ok()?;
+    let body = digest_body(request.body.as_ref());
+    let header = digest::authorization(
+        &challenge,
+        &digest::Request {
+            username,
+            password,
+            method: method.as_str(),
+            uri: &request_target(&parsed),
+            body: &body,
+        },
+        &digest::gen_cnonce(),
+        1,
+    );
+    let note = format!(
+        "Digest challenge — realm \"{}\", {} — retrying with credentials",
+        challenge.realm,
+        challenge.algorithm.label(),
+    );
+    Some((header, note))
+}
 
 /// Compute the SHA-256 the signer needs over the body bytes reqwest will send.
 /// Multipart/binary aren't cheaply reproducible (boundaries, large files) → sign

@@ -239,6 +239,19 @@ pub enum AuthConfig {
         #[serde(default = "default_true", skip_serializing_if = "is_true")]
         enabled: bool,
     },
+    /// HTTP Digest access authentication (RFC 7616). Challenge-response: the
+    /// realm/nonce/algorithm/qop come from the server's `401`, so only the
+    /// credentials are stored. Applied by the executor's challenge-retry loop.
+    #[serde(rename = "digest")]
+    Digest {
+        username: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        password: String,
+        #[serde(default)]
+        password_encrypted: bool,
+        #[serde(default = "default_true", skip_serializing_if = "is_true")]
+        enabled: bool,
+    },
 }
 
 impl AuthConfig {
@@ -295,6 +308,11 @@ impl AuthConfig {
                 (client_secret, *client_secret_encrypted),
                 (password, *password_encrypted),
             ],
+            AuthConfig::Digest {
+                password,
+                password_encrypted,
+                ..
+            } => vec![(password, *password_encrypted)],
             AuthConfig::None | AuthConfig::Inherit { .. } => Vec::new(),
         }
     }
@@ -309,7 +327,8 @@ impl AuthConfig {
             | AuthConfig::ApiKey { enabled, .. }
             | AuthConfig::AwsSigV4 { enabled, .. }
             | AuthConfig::OAuth1 { enabled, .. }
-            | AuthConfig::OAuth2 { enabled, .. } => *enabled,
+            | AuthConfig::OAuth2 { enabled, .. }
+            | AuthConfig::Digest { enabled, .. } => *enabled,
             AuthConfig::None | AuthConfig::Inherit { .. } => true,
         }
     }
@@ -320,13 +339,14 @@ impl AuthConfig {
         !matches!(self, AuthConfig::None | AuthConfig::Inherit { .. }) && self.is_enabled()
     }
 
-    /// Dynamic schemes are applied by the executor over the final request (they
-    /// need the method/URL/body/timestamp), not injected as a static header at
-    /// resolve time. Their resolved config rides on `HttpRequest.auth`.
+    /// Dynamic schemes are applied by the executor, not injected as a static
+    /// header at resolve time, so their resolved config rides on
+    /// `HttpRequest.auth`. SigV4/OAuth1 sign the outgoing request; Digest answers
+    /// the server's `401` challenge on a retry — both need the executor.
     pub fn is_dynamic(&self) -> bool {
         matches!(
             self,
-            AuthConfig::AwsSigV4 { .. } | AuthConfig::OAuth1 { .. }
+            AuthConfig::AwsSigV4 { .. } | AuthConfig::OAuth1 { .. } | AuthConfig::Digest { .. }
         )
     }
 

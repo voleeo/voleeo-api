@@ -149,7 +149,7 @@ impl HttpExecutor {
                                     tokio::select! {
                                         biased;
                                         _ = cancel_rx => Err(VoleeoError::Cancelled),
-                                        r = self.send_inner(request, started, sink, &attach, &capture, &attached) => r,
+                                        r = self.send_with_auth_retry(request, started, sink, &attach, &capture, &attached) => r,
                                     }
                                 }),
                             ),

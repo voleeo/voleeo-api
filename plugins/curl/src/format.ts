@@ -8,6 +8,8 @@ export interface CurlRequest {
   body?: { kind: string; text: string }
   /** Emitted as `-u user:pass`; absent when auth is already in `headers`. */
   basicAuth?: { username: string; password: string }
+  /** Emitted as `--digest -u user:pass` — cURL runs the challenge-response. */
+  digestAuth?: { username: string; password: string }
   cookies?: CurlCookie[]
 }
 
@@ -58,9 +60,16 @@ export function formatCurl(req: CurlRequest): string {
     (h) => `-H ${shellQuote(`${h.name}: ${h.value}`)}`,
   )
 
-  const authFlags = req.basicAuth
-    ? [`-u ${shellQuote(`${req.basicAuth.username}:${req.basicAuth.password}`)}`]
-    : []
+  const authFlags = req.digestAuth
+    ? [
+        "--digest",
+        `-u ${shellQuote(`${req.digestAuth.username}:${req.digestAuth.password}`)}`,
+      ]
+    : req.basicAuth
+      ? [
+          `-u ${shellQuote(`${req.basicAuth.username}:${req.basicAuth.password}`)}`,
+        ]
+      : []
 
   const cookieLines =
     req.cookies && req.cookies.length > 0

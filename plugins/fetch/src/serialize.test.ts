@@ -200,6 +200,17 @@ describe("serializeAsFetch — auth", () => {
     expect(out).toContain(`"Authorization": "Basic " + btoa("alex:secret")`)
   })
 
+  test("digest emits an explanatory comment, no auth header", async () => {
+    const out = await serializeAsFetch(
+      mkRequest({
+        auth: { kind: "digest", username: "alex", password: "secret" },
+      }),
+      ctx,
+    )
+    expect(out).toContain("// Digest auth omitted")
+    expect(out).not.toContain("secret")
+  })
+
   test("api_key header emits custom header", async () => {
     const out = await serializeAsFetch(
       mkRequest({

@@ -225,6 +225,17 @@ describe("serializeAsHttpie — auth", () => {
     expect(out).not.toContain("Authorization")
   })
 
+  test("digest emits -A digest -a", async () => {
+    const out = await serializeAsHttpie(
+      mkRequest({
+        auth: { kind: "digest", username: "alex", password: "secret" },
+      }),
+      ctx,
+    )
+    expect(out).toContain("-A digest")
+    expect(out).toContain("-a 'alex:secret'")
+  })
+
   test("api_key header emits custom header", async () => {
     const out = await serializeAsHttpie(
       mkRequest({

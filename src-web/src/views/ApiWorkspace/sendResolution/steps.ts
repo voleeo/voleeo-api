@@ -208,6 +208,17 @@ export async function applyAuth(
     }
     return { headers: [], resolvedAuth }
   }
+  if (auth.kind === "digest") {
+    const resolvedAuth: AuthConfig = {
+      kind: "digest",
+      username: await resolve(ctx, auth.username, "Auth: Digest username"),
+      password: auth.password
+        ? await resolve(ctx, auth.password, "Auth: Digest password")
+        : "",
+      password_encrypted: false,
+    }
+    return { headers: [], resolvedAuth }
+  }
   return { headers: [] }
 }
 

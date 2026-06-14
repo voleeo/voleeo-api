@@ -210,6 +210,8 @@ export function SentRequestSummary({
         return "OAuth 1.0"
       case "oauth2":
         return "OAuth 2.0"
+      case "digest":
+        return "Digest"
       case "inherit":
         return "Inherit"
     }

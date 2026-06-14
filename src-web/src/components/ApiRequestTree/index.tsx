@@ -156,8 +156,11 @@ export function ApiRequestTree({
         // Re-focus the tree on mouseup so a click that selected a request
         // (which also opens it in the editor) doesn't strand focus there.
         // Pressed-then-released over a row → focus back on the tree, so
-        // Delete / Backspace hits handleDeleteSelection.
-        onMouseUp={() => {
+        // Delete / Backspace hits handleDeleteSelection. But never steal focus
+        // from an inline rename input — that blurs it and commits mid-edit, so a
+        // click to place the caret would exit edit mode.
+        onMouseUp={(e) => {
+          if ((e.target as HTMLElement).closest("input, textarea")) return
           containerRef.current?.focus({ preventScroll: true })
         }}
         onKeyDown={handleKeyDown}

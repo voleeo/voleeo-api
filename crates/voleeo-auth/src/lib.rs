@@ -3,6 +3,7 @@
 //! and AWS test vectors. The HTTP executor calls into here after assembling the
 //! final request.
 
+pub mod digest;
 pub mod encode;
 pub mod oauth1;
 pub mod oauth2;

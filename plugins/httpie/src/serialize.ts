@@ -104,6 +104,11 @@ async function buildAuthParts(
     const value = await resolveStr(ctx, auth.value)
     if (auth.location === "header") extraHeaders.push({ name: key, value })
     else extraQuery.push({ name: key, value })
+  } else if (auth.kind === "digest") {
+    const user = await resolveStr(ctx, auth.username)
+    const pass = await resolveStr(ctx, auth.password ?? "")
+    // HTTPie runs the challenge-response itself with `--auth-type=digest`.
+    flags.push("-A digest", `-a ${shellQuote(`${user}:${pass}`)}`)
   }
   return { flags, extraHeaders, extraQuery }
 }

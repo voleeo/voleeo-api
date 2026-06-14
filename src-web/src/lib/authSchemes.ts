@@ -115,6 +115,15 @@ export const AUTH_SCHEMES: Record<AuthKind, AuthScheme> = {
       password: "",
     }),
   },
+  digest: {
+    kind: "digest",
+    label: "Digest Auth",
+    description:
+      "Answers the server's Digest challenge automatically — one extra round-trip on the first send.",
+    protocols: HTTP_ONLY,
+    dynamic: true,
+    fresh: () => ({ kind: "digest", username: "", password: "" }),
+  },
 }
 
 export const SELECTABLE_AUTH_KINDS: readonly AuthKind[] = [
@@ -125,6 +134,7 @@ export const SELECTABLE_AUTH_KINDS: readonly AuthKind[] = [
   "aws_sig_v4",
   "oauth1",
   "oauth2",
+  "digest",
 ]
 
 export function freshAuth(kind: AuthKind): AuthConfig {
@@ -162,6 +172,7 @@ export function isAuthEnabled(auth: AuthConfig): boolean {
     case "aws_sig_v4":
     case "oauth1":
     case "oauth2":
+    case "digest":
       return auth.enabled ?? true
     default:
       return true
@@ -176,6 +187,7 @@ export function setAuthEnabled(auth: AuthConfig, enabled: boolean): AuthConfig {
     case "aws_sig_v4":
     case "oauth1":
     case "oauth2":
+    case "digest":
       return { ...auth, enabled }
     default:
       return auth

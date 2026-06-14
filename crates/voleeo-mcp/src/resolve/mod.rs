@@ -329,8 +329,10 @@ pub fn apply_to_request(req: &mut HttpRequest, vars: &HashMap<String, String>) {
             // context, so treat unresolved inherit as "no auth".
             AuthConfig::None | AuthConfig::Inherit { .. } => {}
             // Dynamic schemes are handled above; unreachable here.
-            AuthConfig::AwsSigV4 { .. } | AuthConfig::OAuth1 { .. } | AuthConfig::OAuth2 { .. } => {
-            }
+            AuthConfig::AwsSigV4 { .. }
+            | AuthConfig::OAuth1 { .. }
+            | AuthConfig::OAuth2 { .. }
+            | AuthConfig::Digest { .. } => {}
         }
         req.auth = AuthConfig::None;
     }
@@ -431,7 +433,10 @@ pub fn apply_to_connection(
         }
         AuthConfig::None | AuthConfig::Inherit { .. } => {}
         // SigV4 is HTTP-only; a WS connection inheriting it sends no auth.
-        AuthConfig::AwsSigV4 { .. } | AuthConfig::OAuth1 { .. } | AuthConfig::OAuth2 { .. } => {}
+        AuthConfig::AwsSigV4 { .. }
+        | AuthConfig::OAuth1 { .. }
+        | AuthConfig::OAuth2 { .. }
+        | AuthConfig::Digest { .. } => {}
     }
 
     let url = if query_parts.is_empty() {
@@ -486,6 +491,12 @@ fn resolve_dynamic_auth(auth: &mut AuthConfig, vars: &HashMap<String, String>) {
             *timestamp = resolve_str(timestamp, vars);
             *nonce = resolve_str(nonce, vars);
             *version = resolve_str(version, vars);
+        }
+        AuthConfig::Digest {
+            username, password, ..
+        } => {
+            *username = resolve_str(username, vars);
+            *password = resolve_str(password, vars);
         }
         _ => {}
     }

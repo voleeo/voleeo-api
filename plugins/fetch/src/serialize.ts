@@ -89,6 +89,7 @@ async function buildAuthParts(
   extraHeaders: Array<{ name: string; value: string }>
   extraQuery: Array<{ name: string; value: string }>
   basicAuth: { user: string; pass: string } | null
+  note?: string
 }> {
   const extraHeaders: Array<{ name: string; value: string }> = []
   const extraQuery: Array<{ name: string; value: string }> = []
@@ -108,6 +109,14 @@ async function buildAuthParts(
     const value = await resolveStr(ctx, auth.value)
     if (auth.location === "header") extraHeaders.push({ name: key, value })
     else extraQuery.push({ name: key, value })
+  } else if (auth.kind === "digest") {
+    // fetch() has no Digest support — it can't run the 401 challenge-response.
+    return {
+      extraHeaders,
+      extraQuery,
+      basicAuth,
+      note: "Digest auth omitted — fetch() can't perform the challenge-response. Use curl --digest or a digest-capable HTTP client.",
+    }
   }
   return { extraHeaders, extraQuery, basicAuth }
 }
@@ -213,6 +222,7 @@ export async function serializeAsFetch(
   }
 
   const lines: string[] = []
+  if (auth.note) lines.push(`// ${auth.note}`)
   lines.push(`const url = ${JSON.stringify(url)}`)
   lines.push("const response = await fetch(url, {")
   lines.push(`  method: ${JSON.stringify(method)},`)

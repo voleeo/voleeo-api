@@ -61,6 +61,7 @@ interface AuthParts {
   headers: CurlHeader[]
   query: Array<{ name: string; value: string }>
   basicAuth?: { username: string; password: string }
+  digestAuth?: { username: string; password: string }
 }
 
 function authDisabled(auth: AuthConfig | undefined): boolean {
@@ -101,6 +102,15 @@ async function buildAuthParts(
     const value = await resolveStr(ctx, auth.value)
     if (auth.location === "header") headers.push({ name, value })
     else query.push({ name, value })
+  } else if (auth.kind === "digest") {
+    return {
+      headers,
+      query,
+      digestAuth: {
+        username: await resolveStr(ctx, auth.username),
+        password: await resolveStr(ctx, auth.password ?? ""),
+      },
+    }
   }
   return { headers, query }
 }
@@ -174,6 +184,7 @@ async function resolve(
     headers: [...headers, ...auth.headers, ...signed.headers],
     body,
     basicAuth: auth.basicAuth,
+    digestAuth: auth.digestAuth,
   }
 }
 

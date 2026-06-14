@@ -49,6 +49,7 @@ export function RenameInput({
       onKeyDown={onKeyDown}
       onBlur={commit}
       onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
       className="flex-1 min-w-0 bg-transparent border-none outline-none font-sans text-[0.857rem] text-fg"
       style={{ caretColor: "var(--base05)" }}
     />

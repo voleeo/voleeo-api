@@ -39,12 +39,20 @@ service Greeter {
 "#;
 
 fn pool() -> DescriptorPool {
-    let dir = std::env::temp_dir().join(format!("voleeo_grpc_{}", std::process::id()));
+    // Unique dir per call — tests run in parallel, so a shared path would race on
+    // the `test.proto` write/remove.
+    static SEQ: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    let n = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let dir = std::env::temp_dir().join(format!("voleeo_grpc_{}_{n}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
+    // macOS `temp_dir()` is `/var/...` (a symlink to `/private/var/...`); protox
+    // canonicalizes the include dir, so the file path must canonicalize the same
+    // way or it "is not in any include path".
+    let dir = std::fs::canonicalize(&dir).unwrap();
     let path = dir.join("test.proto");
     std::fs::write(&path, PROTO).unwrap();
     let fds = protox::compile([&path], [&dir]).unwrap();
-    let _ = std::fs::remove_file(&path);
+    let _ = std::fs::remove_dir_all(&dir);
     DescriptorPool::from_file_descriptor_set(fds).unwrap()
 }
 
