@@ -62,6 +62,7 @@ interface AuthParts {
   query: Array<{ name: string; value: string }>
   basicAuth?: { username: string; password: string }
   digestAuth?: { username: string; password: string }
+  ntlmAuth?: { username: string; password: string }
 }
 
 function authDisabled(auth: AuthConfig | undefined): boolean {
@@ -108,6 +109,17 @@ async function buildAuthParts(
       query,
       digestAuth: {
         username: await resolveStr(ctx, auth.username),
+        password: await resolveStr(ctx, auth.password ?? ""),
+      },
+    }
+  } else if (auth.kind === "ntlm") {
+    const user = await resolveStr(ctx, auth.username)
+    const domain = await resolveStr(ctx, auth.domain ?? "")
+    return {
+      headers,
+      query,
+      ntlmAuth: {
+        username: domain ? `${domain}\\${user}` : user,
         password: await resolveStr(ctx, auth.password ?? ""),
       },
     }
@@ -185,6 +197,7 @@ async function resolve(
     body,
     basicAuth: auth.basicAuth,
     digestAuth: auth.digestAuth,
+    ntlmAuth: auth.ntlmAuth,
   }
 }
 

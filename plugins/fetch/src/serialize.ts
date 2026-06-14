@@ -117,6 +117,14 @@ async function buildAuthParts(
       basicAuth,
       note: "Digest auth omitted — fetch() can't perform the challenge-response. Use curl --digest or a digest-capable HTTP client.",
     }
+  } else if (auth.kind === "ntlm") {
+    // fetch() can't do the NTLM connection handshake.
+    return {
+      extraHeaders,
+      extraQuery,
+      basicAuth,
+      note: "NTLM auth omitted — fetch() can't perform the NTLM handshake. Use curl --ntlm.",
+    }
   }
   return { extraHeaders, extraQuery, basicAuth }
 }

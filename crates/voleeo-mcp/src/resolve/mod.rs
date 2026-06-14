@@ -332,7 +332,8 @@ pub fn apply_to_request(req: &mut HttpRequest, vars: &HashMap<String, String>) {
             AuthConfig::AwsSigV4 { .. }
             | AuthConfig::OAuth1 { .. }
             | AuthConfig::OAuth2 { .. }
-            | AuthConfig::Digest { .. } => {}
+            | AuthConfig::Digest { .. }
+            | AuthConfig::Ntlm { .. } => {}
         }
         req.auth = AuthConfig::None;
     }
@@ -436,7 +437,8 @@ pub fn apply_to_connection(
         AuthConfig::AwsSigV4 { .. }
         | AuthConfig::OAuth1 { .. }
         | AuthConfig::OAuth2 { .. }
-        | AuthConfig::Digest { .. } => {}
+        | AuthConfig::Digest { .. }
+        | AuthConfig::Ntlm { .. } => {}
     }
 
     let url = if query_parts.is_empty() {
@@ -497,6 +499,18 @@ fn resolve_dynamic_auth(auth: &mut AuthConfig, vars: &HashMap<String, String>) {
         } => {
             *username = resolve_str(username, vars);
             *password = resolve_str(password, vars);
+        }
+        AuthConfig::Ntlm {
+            username,
+            password,
+            domain,
+            workstation,
+            ..
+        } => {
+            *username = resolve_str(username, vars);
+            *password = resolve_str(password, vars);
+            *domain = resolve_str(domain, vars);
+            *workstation = resolve_str(workstation, vars);
         }
         _ => {}
     }

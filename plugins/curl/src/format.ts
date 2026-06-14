@@ -10,6 +10,8 @@ export interface CurlRequest {
   basicAuth?: { username: string; password: string }
   /** Emitted as `--digest -u user:pass` — cURL runs the challenge-response. */
   digestAuth?: { username: string; password: string }
+  /** Emitted as `--ntlm -u user:pass` — username may be `DOMAIN\user`. */
+  ntlmAuth?: { username: string; password: string }
   cookies?: CurlCookie[]
 }
 
@@ -60,16 +62,20 @@ export function formatCurl(req: CurlRequest): string {
     (h) => `-H ${shellQuote(`${h.name}: ${h.value}`)}`,
   )
 
+  const credFlag = (
+    mode: "--digest" | "--ntlm" | null,
+    cred: { username: string; password: string },
+  ) => [
+    ...(mode ? [mode] : []),
+    `-u ${shellQuote(`${cred.username}:${cred.password}`)}`,
+  ]
   const authFlags = req.digestAuth
-    ? [
-        "--digest",
-        `-u ${shellQuote(`${req.digestAuth.username}:${req.digestAuth.password}`)}`,
-      ]
-    : req.basicAuth
-      ? [
-          `-u ${shellQuote(`${req.basicAuth.username}:${req.basicAuth.password}`)}`,
-        ]
-      : []
+    ? credFlag("--digest", req.digestAuth)
+    : req.ntlmAuth
+      ? credFlag("--ntlm", req.ntlmAuth)
+      : req.basicAuth
+        ? credFlag(null, req.basicAuth)
+        : []
 
   const cookieLines =
     req.cookies && req.cookies.length > 0

@@ -5,6 +5,7 @@ mod cookie_provider;
 mod dns;
 mod executor;
 mod fmt;
+mod ntlm;
 mod redirect;
 
 use redirect::RedirectHop;

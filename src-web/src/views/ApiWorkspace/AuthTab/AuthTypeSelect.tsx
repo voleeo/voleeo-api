@@ -1,8 +1,10 @@
+import { Fragment } from "react"
 import { Glyph } from "@/components/Glyph"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -56,20 +58,23 @@ export function AuthTypeSelect({
         {kinds.map((kind) => {
           const active = kind === auth.kind
           return (
-            <DropdownMenuItem
-              key={kind}
-              className="font-sans text-[0.857rem] focus:bg-subtle focus:text-fg cursor-pointer grid grid-cols-[1fr_16px] items-center gap-2"
-              onClick={() => {
-                if (!active) onChange(freshAuth(kind))
-              }}
-            >
-              <span>{authLabel(kind)}</span>
-              <span className="flex items-center justify-center">
-                {active && (
-                  <Glyph kind="check" size={11} color="var(--base04)" />
-                )}
-              </span>
-            </DropdownMenuItem>
+            <Fragment key={kind}>
+              {kind === "inherit" && <DropdownMenuSeparator />}
+              <DropdownMenuItem
+                className="font-sans text-[0.857rem] focus:bg-subtle focus:text-fg cursor-pointer grid grid-cols-[1fr_16px] items-center gap-2"
+                onClick={() => {
+                  if (!active) onChange(freshAuth(kind))
+                }}
+              >
+                <span>{authLabel(kind)}</span>
+                <span className="flex items-center justify-center">
+                  {active && (
+                    <Glyph kind="check" size={11} color="var(--base04)" />
+                  )}
+                </span>
+              </DropdownMenuItem>
+              {kind === "none" && <DropdownMenuSeparator />}
+            </Fragment>
           )
         })}
       </DropdownMenuContent>

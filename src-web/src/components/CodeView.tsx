@@ -1,4 +1,5 @@
 import { json as jsonLang } from "@codemirror/lang-json"
+import { yaml as yamlLang } from "@codemirror/lang-yaml"
 import CodeMirror, {
   defaultLightThemeOption,
   EditorView,
@@ -8,19 +9,28 @@ import { useMemo } from "react"
 import { useThemeStore } from "@/store/theme"
 import { cmEditorTheme } from "@/views/ApiWorkspace/cmEditorTheme"
 
-/** Read-only, syntax-highlighted JSON viewer. Reused across gRPC bodies and the
- *  OAuth 2.0 token inspector — CodeMirror gives native select-and-copy. */
-export function JsonView({ value }: { value: string }) {
+type Lang = "json" | "yaml"
+
+/** Read-only, syntax-highlighted code viewer. Used for gRPC/JSON bodies, the
+ *  OAuth 2.0 token inspector, and the debug modal's raw YAML — CodeMirror gives
+ *  native select-and-copy. */
+export function CodeView({
+  value,
+  lang = "json",
+}: {
+  value: string
+  lang?: Lang
+}) {
   const isDark = useThemeStore((s) => s.activeTheme?.kind !== "light")
   const extensions = useMemo(
     () => [
       isDark ? oneDark : defaultLightThemeOption,
       cmEditorTheme,
-      jsonLang(),
+      lang === "yaml" ? yamlLang() : jsonLang(),
       EditorView.lineWrapping,
       EditorView.editable.of(false),
     ],
-    [isDark],
+    [isDark, lang],
   )
   return (
     <CodeMirror

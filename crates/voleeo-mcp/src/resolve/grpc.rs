@@ -141,7 +141,8 @@ pub fn apply_to_grpc(
         AuthConfig::AwsSigV4 { .. }
         | AuthConfig::OAuth1 { .. }
         | AuthConfig::OAuth2 { .. }
-        | AuthConfig::Digest { .. } => {}
+        | AuthConfig::Digest { .. }
+        | AuthConfig::Ntlm { .. } => {}
     }
 
     (target, message, metadata)

@@ -62,10 +62,17 @@ export const SHORTCUTS = {
 
   /** Open the commit History window. */
   GIT_HISTORY: { key: "h", meta: true, shift: true } satisfies KeyCombo,
+
+  /** Debug: show the selected request/folder's id + on-disk file info. */
+  DEBUG_INFO: {
+    key: "i",
+    shift: true,
+    ctrl: true,
+    alt: true,
+  } satisfies KeyCombo,
 } as const
 
 /** Which workspace a shortcut applies to. `shared` works everywhere. */
-export type ShortcutScope = "api" | "shared"
 
 /**
  * Display metadata for the Keyboard Shortcuts modal. One entry per *logical*
@@ -74,79 +81,68 @@ export type ShortcutScope = "api" | "shared"
 export const SHORTCUT_HELP: {
   combo: KeyCombo
   description: string
-  scope: ShortcutScope
 }[] = [
   {
     combo: SHORTCUTS.NEW_ITEM,
     description: "Create a new request or folder",
-    scope: "api",
   },
   {
     combo: SHORTCUTS.COPY_AS_CURL,
     description: "Copy focused request as cURL",
-    scope: "api",
   },
   {
     combo: SHORTCUTS.PASTE_REQUEST,
     description: "Paste request from clipboard (cURL / HTTPie)",
-    scope: "api",
   },
   {
     combo: SHORTCUTS.COMMAND_PALETTE,
     description: "Open the command palette",
-    scope: "shared",
   },
   {
     // Handled by the native menu accelerator (`CmdOrCtrl+,`), not useKeydown —
     // this entry only documents it in the shortcuts modal.
     combo: { key: ",", meta: true },
     description: "Open settings",
-    scope: "shared",
   },
   {
     combo: SHORTCUTS.SHOW_SHORTCUTS,
     description: "Show keyboard shortcuts",
-    scope: "shared",
   },
   {
     combo: SHORTCUTS.TOGGLE_TREE,
     description: "Show / hide the sidebar",
-    scope: "shared",
   },
   {
     combo: SHORTCUTS.SEARCH,
     description: "Search requests in the current workspace",
-    scope: "api",
   },
   {
     combo: SHORTCUTS.SEND_REQUEST,
     description: "Send the selected request",
-    scope: "api",
   },
   {
     combo: SHORTCUTS.TOGGLE_LAYOUT,
     description: "Toggle columns / rows layout",
-    scope: "api",
   },
   {
     combo: SHORTCUTS.GIT_UPDATE,
     description: "Pull the latest changes",
-    scope: "shared",
   },
   {
     combo: SHORTCUTS.GIT_PUSH,
     description: "Push local commits",
-    scope: "shared",
   },
   {
     combo: SHORTCUTS.GIT_CHANGES,
     description: "Open Changes / Resolve conflicts",
-    scope: "shared",
   },
   {
     combo: SHORTCUTS.GIT_HISTORY,
     description: "Open commit history",
-    scope: "shared",
+  },
+  {
+    combo: SHORTCUTS.DEBUG_INFO,
+    description: "Show debug info for the selected request/folder",
   },
 ]
 

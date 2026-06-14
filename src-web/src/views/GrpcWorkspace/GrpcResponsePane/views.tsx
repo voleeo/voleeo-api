@@ -1,4 +1,4 @@
-import { JsonView } from "@/components/JsonView"
+import { CodeView } from "@/components/CodeView"
 import { cn } from "@/lib/utils"
 import type {
   GrpcStreamMessage,
@@ -39,7 +39,7 @@ export function UnaryBody({
     )
   return (
     <div className="px-2 py-1">
-      <JsonView value={prettyJson(message)} />
+      <CodeView value={prettyJson(message)} lang="json" />
     </div>
   )
 }

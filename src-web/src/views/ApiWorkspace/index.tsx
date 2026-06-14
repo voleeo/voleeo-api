@@ -7,6 +7,7 @@ import { GrpcPane } from "@/views/GrpcWorkspace/GrpcPane"
 import { GrpcResponsePane } from "@/views/GrpcWorkspace/GrpcResponsePane"
 import { WsPane } from "@/views/WsWorkspace/WsPane"
 import { WsTranscriptPane } from "@/views/WsWorkspace/WsTranscriptPane"
+import { DebugInfoModal } from "./DebugInfoModal"
 import { FolderPane } from "./FolderPane"
 import { FolderRunPanel } from "./FolderRunPanel"
 import { GraphqlDocsRail } from "./GraphqlDocsRail"
@@ -192,6 +193,7 @@ export function ApiWorkspace() {
     <div className="h-full flex overflow-hidden bg-bg">
       <div className="flex-1 min-w-0 h-full overflow-hidden">{layout}</div>
       <GraphqlDocsRail />
+      <DebugInfoModal />
     </div>
   )
 }

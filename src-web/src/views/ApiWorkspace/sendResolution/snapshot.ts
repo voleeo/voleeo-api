@@ -92,6 +92,8 @@ export function buildSentSnapshot(args: {
         return `OAuth 2.0 (${auth.grant_type})`
       case "digest":
         return `Digest (${auth.username || "—"})`
+      case "ntlm":
+        return `NTLM (${auth.username || "—"})`
       case "inherit":
         return "Inherited (no folder or workspace defined an auth)"
     }

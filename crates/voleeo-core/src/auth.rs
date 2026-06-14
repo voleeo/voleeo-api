@@ -252,6 +252,22 @@ pub enum AuthConfig {
         #[serde(default = "default_true", skip_serializing_if = "is_true")]
         enabled: bool,
     },
+    /// NTLM (NTLMv2). Authenticates a *connection*, so the executor runs the
+    /// Type1→Type2→Type3 handshake over a dedicated single connection. HTTP-only.
+    #[serde(rename = "ntlm")]
+    Ntlm {
+        username: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        password: String,
+        #[serde(default)]
+        password_encrypted: bool,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        domain: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        workstation: String,
+        #[serde(default = "default_true", skip_serializing_if = "is_true")]
+        enabled: bool,
+    },
 }
 
 impl AuthConfig {
@@ -312,6 +328,11 @@ impl AuthConfig {
                 password,
                 password_encrypted,
                 ..
+            }
+            | AuthConfig::Ntlm {
+                password,
+                password_encrypted,
+                ..
             } => vec![(password, *password_encrypted)],
             AuthConfig::None | AuthConfig::Inherit { .. } => Vec::new(),
         }
@@ -328,7 +349,8 @@ impl AuthConfig {
             | AuthConfig::AwsSigV4 { enabled, .. }
             | AuthConfig::OAuth1 { enabled, .. }
             | AuthConfig::OAuth2 { enabled, .. }
-            | AuthConfig::Digest { enabled, .. } => *enabled,
+            | AuthConfig::Digest { enabled, .. }
+            | AuthConfig::Ntlm { enabled, .. } => *enabled,
             AuthConfig::None | AuthConfig::Inherit { .. } => true,
         }
     }
@@ -346,7 +368,10 @@ impl AuthConfig {
     pub fn is_dynamic(&self) -> bool {
         matches!(
             self,
-            AuthConfig::AwsSigV4 { .. } | AuthConfig::OAuth1 { .. } | AuthConfig::Digest { .. }
+            AuthConfig::AwsSigV4 { .. }
+                | AuthConfig::OAuth1 { .. }
+                | AuthConfig::Digest { .. }
+                | AuthConfig::Ntlm { .. }
         )
     }
 

@@ -16,6 +16,36 @@ fn raw_content_type(kind: &BodyKind) -> Option<&'static str> {
     }
 }
 
+/// The exact bytes a non-streaming body puts on the wire — the single home for
+/// the `BodyKind` → bytes mapping shared by SigV4 payload hashing and the NTLM
+/// authenticate leg. `None` for multipart/binary (boundaries / file streams
+/// aren't cheaply reproducible). Form encoding byte-matches reqwest's `.form()`.
+pub(crate) fn reproducible_body_bytes(body: &RequestBody) -> Option<Vec<u8>> {
+    match body.kind {
+        BodyKind::None => Some(Vec::new()),
+        BodyKind::Json | BodyKind::Xml | BodyKind::Text | BodyKind::Html => {
+            Some(body.text.clone().into_bytes())
+        }
+        BodyKind::Graphql => Some(body.graphql_payload().into_bytes()),
+        BodyKind::FormUrlEncoded => {
+            let pairs: Vec<(&str, &str)> = body
+                .fields
+                .as_deref()
+                .unwrap_or(&[])
+                .iter()
+                .filter(|f| f.enabled && !f.name.trim().is_empty())
+                .map(|f| (f.name.as_str(), f.value.as_str()))
+                .collect();
+            Some(
+                serde_urlencoded::to_string(&pairs)
+                    .unwrap_or_default()
+                    .into_bytes(),
+            )
+        }
+        BodyKind::Multipart | BodyKind::Binary => None,
+    }
+}
+
 /// True when the body would put bytes on the wire — used by the redirect
 /// warning logic to decide whether a 301/302/303 downgrade dropped a payload.
 pub(crate) fn has_content(body: &RequestBody) -> bool {

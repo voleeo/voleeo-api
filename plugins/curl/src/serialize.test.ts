@@ -241,6 +241,22 @@ describe("serializeAsCurl — auth", () => {
     expect(out).not.toContain("Authorization")
   })
 
+  test("ntlm emits --ntlm with DOMAIN\\user", async () => {
+    const out = await serializeAsCurl(
+      mkRequest({
+        auth: {
+          kind: "ntlm",
+          username: "alex",
+          password: "secret",
+          domain: "CORP",
+        },
+      }),
+      ctx,
+    )
+    expect(out).toContain("--ntlm")
+    expect(out).toContain("-u 'CORP\\alex:secret'")
+  })
+
   test("api_key with location=header emits custom header", async () => {
     const out = await serializeAsCurl(
       mkRequest({

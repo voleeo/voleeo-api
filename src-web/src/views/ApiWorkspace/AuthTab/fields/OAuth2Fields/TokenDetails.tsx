@@ -1,6 +1,6 @@
 import { listen } from "@tauri-apps/api/event"
 import { useCallback, useEffect, useRef, useState } from "react"
-import { JsonView } from "@/components/JsonView"
+import { CodeView } from "@/components/CodeView"
 import { type Oauth2TokenDetails, oauth2TokenDetails } from "@/store/oauth2"
 import type { AuthConfig } from "@/store/requests"
 
@@ -58,7 +58,7 @@ export function TokenDetails({
         Access token
       </span>
       <div className="selectable-text rounded-[5px] border border-border overflow-hidden max-h-[260px] overflow-y-auto">
-        <JsonView value={toJson(details)} />
+        <CodeView value={toJson(details)} lang="json" />
       </div>
     </div>
   )

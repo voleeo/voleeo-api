@@ -86,6 +86,7 @@ async function buildAuthParts(
   flags: string[]
   extraHeaders: Array<{ name: string; value: string }>
   extraQuery: Array<{ name: string; value: string }>
+  note?: string
 }> {
   const flags: string[] = []
   const extraHeaders: Array<{ name: string; value: string }> = []
@@ -109,6 +110,14 @@ async function buildAuthParts(
     const pass = await resolveStr(ctx, auth.password ?? "")
     // HTTPie runs the challenge-response itself with `--auth-type=digest`.
     flags.push("-A digest", `-a ${shellQuote(`${user}:${pass}`)}`)
+  } else if (auth.kind === "ntlm") {
+    // NTLM isn't built into HTTPie; surface a note rather than emit broken auth.
+    return {
+      flags,
+      extraHeaders,
+      extraQuery,
+      note: "NTLM needs the httpie-ntlm plugin: -A ntlm -a 'DOMAIN\\user:pass'",
+    }
   }
   return { flags, extraHeaders, extraQuery }
 }
@@ -249,6 +258,9 @@ export async function serializeAsHttpie(
   const headSegments = ["http", ...auth.flags, method, shellQuote(url)]
   const rest = [...queryArgs, ...headerArgs, ...bodyArgs]
   const head = headSegments.join(" ")
-  if (rest.length === 0) return head
-  return [head, ...rest.map((p) => `  ${p}`)].join(" \\\n")
+  const command =
+    rest.length === 0
+      ? head
+      : [head, ...rest.map((p) => `  ${p}`)].join(" \\\n")
+  return auth.note ? `# ${auth.note}\n${command}` : command
 }

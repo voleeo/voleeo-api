@@ -13,6 +13,7 @@ import { AwsSigV4Fields } from "./fields/AwsSigV4Fields"
 import { BasicFields } from "./fields/BasicFields"
 import { BearerFields } from "./fields/BearerFields"
 import { DigestFields } from "./fields/DigestFields"
+import { NtlmFields } from "./fields/NtlmFields"
 import { OAuth1Fields } from "./fields/OAuth1Fields"
 import { OAuth2Fields } from "./fields/OAuth2Fields"
 import { AuthToggleButton, WarningBlock } from "./fields/shared"
@@ -54,6 +55,10 @@ function FieldGroup({ auth, setAuth, onVarClick }: Props) {
     case "digest":
       return (
         <DigestFields auth={auth} setAuth={setAuth} onVarClick={onVarClick} />
+      )
+    case "ntlm":
+      return (
+        <NtlmFields auth={auth} setAuth={setAuth} onVarClick={onVarClick} />
       )
     default:
       return null

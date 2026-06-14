@@ -115,6 +115,7 @@ const AUTH_TYPE_LABEL: Record<string, string> = {
   oauth1: "OAuth 1.0",
   oauth2: "OAuth 2.0",
   digest: "Digest",
+  ntlm: "NTLM",
 }
 
 const OAUTH1_SIGNATURE_LABEL: Record<string, string> = {
@@ -342,6 +343,32 @@ export function authEntries(auth: AuthConfig): AuthEntry[] {
         },
         stateEntry(auth.enabled),
       ]
+    case "ntlm": {
+      const entries: AuthEntry[] = [
+        type,
+        { key: "auth.username", label: "Username", value: auth.username },
+        {
+          key: "auth.password",
+          label: "Password",
+          value: auth.password ?? "",
+          secret: true,
+        },
+      ]
+      if (auth.domain)
+        entries.push({
+          key: "auth.domain",
+          label: "Domain",
+          value: auth.domain,
+        })
+      if (auth.workstation)
+        entries.push({
+          key: "auth.workstation",
+          label: "Workstation",
+          value: auth.workstation,
+        })
+      entries.push(stateEntry(auth.enabled))
+      return entries
+    }
     default:
       return [type]
   }

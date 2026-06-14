@@ -6,7 +6,7 @@
 use voleeo_auth::sigv4::{self, SigV4Request};
 use voleeo_auth::{digest, oauth1};
 use voleeo_core::{
-    AuthConfig, BodyKind, HttpRequest, OAuth1Location, OAuth1Signature, RequestBody, VoleeoError,
+    AuthConfig, HttpRequest, OAuth1Location, OAuth1Signature, RequestBody, VoleeoError,
 };
 
 /// The request-target (path + query) a Digest response must hash over — matches
@@ -22,14 +22,8 @@ fn request_target(url: &reqwest::Url) -> String {
 /// Non-reproducible bodies (multipart/binary) hash as empty; servers offering
 /// `auth` (preferred by the parser) never reach this.
 fn digest_body(body: Option<&RequestBody>) -> Vec<u8> {
-    let Some(body) = body else { return Vec::new() };
-    match body.kind {
-        BodyKind::Json | BodyKind::Xml | BodyKind::Text | BodyKind::Html => {
-            body.text.clone().into_bytes()
-        }
-        BodyKind::Graphql => body.graphql_payload().into_bytes(),
-        _ => Vec::new(),
-    }
+    body.and_then(crate::body::reproducible_body_bytes)
+        .unwrap_or_default()
 }
 
 /// Compute the `Authorization: Digest` header answering a `401` challenge, with a
@@ -79,30 +73,14 @@ pub fn digest_authorization(
 /// as `UNSIGNED-PAYLOAD`, which AWS accepts. Returns `(hash, reproduced)` where
 /// `reproduced == false` drove the unsigned path (for a timeline note).
 fn payload_sha256(body: Option<&RequestBody>) -> (String, bool) {
+    // No body hashes the same as an empty one; `BodyKind::None` reproduces as
+    // `Some([])`, so only multipart/binary (the helper's `None`) go unsigned.
     let Some(body) = body else {
         return (sigv4::empty_payload_hash(), true);
     };
-    match body.kind {
-        BodyKind::None => (sigv4::empty_payload_hash(), true),
-        BodyKind::Json | BodyKind::Xml | BodyKind::Text | BodyKind::Html => {
-            (sigv4::payload_hash(body.text.as_bytes()), true)
-        }
-        BodyKind::Graphql => (sigv4::payload_hash(body.graphql_payload().as_bytes()), true),
-        BodyKind::FormUrlEncoded => {
-            // Must byte-match reqwest's `.form()` — it serializes with
-            // serde_urlencoded, so we do too.
-            let pairs: Vec<(&str, &str)> = body
-                .fields
-                .as_deref()
-                .unwrap_or(&[])
-                .iter()
-                .filter(|f| f.enabled && !f.name.trim().is_empty())
-                .map(|f| (f.name.as_str(), f.value.as_str()))
-                .collect();
-            let encoded = serde_urlencoded::to_string(&pairs).unwrap_or_default();
-            (sigv4::payload_hash(encoded.as_bytes()), true)
-        }
-        BodyKind::Multipart | BodyKind::Binary => ("UNSIGNED-PAYLOAD".to_string(), false),
+    match crate::body::reproducible_body_bytes(body) {
+        Some(bytes) => (sigv4::payload_hash(&bytes), true),
+        None => ("UNSIGNED-PAYLOAD".to_string(), false),
     }
 }
 
@@ -303,7 +281,7 @@ fn host_header(url: &reqwest::Url) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use voleeo_core::BodyField;
+    use voleeo_core::{BodyField, BodyKind};
 
     #[test]
     fn host_header_omits_default_port() {

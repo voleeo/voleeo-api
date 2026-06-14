@@ -124,6 +124,21 @@ export const AUTH_SCHEMES: Record<AuthKind, AuthScheme> = {
     dynamic: true,
     fresh: () => ({ kind: "digest", username: "", password: "" }),
   },
+  ntlm: {
+    kind: "ntlm",
+    label: "NTLM",
+    description:
+      "Runs the NTLMv2 handshake over a dedicated connection (Windows / IIS intranets). HTTP/1.1 only.",
+    protocols: HTTP_ONLY,
+    dynamic: true,
+    fresh: () => ({
+      kind: "ntlm",
+      username: "",
+      password: "",
+      domain: "",
+      workstation: "",
+    }),
+  },
 }
 
 export const SELECTABLE_AUTH_KINDS: readonly AuthKind[] = [
@@ -135,6 +150,7 @@ export const SELECTABLE_AUTH_KINDS: readonly AuthKind[] = [
   "oauth1",
   "oauth2",
   "digest",
+  "ntlm",
 ]
 
 export function freshAuth(kind: AuthKind): AuthConfig {
@@ -173,6 +189,7 @@ export function isAuthEnabled(auth: AuthConfig): boolean {
     case "oauth1":
     case "oauth2":
     case "digest":
+    case "ntlm":
       return auth.enabled ?? true
     default:
       return true
@@ -188,6 +205,7 @@ export function setAuthEnabled(auth: AuthConfig, enabled: boolean): AuthConfig {
     case "oauth1":
     case "oauth2":
     case "digest":
+    case "ntlm":
       return { ...auth, enabled }
     default:
       return auth

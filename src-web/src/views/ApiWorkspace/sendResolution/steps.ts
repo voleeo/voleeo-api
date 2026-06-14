@@ -219,6 +219,19 @@ export async function applyAuth(
     }
     return { headers: [], resolvedAuth }
   }
+  if (auth.kind === "ntlm") {
+    const r = (v: string | undefined, label: string) =>
+      v ? resolve(ctx, v, label) : Promise.resolve("")
+    const resolvedAuth: AuthConfig = {
+      kind: "ntlm",
+      username: await resolve(ctx, auth.username, "Auth: NTLM username"),
+      password: await r(auth.password, "Auth: NTLM password"),
+      password_encrypted: false,
+      domain: await r(auth.domain, "Auth: NTLM domain"),
+      workstation: await r(auth.workstation, "Auth: NTLM workstation"),
+    }
+    return { headers: [], resolvedAuth }
+  }
   return { headers: [] }
 }
 

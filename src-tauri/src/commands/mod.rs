@@ -1,4 +1,5 @@
 pub mod cookie;
+pub mod debug;
 pub mod environment;
 pub mod git;
 pub mod graphql;
