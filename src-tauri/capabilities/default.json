@@ -22,6 +22,8 @@
     "core:resources:default",
     "core:menu:default",
     "core:tray:default",
-    "dialog:allow-open"
+    "dialog:allow-open",
+    "updater:default",
+    "process:default"
   ]
 }

@@ -57,8 +57,6 @@ impl HttpExecutor {
         capture_sink: &Arc<Mutex<Vec<StoredCookie>>>,
         attached_sink: &Arc<Mutex<Vec<StoredCookie>>>,
     ) -> Result<HttpResponse, VoleeoError> {
-        // NTLM authenticates a connection, so it runs its whole handshake over a
-        // dedicated single connection — entirely outside the pooled send path.
         if let AuthConfig::Ntlm {
             username,
             password,

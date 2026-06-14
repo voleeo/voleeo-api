@@ -23,9 +23,21 @@
       "csp": null
     }
   },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDU2RDVGQ0I5Qjc3RTU4MTIKUldRU1dINjN1ZnpWVnNNcm8zbkRRNHg0empaZWJ0SlRpNm84OS81NjVWNm9ERGx2ZnpXU1BkbEkK",
+      "endpoints": [
+        "https://github.com/voleeo/voleeo-api/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "externalBin": ["binaries/voleeo-mcp-bridge"],
     "icon": [
       "icons/production/32x32.png",

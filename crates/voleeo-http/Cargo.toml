@@ -15,6 +15,7 @@ reqwest = { workspace = true }
 tokio = { workspace = true }
 futures-util = { workspace = true }
 serde_urlencoded = "0.7"
+
 # NTLM: a dedicated single-connection handshake (Type1→Type2→Type3) since the
 # scheme authenticates a connection, not a request. ntlmclient does NTLMv2 crypto.
 ntlmclient = "0.2"

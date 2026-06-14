@@ -18,7 +18,7 @@ members = [
 
 [workspace.package]
 license = "MIT"
-repository = "https://github.com/coffeein-dev/voleeo-api"
+repository = "https://github.com/voleeo/voleeo-api"
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
@@ -48,4 +48,6 @@ tauri = { version = "2", features = [] }
 tauri-specta = { version = "=2.0.0-rc.25", features = ["derive", "typescript"] }
 specta-typescript = "0.0.12"
 tauri-plugin-dialog = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 git2 = { version = "0.20", default-features = false, features = ["vendored-libgit2", "vendored-openssl", "ssh", "https"] }

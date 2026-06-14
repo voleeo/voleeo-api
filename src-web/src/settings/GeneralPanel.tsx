@@ -1,5 +1,6 @@
 import { useEffect } from "react"
 import { useShallow } from "zustand/react/shallow"
+import { UpdatesSection } from "@/settings/UpdatesSection"
 import { useAppStore } from "@/store/app"
 
 export function GeneralPanel() {
@@ -31,6 +32,7 @@ export function GeneralPanel() {
           {info.log_dir}
         </dd>
       </dl>
+      <UpdatesSection />
     </section>
   )
 }

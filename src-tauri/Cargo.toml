@@ -48,6 +48,8 @@ tauri-specta = { workspace = true }
 specta = { workspace = true }
 specta-typescript = { workspace = true }
 tauri-plugin-dialog = { workspace = true }
+tauri-plugin-updater = { workspace = true }
+tauri-plugin-process = { workspace = true }
 font-kit = "0.14"
 
 # macOS-only: native titlebar via cocoa/objc. Not compiled on Linux/Windows.
