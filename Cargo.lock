@@ -8322,7 +8322,7 @@ version = "0.1.0"
 dependencies = [
  "objc2 0.6.4",
  "objc2-foundation 0.3.2",
- "rand 0.9.4",
+ "rand 0.10.1",
  "serde_json",
  "tauri",
 ]
