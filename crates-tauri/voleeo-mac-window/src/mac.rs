@@ -135,7 +135,16 @@ extern "C" fn on_window_did_change_backing_properties(
         let _: () = msg_send![super_delegate(this), windowDidChangeBackingProperties: notification];
     }
 }
-extern "C" fn on_window_did_become_key(this: &AnyObject, _cmd: Sel, notification: Id) {
+extern "C" fn on_window_did_become_key<R: Runtime>(this: &AnyObject, _cmd: Sel, notification: Id) {
+    with_window_state(this, |state: &mut WindowState<R>| {
+        if let Ok(id) = state.window.ns_window() {
+            position_traffic_lights(
+                UnsafeWindowHandle(id),
+                WINDOW_CONTROL_PAD_X,
+                WINDOW_CONTROL_PAD_Y,
+            );
+        }
+    });
     unsafe {
         let _: () = msg_send![super_delegate(this), windowDidBecomeKey: notification];
     }
@@ -303,7 +312,7 @@ fn build_delegate_class<R: Runtime>(name: &str) -> &'static AnyClass {
         );
         builder.add_method(
             sel!(windowDidBecomeKey:),
-            on_window_did_become_key as extern "C" fn(_, _, _),
+            on_window_did_become_key::<R> as extern "C" fn(_, _, _),
         );
         builder.add_method(
             sel!(windowDidResignKey:),
