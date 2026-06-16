@@ -24,6 +24,7 @@
     "core:tray:default",
     "dialog:allow-open",
     "updater:default",
-    "process:default"
+    "process:default",
+    "mcp-bridge:default"
   ]
 }
