@@ -22,6 +22,13 @@ pub fn status(path: &Path) -> Result<GitStatus, VoleeoError> {
         let Some(p) = entry.path().map(String::from) else {
             continue;
         };
+        // `.gitignore` is app-managed infrastructure, committed automatically with
+        // every commit — never a user-facing change. Hiding it keeps the dirty
+        // indicator honest: the entity review can't show it, so counting it would
+        // leave the branch "dirty" against an empty changes list.
+        if p == ".gitignore" {
+            continue;
+        }
         // Hide files whose only change vs HEAD is volatile metadata (timestamps).
         if !st.contains(Status::CONFLICTED) && only_volatile_change(&repo, &p) {
             continue;
