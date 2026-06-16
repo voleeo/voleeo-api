@@ -126,7 +126,7 @@ cargo test -p voleeo-storage test_name
 
 ## Commits & releases
 
-**Conventional commits are mandatory** — versioning and release notes derive from them (`cliff.toml`). On every push to `main`, `release.yml` computes the next semver with git-cliff (`feat:` → minor, `fix:`/`perf:` → patch; `chore:`/`docs:`/`ci:`/`refactor:` → no release), builds, and publishes a GitHub release. The version lives in git tags only — CI injects it into `tauri.conf.json` at build time; never bump version fields manually. No `Co-Authored-By: Claude` trailers or AI attribution in commits/PRs.
+**Conventional commits are mandatory** — versioning and release notes derive from them (`cliff.toml`). `release.yml` is **manual-only** (`workflow_dispatch` from the Actions tab or `gh workflow run release.yml`); it computes the next semver with git-cliff (`feat:` → minor, `fix:`/`perf:` → patch; `chore:`/`docs:`/`ci:`/`refactor:` → no release) and skips when there are no releasable commits since the last tag. The version lives in git tags only — CI injects it into `tauri.conf.json` at build time; never bump version fields manually. No `Co-Authored-By: Claude` trailers or AI attribution in commits/PRs.
 
 ## Toolchain
 
