@@ -60,7 +60,7 @@ export function RequestFunctionForm({
     <div className="flex flex-col gap-1.5">
       <label className="font-sans text-[0.786rem] text-muted font-medium">
         {fnName === "request.header" ? "Header name" : "Param name"}{" "}
-        <span className="text-error">*</span>
+        <span className="text-accent">*</span>
       </label>
       <input
         type="text"

@@ -147,7 +147,7 @@ export function TemplateFunctionModal({
                   <label className="font-sans text-[0.786rem] text-muted font-medium">
                     {head.label ?? head.name}
                     {head.required && (
-                      <span className="text-error ml-0.5">*</span>
+                      <span className="text-accent ml-0.5">*</span>
                     )}
                     {head.description && (
                       <span className="ml-1.5 font-normal text-muted/60">

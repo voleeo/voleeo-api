@@ -137,7 +137,7 @@ export const VarRow = memo(function VarRow({
             "flex items-center justify-center w-6 h-6 rounded-[3px] border-0 outline-none cursor-pointer bg-transparent hover:bg-error/10 transition-opacity",
             isTrailing && !isTouched
               ? "invisible pointer-events-none"
-              : "opacity-0 group-hover/row:opacity-100",
+              : "opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100",
           )}
         >
           <Glyph kind="trash" size={11} color="var(--base08)" />
