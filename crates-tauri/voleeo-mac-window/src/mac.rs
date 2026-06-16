@@ -107,6 +107,17 @@ fn super_delegate(this: &AnyObject) -> Id {
     unsafe { *this.get_ivar::<Id>("super_delegate") }
 }
 
+/// The NSWindow that posted this delegate notification (`[notification object]`).
+///
+/// Source the window from the notification, never via `Window::ns_window()`:
+/// closing a window drops the tao window *while Tauri holds `windows` borrowed
+/// mutably*, and the close synchronously fires `windowDidBecomeKey:` on the next
+/// window. Re-entering Tauri there double-borrows that RefCell and aborts the app.
+unsafe fn notification_window(notification: Id) -> *mut c_void {
+    let ns_window: Id = msg_send![notification, object];
+    ns_window as *mut c_void
+}
+
 extern "C" fn on_window_should_close(this: &AnyObject, _cmd: Sel, sender: Id) -> Bool {
     unsafe { msg_send![super_delegate(this), windowShouldClose: sender] }
 }
@@ -115,16 +126,13 @@ extern "C" fn on_window_will_close(this: &AnyObject, _cmd: Sel, notification: Id
         let _: () = msg_send![super_delegate(this), windowWillClose: notification];
     }
 }
-extern "C" fn on_window_did_resize<R: Runtime>(this: &AnyObject, _cmd: Sel, notification: Id) {
-    with_window_state(this, |state: &mut WindowState<R>| {
-        let id = state.window.ns_window().expect("Failed to get ns_window");
+extern "C" fn on_window_did_resize(this: &AnyObject, _cmd: Sel, notification: Id) {
+    unsafe {
         position_traffic_lights(
-            UnsafeWindowHandle(id),
+            UnsafeWindowHandle(notification_window(notification)),
             WINDOW_CONTROL_PAD_X,
             WINDOW_CONTROL_PAD_Y,
         );
-    });
-    unsafe {
         let _: () = msg_send![super_delegate(this), windowDidResize: notification];
     }
 }
@@ -142,17 +150,13 @@ extern "C" fn on_window_did_change_backing_properties(
         let _: () = msg_send![super_delegate(this), windowDidChangeBackingProperties: notification];
     }
 }
-extern "C" fn on_window_did_become_key<R: Runtime>(this: &AnyObject, _cmd: Sel, notification: Id) {
-    with_window_state(this, |state: &mut WindowState<R>| {
-        if let Ok(id) = state.window.ns_window() {
-            position_traffic_lights(
-                UnsafeWindowHandle(id),
-                WINDOW_CONTROL_PAD_X,
-                WINDOW_CONTROL_PAD_Y,
-            );
-        }
-    });
+extern "C" fn on_window_did_become_key(this: &AnyObject, _cmd: Sel, notification: Id) {
     unsafe {
+        position_traffic_lights(
+            UnsafeWindowHandle(notification_window(notification)),
+            WINDOW_CONTROL_PAD_X,
+            WINDOW_CONTROL_PAD_Y,
+        );
         let _: () = msg_send![super_delegate(this), windowDidBecomeKey: notification];
     }
 }
@@ -236,14 +240,13 @@ extern "C" fn on_window_did_exit_full_screen<R: Runtime>(
             .window
             .emit("did-exit-fullscreen", ())
             .expect("Failed to emit event");
-        let id = state.window.ns_window().expect("Failed to get ns_window");
+    });
+    unsafe {
         position_traffic_lights(
-            UnsafeWindowHandle(id),
+            UnsafeWindowHandle(notification_window(notification)),
             WINDOW_CONTROL_PAD_X,
             WINDOW_CONTROL_PAD_Y,
         );
-    });
-    unsafe {
         let _: () = msg_send![super_delegate(this), windowDidExitFullScreen: notification];
     }
 }
@@ -307,7 +310,7 @@ fn build_delegate_class<R: Runtime>(name: &str) -> &'static AnyClass {
         );
         builder.add_method(
             sel!(windowDidResize:),
-            on_window_did_resize::<R> as extern "C" fn(_, _, _),
+            on_window_did_resize as extern "C" fn(_, _, _),
         );
         builder.add_method(
             sel!(windowDidMove:),
@@ -319,7 +322,7 @@ fn build_delegate_class<R: Runtime>(name: &str) -> &'static AnyClass {
         );
         builder.add_method(
             sel!(windowDidBecomeKey:),
-            on_window_did_become_key::<R> as extern "C" fn(_, _, _),
+            on_window_did_become_key as extern "C" fn(_, _, _),
         );
         builder.add_method(
             sel!(windowDidResignKey:),
