@@ -429,18 +429,23 @@ pub fn setup_traffic_light_positioner<R: Runtime>(window: &Window<R>) {
     let app = window.app_handle().clone();
     let win = window.clone();
     std::thread::spawn(move || {
-        for delay in [50u64, 150, 350] {
+        for delay in [50u64, 150, 350, 700, 1200] {
             std::thread::sleep(Duration::from_millis(delay));
             let w = win.clone();
-            let _ = app.run_on_main_thread(move || {
-                if let Ok(id) = w.ns_window() {
-                    position_traffic_lights(
-                        UnsafeWindowHandle(id),
-                        WINDOW_CONTROL_PAD_X,
-                        WINDOW_CONTROL_PAD_Y,
-                    );
-                }
-            });
+            let _ = app.run_on_main_thread(move || reposition(&w));
         }
     });
+}
+
+/// Re-apply the custom traffic-light position to an already-set-up window. Safe
+/// to call repeatedly and from any layout-settled moment (focus, page load) —
+/// it just moves the existing standard window buttons, no delegate work.
+pub fn reposition<R: Runtime>(window: &Window<R>) {
+    if let Ok(id) = window.ns_window() {
+        position_traffic_lights(
+            UnsafeWindowHandle(id),
+            WINDOW_CONTROL_PAD_X,
+            WINDOW_CONTROL_PAD_Y,
+        );
+    }
 }

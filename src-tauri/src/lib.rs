@@ -283,6 +283,14 @@ pub fn run() {
                 window.app_handle().exit(0);
             }
         })
+        // The title bar is fully laid out by the time the page finishes loading,
+        // so re-apply the macOS traffic-light position here.
+        .on_page_load(|_webview, _payload| {
+            #[cfg(target_os = "macos")]
+            if matches!(_payload.event(), tauri::webview::PageLoadEvent::Finished) {
+                voleeo_mac_window::reposition_traffic_lights(&_webview.window());
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             commands::workspace::list_workspaces,
             commands::workspace::create_workspace,
