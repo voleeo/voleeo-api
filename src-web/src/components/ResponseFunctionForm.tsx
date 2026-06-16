@@ -104,7 +104,7 @@ export function ResponseFunctionForm({
       ) : (
         <div className="flex flex-col gap-1.5">
           <label className="font-sans text-[0.786rem] text-muted font-medium">
-            Header name <span className="text-error">*</span>
+            Header name <span className="text-accent">*</span>
           </label>
           <input
             type="text"

@@ -1,7 +1,7 @@
 import { Fragment, memo } from "react"
 import { abbrev } from "@/components/ApiRequestTree/TreeRow"
 import { Glyph } from "@/components/Glyph"
-import { methodColor } from "@/components/tokens"
+import { C_GQL, methodColor } from "@/components/tokens"
 import { Checkbox } from "@/components/ui/checkbox"
 import { cn } from "@/lib/utils"
 import type { ReqRunStatus } from "@/store/folderRun"
@@ -65,6 +65,7 @@ function FolderRunRowImpl({
     setActiveRequest(request.id)
   }
 
+  const isGraphql = request.body?.kind === "graphql"
   const totalMs = response?.timing.totalMs ?? null
   const status = response?.status ?? null
   const barPct =
@@ -91,9 +92,10 @@ function FolderRunRowImpl({
       />
       <span
         className="font-mono text-[0.857rem] font-semibold tracking-wide text-right shrink-0"
-        style={{ color: methodColor(request.method) }}
+        title={isGraphql ? "GraphQL" : request.method}
+        style={{ color: isGraphql ? C_GQL : methodColor(request.method) }}
       >
-        {abbrev(request.method)}
+        {isGraphql ? "GQL" : abbrev(request.method)}
       </span>
       <div className="flex flex-col min-w-0">
         <div className="flex items-center gap-1.5 min-w-0">

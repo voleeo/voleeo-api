@@ -4,32 +4,50 @@ import { linter, lintGutter } from "@codemirror/lint"
 
 export { lintGutter }
 
+const TEMPLATE_TOKEN = /\{\{[^}]*\}\}/g
+
+/** Mask `{{ … }}` tokens with equal-length filler so the surrounding JSON stays
+ *  parseable. Length is preserved so a *real* error keeps its original offset. */
+function maskTemplateTokens(text: string): string {
+  return text.replace(TEMPLATE_TOKEN, (m) => "1".repeat(m.length))
+}
+
+function inTemplateToken(text: string, pos: number): boolean {
+  for (const m of text.matchAll(TEMPLATE_TOKEN)) {
+    const start = m.index ?? 0
+    if (pos >= start && pos < start + m[0].length) return true
+  }
+  return false
+}
+
 export function makeJsonLinter() {
   return linter((view): Diagnostic[] => {
     const text = view.state.doc.toString()
     if (!text.trim()) return []
 
-    // Position comes from the Lezer syntax tree, not the engine: WebKit's
-    // JSON.parse errors carry no offset, so the message gives us a readable
-    // reason but the tree's error node marks the actual bad token.
+    const masked = maskTemplateTokens(text)
+    let message = "Invalid JSON"
+    try {
+      JSON.parse(masked)
+      return []
+    } catch (e) {
+      if (e instanceof SyntaxError) message = e.message
+    }
+
     let from = -1
     let to = -1
     syntaxTree(view.state).iterate({
       enter: (n) => {
-        if (from < 0 && n.type.isError) {
+        if (from < 0 && n.type.isError && !inTemplateToken(text, n.from)) {
           from = n.from
           to = n.to
           return false
         }
       },
     })
-    if (from < 0) return []
-
-    let message = "Invalid JSON"
-    try {
-      JSON.parse(text)
-    } catch (e) {
-      if (e instanceof SyntaxError) message = e.message
+    if (from < 0) {
+      from = Math.max(0, text.length - 1)
+      to = text.length
     }
     from = Math.max(0, Math.min(from, text.length - 1))
     to = to > from ? Math.min(to, text.length) : Math.min(from + 1, text.length)

@@ -149,7 +149,7 @@ export function RequestFunctionModal({
       <div className="px-4 py-4 flex flex-col gap-3 border-b border-border">
         <div className="flex flex-col gap-1.5">
           <label className="font-sans text-[0.786rem] text-muted font-medium">
-            Source request <span className="text-error">*</span>
+            Source request <span className="text-accent">*</span>
           </label>
           <RequestPicker value={requestId} onChange={handlePickerChange} />
         </div>
