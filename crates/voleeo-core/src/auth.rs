@@ -338,6 +338,56 @@ impl AuthConfig {
         }
     }
 
+    /// Flag every secret field as encrypted. Callers that receive plaintext auth
+    /// (e.g. the MCP bridge) use this before encrypting at rest on an encrypted
+    /// workspace, matching what the desktop sends for encrypted scopes.
+    pub fn mark_secrets_encrypted(&mut self) {
+        match self {
+            AuthConfig::Bearer {
+                token_encrypted, ..
+            } => *token_encrypted = true,
+            AuthConfig::Basic {
+                password_encrypted, ..
+            }
+            | AuthConfig::Digest {
+                password_encrypted, ..
+            }
+            | AuthConfig::Ntlm {
+                password_encrypted, ..
+            } => *password_encrypted = true,
+            AuthConfig::ApiKey {
+                value_encrypted, ..
+            } => *value_encrypted = true,
+            AuthConfig::AwsSigV4 {
+                secret_key_encrypted,
+                session_token_encrypted,
+                ..
+            } => {
+                *secret_key_encrypted = true;
+                *session_token_encrypted = true;
+            }
+            AuthConfig::OAuth1 {
+                consumer_secret_encrypted,
+                token_secret_encrypted,
+                private_key_encrypted,
+                ..
+            } => {
+                *consumer_secret_encrypted = true;
+                *token_secret_encrypted = true;
+                *private_key_encrypted = true;
+            }
+            AuthConfig::OAuth2 {
+                client_secret_encrypted,
+                password_encrypted,
+                ..
+            } => {
+                *client_secret_encrypted = true;
+                *password_encrypted = true;
+            }
+            AuthConfig::None | AuthConfig::Inherit { .. } => {}
+        }
+    }
+
     /// Whether a configured scheme is switched on. The UI toggles this per
     /// scope (request/folder/workspace); `None`/`Inherit` have nothing to gate
     /// so they report enabled.
