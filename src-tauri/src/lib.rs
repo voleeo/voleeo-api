@@ -180,6 +180,15 @@ pub fn run() {
     #[cfg(target_os = "macos")]
     let builder = builder.plugin(voleeo_mac_window::init());
 
+    // Debug-only E2E bridge: exposes a localhost WebSocket (:9223) so the
+    // voleeo-e2e suite can drive the webview. Absent from release builds.
+    #[cfg(debug_assertions)]
+    let builder = builder.plugin(
+        tauri_plugin_mcp_bridge::Builder::new()
+            .bind_address("127.0.0.1")
+            .build(),
+    );
+
     builder
         .setup(|app| {
             let settings_item = MenuItemBuilder::with_id("settings", "Settings")

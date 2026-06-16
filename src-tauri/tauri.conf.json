@@ -9,6 +9,7 @@
     "frontendDist": "../src-web/dist"
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "title": "Voleeo",
