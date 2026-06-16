@@ -46,7 +46,7 @@ pub(super) fn definitions() -> Vec<ToolDef> {
         },
         ToolDef {
             name: "request.update".into(),
-            description: "Update an existing request's method, URL, or name. Setting `graphqlQuery` turns it into a GraphQL request — a plain HTTP POST with a `{ query, variables }` JSON body; send it with request.send.".into(),
+            description: "Update an existing request's method, URL, name, or auth. Setting `graphqlQuery` turns it into a GraphQL request — a plain HTTP POST with a `{ query, variables }` JSON body; send it with request.send.".into(),
             input_schema: obj_schema(
                 &[
                     ("workspaceId", "Workspace ID", str_schema()),
@@ -58,6 +58,7 @@ pub(super) fn definitions() -> Vec<ToolDef> {
                     ("name", "New name", str_schema()),
                     ("graphqlQuery", "GraphQL query/mutation document; sets a GraphQL body (auto-switches a GET to POST)", str_schema()),
                     ("graphqlVariables", "GraphQL variables as a JSON object string; updates the variables of an existing GraphQL body", str_schema()),
+                    ("auth", "Auth config object keyed by `kind`. kinds: none, inherit, bearer {token}, basic {username,password}, api_key {key,value,location}, aws_sig_v4, o_auth1, o_auth2, digest {username,password}, ntlm. Send plaintext secrets — they're encrypted at rest on encrypted workspaces. Example: {\"kind\":\"bearer\",\"token\":\"abc\"}.", obj_schema(&[("kind", "Auth kind", str_schema())], &[])),
                 ],
             ),
         },
