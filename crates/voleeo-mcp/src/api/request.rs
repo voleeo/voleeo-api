@@ -146,6 +146,36 @@ impl ApiBackend {
                 body.graphql_variables = Some(v.to_string());
             }
         }
+        if !args["auth"].is_null() {
+            let mut auth: AuthConfig = match serde_json::from_value(args["auth"].clone()) {
+                Ok(a) => a,
+                Err(e) => return ToolResult::error(format!("invalid auth: {e}")),
+            };
+
+            let ws_encrypted = self
+                .workspaces
+                .get(&ws_id)
+                .map(|w| w.encrypted)
+                .unwrap_or(false);
+            if ws_encrypted {
+                auth.mark_secrets_encrypted();
+                if auth.secret_fields_mut().iter().any(|(_, enc)| *enc) {
+                    let key = match voleeo_crypto::load_key(&ws_id, &self.app_data_dir) {
+                        Ok(k) => k,
+                        Err(e) => return ToolResult::error(e.to_string()),
+                    };
+                    for (secret, enc) in auth.secret_fields_mut() {
+                        if enc && !voleeo_crypto::is_encrypted(secret) {
+                            match voleeo_crypto::encrypt(secret, &key) {
+                                Ok(ct) => *secret = ct,
+                                Err(e) => return ToolResult::error(e.to_string()),
+                            }
+                        }
+                    }
+                }
+            }
+            req.auth = auth;
+        }
         match self.requests.update_request(
             &ws_id,
             &req_id,

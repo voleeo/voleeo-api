@@ -987,6 +987,169 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn grpc_call_persists_selection_and_notifies() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let dir = tempfile::tempdir().unwrap();
+        let count = Arc::new(AtomicUsize::new(0));
+        let count_clone = count.clone();
+        let b = ApiBackend {
+            workspaces: WorkspaceStore::new(dir.path()).unwrap(),
+            requests: RequestStore::new(dir.path()).unwrap(),
+            environments: EnvironmentStore::new(dir.path()).unwrap(),
+            cookies: CookieJarStore::new(dir.path()).unwrap(),
+            responses: ResponseStore::new(dir.path()).unwrap(),
+            selections: SelectionStore::new(dir.path()).unwrap(),
+            ws: WsStore::new(dir.path()).unwrap(),
+            ws_transcripts: WsTranscriptStore::new(dir.path()).unwrap(),
+            grpc: GrpcStore::new(dir.path()).unwrap(),
+            grpc_responses: GrpcResponseStore::new(dir.path()).unwrap(),
+            grpc_transcripts: GrpcTranscriptStore::new(dir.path()).unwrap(),
+            executor: HttpExecutor::new().unwrap(),
+            ws_manager: WsManager::new(),
+            grpc_executor: GrpcExecutor::new(),
+            grpc_manager: GrpcManager::new(),
+            grpc_descriptors: DescriptorCache::new(),
+            notify: Arc::new(move |event, _payload| {
+                if event == "mcp:grpc:changed" {
+                    count_clone.fetch_add(1, Ordering::SeqCst);
+                }
+            }),
+            app_data_dir: dir.path().to_path_buf(),
+        };
+        let ws_id = ws(&b).await;
+        let created = b
+            .call_tool(
+                "grpc.create",
+                args(&[
+                    ("workspaceId", Value::String(ws_id.clone())),
+                    ("name", Value::String("Greeter".into())),
+                    ("target", Value::String("127.0.0.1:1".into())),
+                ]),
+            )
+            .await;
+        let g: Value = serde_json::from_str(&created.content[0].text).unwrap();
+        let id = g["id"].as_str().unwrap().to_string();
+        let after_create = count.load(Ordering::SeqCst);
+
+        let called = b
+            .call_tool(
+                "grpc.call",
+                args(&[
+                    ("workspaceId", Value::String(ws_id.clone())),
+                    ("id", Value::String(id.clone())),
+                    ("service", Value::String("helloworld.Greeter".into())),
+                    ("method", Value::String("SayHello".into())),
+                ]),
+            )
+            .await;
+        assert_eq!(
+            called.is_error,
+            Some(true),
+            "call without a server should fail at resolution"
+        );
+
+        let listed = b
+            .call_tool("grpc.list", args(&[("workspaceId", Value::String(ws_id))]))
+            .await;
+        let list: Vec<Value> = serde_json::from_str(&listed.content[0].text).unwrap();
+        let stored = list.iter().find(|x| x["id"] == id.as_str()).unwrap();
+        assert_eq!(stored["service"], "helloworld.Greeter", "service persisted");
+        assert_eq!(stored["method"], "SayHello", "method persisted");
+        assert!(
+            count.load(Ordering::SeqCst) > after_create,
+            "grpc.call should emit mcp:grpc:changed"
+        );
+    }
+
+    #[tokio::test]
+    async fn request_update_sets_auth_and_notifies() {
+        // The agent can set request auth via request.update; it persists and emits
+        // `mcp:requests:changed` so the open AUTH tab refreshes. Regression: there
+        // was no way to set auth through MCP at all.
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let dir = tempfile::tempdir().unwrap();
+        let count = Arc::new(AtomicUsize::new(0));
+        let count_clone = count.clone();
+        let b = ApiBackend {
+            workspaces: WorkspaceStore::new(dir.path()).unwrap(),
+            requests: RequestStore::new(dir.path()).unwrap(),
+            environments: EnvironmentStore::new(dir.path()).unwrap(),
+            cookies: CookieJarStore::new(dir.path()).unwrap(),
+            responses: ResponseStore::new(dir.path()).unwrap(),
+            selections: SelectionStore::new(dir.path()).unwrap(),
+            ws: WsStore::new(dir.path()).unwrap(),
+            ws_transcripts: WsTranscriptStore::new(dir.path()).unwrap(),
+            grpc: GrpcStore::new(dir.path()).unwrap(),
+            grpc_responses: GrpcResponseStore::new(dir.path()).unwrap(),
+            grpc_transcripts: GrpcTranscriptStore::new(dir.path()).unwrap(),
+            executor: HttpExecutor::new().unwrap(),
+            ws_manager: WsManager::new(),
+            grpc_executor: GrpcExecutor::new(),
+            grpc_manager: GrpcManager::new(),
+            grpc_descriptors: DescriptorCache::new(),
+            notify: Arc::new(move |event, _payload| {
+                if event == "mcp:requests:changed" {
+                    count_clone.fetch_add(1, Ordering::SeqCst);
+                }
+            }),
+            app_data_dir: dir.path().to_path_buf(),
+        };
+        let ws_id = ws(&b).await;
+        let created: Value = serde_json::from_str(
+            &b.call_tool(
+                "request.create",
+                args(&[
+                    ("workspaceId", Value::String(ws_id.clone())),
+                    ("name", Value::String("R".into())),
+                    ("method", Value::String("GET".into())),
+                    ("url", Value::String("https://example.com".into())),
+                ]),
+            )
+            .await
+            .content[0]
+                .text,
+        )
+        .unwrap();
+        let req_id = created["id"].as_str().unwrap().to_string();
+        let before = count.load(Ordering::SeqCst);
+
+        let updated = b
+            .call_tool(
+                "request.update",
+                args(&[
+                    ("workspaceId", Value::String(ws_id.clone())),
+                    ("requestId", Value::String(req_id.clone())),
+                    (
+                        "auth",
+                        serde_json::json!({ "kind": "bearer", "token": "s3cr3t" }),
+                    ),
+                ]),
+            )
+            .await;
+        assert!(updated.is_error.is_none(), "{}", updated.content[0].text);
+        assert!(
+            count.load(Ordering::SeqCst) > before,
+            "auth update should emit mcp:requests:changed"
+        );
+
+        let got: Value = serde_json::from_str(
+            &b.call_tool(
+                "request.get",
+                args(&[
+                    ("workspaceId", Value::String(ws_id)),
+                    ("requestId", Value::String(req_id)),
+                ]),
+            )
+            .await
+            .content[0]
+                .text,
+        )
+        .unwrap();
+        assert_eq!(got["auth"]["kind"], "bearer");
+        assert_eq!(got["auth"]["token"], "s3cr3t");
+    }
+
+    #[tokio::test]
     async fn cookie_change_notifies() {
         // Mutations emit `mcp:cookies:changed` so the frontend reloads.
         use std::sync::atomic::{AtomicUsize, Ordering};
