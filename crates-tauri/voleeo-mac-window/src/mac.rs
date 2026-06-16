@@ -4,7 +4,8 @@ use objc2::{msg_send, sel};
 use objc2_foundation::NSRect;
 use std::ffi::{c_void, CString};
 use std::sync::OnceLock;
-use tauri::{Emitter, Runtime, Window};
+use std::time::Duration;
+use tauri::{Emitter, Manager, Runtime, Window};
 
 /// Raw Objective-C object pointer (`id`).
 type Id = *mut AnyObject;
@@ -424,4 +425,22 @@ pub fn setup_traffic_light_positioner<R: Runtime>(window: &Window<R>) {
 
         let _: () = msg_send![ns_win, setDelegate: delegate];
     }
+
+    let app = window.app_handle().clone();
+    let win = window.clone();
+    std::thread::spawn(move || {
+        for delay in [50u64, 150, 350] {
+            std::thread::sleep(Duration::from_millis(delay));
+            let w = win.clone();
+            let _ = app.run_on_main_thread(move || {
+                if let Ok(id) = w.ns_window() {
+                    position_traffic_lights(
+                        UnsafeWindowHandle(id),
+                        WINDOW_CONTROL_PAD_X,
+                        WINDOW_CONTROL_PAD_Y,
+                    );
+                }
+            });
+        }
+    });
 }
