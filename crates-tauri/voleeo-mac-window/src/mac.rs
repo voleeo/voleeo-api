@@ -55,10 +55,17 @@ fn position_traffic_lights(ns_window_handle: UnsafeWindowHandle, x: f64, y: f64)
         let title_bar_container_view: Id = msg_send![close_superview, superview];
 
         static DEFAULT_TITLEBAR_HEIGHT: OnceLock<f64> = OnceLock::new();
-        let default_height = *DEFAULT_TITLEBAR_HEIGHT.get_or_init(|| {
-            let rect: NSRect = msg_send![title_bar_container_view, frame];
-            rect.size.height
-        });
+        let default_height = match DEFAULT_TITLEBAR_HEIGHT.get() {
+            Some(h) => *h,
+            None => {
+                let rect: NSRect = msg_send![title_bar_container_view, frame];
+                if rect.size.height < 10.0 {
+                    return;
+                }
+                let _ = DEFAULT_TITLEBAR_HEIGHT.set(rect.size.height);
+                rect.size.height
+            }
+        };
 
         let desired = button_height + y;
         let title_bar_frame_height = if desired > default_height {

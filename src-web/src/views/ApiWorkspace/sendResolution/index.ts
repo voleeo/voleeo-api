@@ -1,6 +1,7 @@
 import { isAuthEnabled } from "@/lib/authSchemes"
 import type { ResolutionLog } from "@/lib/template"
 import { oauth2EnsureToken, resolveOAuth2Templates } from "@/store/oauth2"
+import type { AuthConfig, RequestParameter } from "@/store/requests"
 import {
   mergeInheritedHeadersAnnotated,
   mergeInheritedVariables,
@@ -8,12 +9,42 @@ import {
 } from "./inheritance"
 import {
   applyAuth,
+  type ResolveCtx,
   resolveBody,
   resolveCookies,
   resolveHeaders,
   resolveUrl,
 } from "./steps"
 import type { ResolvedSendPayload, ResolveSendInput } from "./types"
+
+export async function applyAuthForSend(
+  ctx: ResolveCtx,
+  auth: AuthConfig,
+  workspaceId: string,
+  forSend: boolean,
+): Promise<{
+  headers: RequestParameter[]
+  query: string | null
+  dynamicAuthOverride?: AuthConfig
+}> {
+  const applied = await applyAuth(ctx, auth)
+  const headers = [...applied.headers]
+  if (forSend && auth.kind === "oauth2" && isAuthEnabled(auth)) {
+    const resolved = await resolveOAuth2Templates(auth, ctx.vars, ctx.fns)
+    const token = await oauth2EnsureToken(workspaceId, resolved)
+    headers.push({
+      id: "__auth",
+      name: "Authorization",
+      value: `Bearer ${token}`,
+      enabled: true,
+    })
+  }
+  return {
+    headers,
+    query: applied.query ?? null,
+    dynamicAuthOverride: applied.resolvedAuth,
+  }
+}
 
 export {
   mergeEnvVars,
@@ -23,6 +54,7 @@ export {
   resolveInheritedAuthAnnotated,
 } from "./inheritance"
 export { buildSentSnapshot } from "./snapshot"
+export { resolveBody } from "./steps"
 export type {
   AnnotatedHeader,
   ResolvedSendPayload,
@@ -55,21 +87,15 @@ export async function resolveSendPayload(
     inheritedFromFolderName,
     inheritedFromWorkspace,
   } = resolveInheritedAuthAnnotated(request, folders, workspace)
-  const applied = await applyAuth(ctx, auth)
-  headers.push(...applied.headers)
-  if (applied.query)
-    fullUrl += (fullUrl.includes("?") ? "&" : "?") + applied.query
-
-  if (input.forSend && auth.kind === "oauth2" && isAuthEnabled(auth)) {
-    const resolved = await resolveOAuth2Templates(auth, ctx.vars, ctx.fns)
-    const token = await oauth2EnsureToken(workspace.id, resolved)
-    headers.push({
-      id: "__auth",
-      name: "Authorization",
-      value: `Bearer ${token}`,
-      enabled: true,
-    })
-  }
+  const appliedAuth = await applyAuthForSend(
+    ctx,
+    auth,
+    workspace.id,
+    !!input.forSend,
+  )
+  headers.push(...appliedAuth.headers)
+  if (appliedAuth.query)
+    fullUrl += (fullUrl.includes("?") ? "&" : "?") + appliedAuth.query
 
   const cookies = await resolveCookies(ctx, activeJar, workspace.id)
 
@@ -81,7 +107,7 @@ export async function resolveSendPayload(
     cookies,
     headerOrigins,
     resolvedAuth: auth,
-    dynamicAuthOverride: applied.resolvedAuth,
+    dynamicAuthOverride: appliedAuth.dynamicAuthOverride,
     inheritedAuthFolderId: inheritedFromFolderId,
     inheritedAuthFolderName: inheritedFromFolderName,
     inheritedAuthFromWorkspace: inheritedFromWorkspace,

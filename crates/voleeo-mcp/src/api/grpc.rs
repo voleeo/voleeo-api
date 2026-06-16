@@ -10,6 +10,7 @@ use voleeo_core::{
     new_id, now_iso, GrpcRequest, GrpcRpcKind, GrpcStreamMessage, VoleeoError, WsDirection,
 };
 use voleeo_grpc::{GrpcEvent, GrpcEventSink, ResolvedDescriptors, StreamSpec};
+use voleeo_storage::GrpcUpdate;
 
 use super::ApiBackend;
 use crate::{protocol::ToolResult, resolve};
@@ -22,6 +23,15 @@ fn message_arg(args: &Value) -> Option<String> {
         Value::String(s) => Some(s.clone()),
         other => Some(other.to_string()),
     }
+}
+
+/// True when the call carries a `service`/`method`/`message` override — i.e. it
+/// mutates the stored request, so the selection must be persisted and the UI told
+/// to refresh.
+fn touches_selection(args: &Value) -> bool {
+    args["service"].as_str().is_some()
+        || args["method"].as_str().is_some()
+        || !matches!(args["message"], Value::Null)
 }
 
 impl ApiBackend {
@@ -109,6 +119,28 @@ impl ApiBackend {
             if let Some(msg) = message_arg(&args) {
                 req.message = msg;
             }
+            // Persist the agent's selection so the open desktop UI shows what was
+            // called — the gRPC pane reads service/method/message from the stored
+            // request. Best-effort (a persist hiccup must not fail the call) and
+            // idempotent via save_if_changed. Done BEFORE resolve, which rewrites
+            // auth into send-time headers we must not store; auth is written back
+            // exactly as read, so encrypted workspaces are untouched.
+            if touches_selection(&args) {
+                let _ = grpc.update(
+                    &ws_id,
+                    &id,
+                    GrpcUpdate {
+                        target: req.target.clone(),
+                        tls: req.tls,
+                        proto_source: req.proto_source.clone(),
+                        service: req.service.clone(),
+                        method: req.method.clone(),
+                        metadata: req.metadata.clone(),
+                        message: req.message.clone(),
+                        auth: req.auth.clone(),
+                    },
+                );
+            }
             let (req, message, metadata) = resolve::resolve_grpc_for_send(
                 req,
                 args["environmentId"].as_str(),
@@ -134,6 +166,10 @@ impl ApiBackend {
             Ok(r) => r,
             Err(e) => return ToolResult::error(e.to_string()),
         };
+        // prepare_blocking persisted the selection; tell the UI to reload it.
+        if touches_selection(args) {
+            self.notify_grpc(&ws_id);
+        }
         let resolved = match self
             .grpc_descriptors
             .get_or_build(
@@ -214,6 +250,10 @@ impl ApiBackend {
             Ok(r) => r,
             Err(e) => return ToolResult::error(e.to_string()),
         };
+        // prepare_blocking persisted the selection; tell the UI to reload it.
+        if touches_selection(args) {
+            self.notify_grpc(&ws_id);
+        }
         let resolved = match self
             .grpc_descriptors
             .get_or_build(
