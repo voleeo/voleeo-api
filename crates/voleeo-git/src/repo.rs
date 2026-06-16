@@ -1,10 +1,14 @@
 use crate::{git_err, open_repo, remote::remotes};
-use git2::{BranchType, Repository, RepositoryState};
+use git2::{BranchType, Repository, RepositoryInitOptions, RepositoryState};
 use std::path::Path;
 use voleeo_core::{GitIdentity, GitRepoInfo, VoleeoError};
 
 pub fn init(path: &Path) -> Result<(), VoleeoError> {
-    Repository::init(path).map_err(git_err)?;
+    // libgit2 hardcodes the unborn branch to `master` and ignores
+    // `init.defaultBranch`, so set the initial HEAD to `main` explicitly.
+    let mut opts = RepositoryInitOptions::new();
+    opts.initial_head("main");
+    Repository::init_opts(path, &opts).map_err(git_err)?;
     Ok(())
 }
 
