@@ -71,7 +71,7 @@ export function HomeView({ onSelect }: HomeViewProps) {
         <div className="flex gap-3">
           <WorkspaceTypeCard
             icon="api"
-            title="New Wokrspace"
+            title="New Workspace"
             description="HTTP requests / WebSockets / gRPC"
             onClick={() => onSelect("api")}
           />
