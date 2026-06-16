@@ -27,14 +27,18 @@ fn should_decorate<R: Runtime>(window: &tauri::Window<R>) -> bool {
     chrome && custom_title_bar_enabled(window)
 }
 
-/// Re-apply the custom traffic-light position. Call from a layout-settled moment
-/// (e.g. `on_page_load`) so release builds, which lay out the title bar after the
-/// window is ready, don't leave the buttons at their default spots.
+/// Re-apply the custom traffic-light position. The frontend calls this (via the
+/// `reposition_window_controls` command) once it has rendered: the window is
+/// non-resizable, so no `windowDidResize` fires to correct the initial placement,
+/// which release builds apply before the title bar has finished laying out.
+/// Dispatches to the main thread — the command handler runs off it.
 #[cfg(target_os = "macos")]
 pub fn reposition_traffic_lights<R: Runtime>(window: &tauri::Window<R>) {
-    if should_decorate(window) {
-        mac::reposition(window);
+    if !should_decorate(window) {
+        return;
     }
+    let win = window.clone();
+    let _ = window.run_on_main_thread(move || mac::reposition(&win));
 }
 
 // Reads the persisted `custom_title_bar` setting straight from settings.json.

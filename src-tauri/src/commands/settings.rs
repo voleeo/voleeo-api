@@ -78,6 +78,16 @@ pub async fn settings_set_custom_title_bar(
 
 #[tauri::command]
 #[specta::specta]
+pub async fn reposition_window_controls(window: tauri::Window) -> Result<(), VoleeoError> {
+    #[cfg(target_os = "macos")]
+    voleeo_mac_window::reposition_traffic_lights(&window);
+    #[cfg(not(target_os = "macos"))]
+    let _ = window;
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
 pub async fn settings_regenerate_mcp_token(
     state: State<'_, AppState>,
 ) -> Result<String, VoleeoError> {

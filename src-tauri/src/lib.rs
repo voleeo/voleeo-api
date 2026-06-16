@@ -108,6 +108,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::settings::settings_regenerate_mcp_token,
         commands::settings::settings_get_custom_title_bar,
         commands::settings::settings_set_custom_title_bar,
+        commands::settings::reposition_window_controls,
         commands::theme::theme_get_active,
         commands::theme::theme_activate,
         commands::theme::theme_get_color_mode,
@@ -283,14 +284,6 @@ pub fn run() {
                 window.app_handle().exit(0);
             }
         })
-        // The title bar is fully laid out by the time the page finishes loading,
-        // so re-apply the macOS traffic-light position here.
-        .on_page_load(|_webview, _payload| {
-            #[cfg(target_os = "macos")]
-            if matches!(_payload.event(), tauri::webview::PageLoadEvent::Finished) {
-                voleeo_mac_window::reposition_traffic_lights(&_webview.window());
-            }
-        })
         .invoke_handler(tauri::generate_handler![
             commands::workspace::list_workspaces,
             commands::workspace::create_workspace,
@@ -389,6 +382,7 @@ pub fn run() {
             commands::settings::settings_regenerate_mcp_token,
             commands::settings::settings_get_custom_title_bar,
             commands::settings::settings_set_custom_title_bar,
+            commands::settings::reposition_window_controls,
             commands::theme::theme_get_active,
             commands::theme::theme_activate,
             commands::theme::theme_get_color_mode,

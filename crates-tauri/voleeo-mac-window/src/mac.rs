@@ -4,8 +4,7 @@ use objc2::{msg_send, sel};
 use objc2_foundation::NSRect;
 use std::ffi::{c_void, CString};
 use std::sync::OnceLock;
-use std::time::Duration;
-use tauri::{Emitter, Manager, Runtime, Window};
+use tauri::{Emitter, Runtime, Window};
 
 /// Raw Objective-C object pointer (`id`).
 type Id = *mut AnyObject;
@@ -15,7 +14,7 @@ unsafe impl Send for UnsafeWindowHandle {}
 unsafe impl Sync for UnsafeWindowHandle {}
 
 const WINDOW_CONTROL_PAD_X: f64 = 13.0;
-const WINDOW_CONTROL_PAD_Y: f64 = 13.0;
+const WINDOW_CONTROL_PAD_Y: f64 = 18.0;
 const TITLEBAR_EXTRA_HEIGHT: f64 = 4.0;
 // NSWindowStyleMask::NSFullSizeContentViewWindowMask
 const NS_FULL_SIZE_CONTENT_VIEW_WINDOW_MASK: u64 = 1 << 15;
@@ -55,6 +54,8 @@ fn position_traffic_lights(ns_window_handle: UnsafeWindowHandle, x: f64, y: f64)
         let close_superview: Id = msg_send![close, superview];
         let title_bar_container_view: Id = msg_send![close_superview, superview];
 
+        // Capture the OS default title bar height on the first call, before we've
+        // modified it — otherwise repeated calls grow the bar unboundedly.
         static DEFAULT_TITLEBAR_HEIGHT: OnceLock<f64> = OnceLock::new();
         let default_height = match DEFAULT_TITLEBAR_HEIGHT.get() {
             Some(h) => *h,
@@ -68,6 +69,9 @@ fn position_traffic_lights(ns_window_handle: UnsafeWindowHandle, x: f64, y: f64)
             }
         };
 
+        // Pre-Tahoe: button_height + y exceeds the default, so the resize lands.
+        // Tahoe (26+): default is already 32px and button_height + y = 32, so add
+        // TITLEBAR_EXTRA_HEIGHT to push the buttons down instead.
         let desired = button_height + y;
         let title_bar_frame_height = if desired > default_height {
             desired
@@ -108,17 +112,6 @@ fn super_delegate(this: &AnyObject) -> Id {
     unsafe { *this.get_ivar::<Id>("super_delegate") }
 }
 
-/// The NSWindow that posted this delegate notification (`[notification object]`).
-///
-/// Source the window from the notification, never via `Window::ns_window()`:
-/// closing a window drops the tao window *while Tauri holds `windows` borrowed
-/// mutably*, and the close synchronously fires `windowDidBecomeKey:` on the next
-/// window. Re-entering Tauri there double-borrows that RefCell and aborts the app.
-unsafe fn notification_window(notification: Id) -> *mut c_void {
-    let ns_window: Id = msg_send![notification, object];
-    ns_window as *mut c_void
-}
-
 extern "C" fn on_window_should_close(this: &AnyObject, _cmd: Sel, sender: Id) -> Bool {
     unsafe { msg_send![super_delegate(this), windowShouldClose: sender] }
 }
@@ -127,13 +120,17 @@ extern "C" fn on_window_will_close(this: &AnyObject, _cmd: Sel, notification: Id
         let _: () = msg_send![super_delegate(this), windowWillClose: notification];
     }
 }
-extern "C" fn on_window_did_resize(this: &AnyObject, _cmd: Sel, notification: Id) {
+extern "C" fn on_window_did_resize<R: Runtime>(this: &AnyObject, _cmd: Sel, notification: Id) {
+    with_window_state(this, |state: &mut WindowState<R>| {
+        if let Ok(id) = state.window.ns_window() {
+            position_traffic_lights(
+                UnsafeWindowHandle(id),
+                WINDOW_CONTROL_PAD_X,
+                WINDOW_CONTROL_PAD_Y,
+            );
+        }
+    });
     unsafe {
-        position_traffic_lights(
-            UnsafeWindowHandle(notification_window(notification)),
-            WINDOW_CONTROL_PAD_X,
-            WINDOW_CONTROL_PAD_Y,
-        );
         let _: () = msg_send![super_delegate(this), windowDidResize: notification];
     }
 }
@@ -151,13 +148,11 @@ extern "C" fn on_window_did_change_backing_properties(
         let _: () = msg_send![super_delegate(this), windowDidChangeBackingProperties: notification];
     }
 }
+// Forward only — never reposition here. `windowDidBecomeKey:` fires synchronously
+// while another window is closing (Tauri holds its `windows` RefCell borrowed
+// mutably), so calling back into Tauri to reposition double-borrows and aborts.
 extern "C" fn on_window_did_become_key(this: &AnyObject, _cmd: Sel, notification: Id) {
     unsafe {
-        position_traffic_lights(
-            UnsafeWindowHandle(notification_window(notification)),
-            WINDOW_CONTROL_PAD_X,
-            WINDOW_CONTROL_PAD_Y,
-        );
         let _: () = msg_send![super_delegate(this), windowDidBecomeKey: notification];
     }
 }
@@ -241,13 +236,15 @@ extern "C" fn on_window_did_exit_full_screen<R: Runtime>(
             .window
             .emit("did-exit-fullscreen", ())
             .expect("Failed to emit event");
+        if let Ok(id) = state.window.ns_window() {
+            position_traffic_lights(
+                UnsafeWindowHandle(id),
+                WINDOW_CONTROL_PAD_X,
+                WINDOW_CONTROL_PAD_Y,
+            );
+        }
     });
     unsafe {
-        position_traffic_lights(
-            UnsafeWindowHandle(notification_window(notification)),
-            WINDOW_CONTROL_PAD_X,
-            WINDOW_CONTROL_PAD_Y,
-        );
         let _: () = msg_send![super_delegate(this), windowDidExitFullScreen: notification];
     }
 }
@@ -311,7 +308,7 @@ fn build_delegate_class<R: Runtime>(name: &str) -> &'static AnyClass {
         );
         builder.add_method(
             sel!(windowDidResize:),
-            on_window_did_resize as extern "C" fn(_, _, _),
+            on_window_did_resize::<R> as extern "C" fn(_, _, _),
         );
         builder.add_method(
             sel!(windowDidMove:),
@@ -425,21 +422,12 @@ pub fn setup_traffic_light_positioner<R: Runtime>(window: &Window<R>) {
 
         let _: () = msg_send![ns_win, setDelegate: delegate];
     }
-
-    let app = window.app_handle().clone();
-    let win = window.clone();
-    std::thread::spawn(move || {
-        for delay in [50u64, 150, 350, 700, 1200] {
-            std::thread::sleep(Duration::from_millis(delay));
-            let w = win.clone();
-            let _ = app.run_on_main_thread(move || reposition(&w));
-        }
-    });
 }
 
-/// Re-apply the custom traffic-light position to an already-set-up window. Safe
-/// to call repeatedly and from any layout-settled moment (focus, page load) —
-/// it just moves the existing standard window buttons, no delegate work.
+/// Re-apply the custom traffic-light position. The window is non-resizable, so no
+/// `windowDidResize` fires after the webview's first layout to correct the
+/// initial (too-early) placement — the frontend calls this once it has rendered,
+/// when the title bar is settled. Must run on the main thread.
 pub fn reposition<R: Runtime>(window: &Window<R>) {
     if let Ok(id) = window.ns_window() {
         position_traffic_lights(
