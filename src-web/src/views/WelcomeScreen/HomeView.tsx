@@ -72,7 +72,7 @@ export function HomeView({ onSelect }: HomeViewProps) {
           <WorkspaceTypeCard
             icon="api"
             title="New Workspace"
-            description="HTTP requests / WebSockets / gRPC"
+            description="HTTP / WebSockets / gRPC / GraphQL"
             onClick={() => onSelect("api")}
           />
           <WorkspaceTypeCard

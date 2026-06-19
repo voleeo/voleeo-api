@@ -45,6 +45,10 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::request::delete_request,
         commands::request::delete_folder,
         commands::request::move_items,
+        commands::import::import_preview,
+        commands::import::import_read_file,
+        commands::import::import_fetch_url,
+        commands::import::import_commit,
         commands::http::send_request,
         commands::http::cancel_request,
         commands::http::sign_auth_headers,
@@ -276,11 +280,12 @@ pub fn run() {
             }
         })
         .on_window_event(|window, event| {
-            // Closing the main window closes the whole app — secondary windows
-            // (settings, Git Sync, …) shouldn't linger without their parent.
-            if matches!(event, tauri::WindowEvent::CloseRequested { .. })
-                && window.label() == "main"
-            {
+            // The frontend intercepts the main window's close: with a workspace
+            // open it prevents the close and steps back to Welcome; on Welcome it
+            // lets the close through. When the window is actually destroyed, quit
+            // the whole app (and any secondary windows). No prevent_close here, so
+            // the window can never get stuck open.
+            if matches!(event, tauri::WindowEvent::Destroyed) && window.label() == "main" {
                 window.app_handle().exit(0);
             }
         })
@@ -319,6 +324,10 @@ pub fn run() {
             commands::request::delete_request,
             commands::request::delete_folder,
             commands::request::move_items,
+            commands::import::import_preview,
+            commands::import::import_read_file,
+            commands::import::import_fetch_url,
+            commands::import::import_commit,
             commands::http::send_request,
             commands::http::cancel_request,
             commands::http::sign_auth_headers,

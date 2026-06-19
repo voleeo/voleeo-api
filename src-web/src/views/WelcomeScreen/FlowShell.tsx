@@ -1,15 +1,15 @@
 import type { ReactNode } from "react"
 import { useEffect, useRef } from "react"
 import { Glyph } from "@/components/Glyph"
-import { Body, Heading } from "@/components/Primitives"
 import { applyFlowWindowHeight } from "./flowUtils"
 
 interface FlowShellProps {
   icon: string
   title: string
-  description: string
+  description: ReactNode
   footer: ReactNode
   children: ReactNode
+  wide?: boolean
 }
 
 export function FlowShell({
@@ -18,6 +18,7 @@ export function FlowShell({
   description,
   footer,
   children,
+  wide = false,
 }: FlowShellProps) {
   const shellRef = useRef<HTMLDivElement>(null)
 
@@ -41,16 +42,20 @@ export function FlowShell({
           <Glyph kind={icon} size={20} color="var(--base05)" />
         </div>
         <div>
-          <Heading size={16}>{title}</Heading>
-          <Body size={12} style={{ marginTop: 2 }}>
+          <div className="font-sans font-semibold leading-tight tracking-[-0.2px] text-[1.143rem] text-fg">
+            {title}
+          </div>
+          <div className="font-sans leading-relaxed text-[0.857rem] text-muted mt-0.5">
             {description}
-          </Body>
+          </div>
         </div>
       </div>
 
       {/* Content — no height constraint, sizes to children */}
       <div className="flex flex-col items-center px-8">
-        <div className="w-full max-w-[560px] py-6 flex flex-col gap-5">
+        <div
+          className={`w-full ${wide ? "max-w-[820px]" : "max-w-[560px]"} py-6 flex flex-col gap-5`}
+        >
           {children}
         </div>
       </div>

@@ -94,13 +94,20 @@ export async function oauth2ClearToken(
   if (res.status === "error") throw new Error(errorMessage(res.error))
 }
 
-/** Send-path: a valid access token, refreshing/fetching as needed. Throws for
- *  authorization-code with no cached token (the user must Get Token first). */
 export async function oauth2EnsureToken(
   workspaceId: string,
   auth: AuthConfig,
 ): Promise<string> {
   const res = await commands.oauth2EnsureToken(workspaceId, auth)
-  if (res.status === "error") throw new Error(errorMessage(res.error))
-  return res.data
+  if (res.status === "ok") return res.data
+  if (
+    auth.kind === "oauth2" &&
+    (auth.grant_type === "authorization_code" || auth.grant_type === "implicit")
+  ) {
+    await oauth2FetchToken(workspaceId, auth) // opens browser, caches the token
+    const retry = await commands.oauth2EnsureToken(workspaceId, auth)
+    if (retry.status === "ok") return retry.data
+    throw new Error(errorMessage(retry.error))
+  }
+  throw new Error(errorMessage(res.error))
 }

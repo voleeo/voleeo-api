@@ -34,6 +34,14 @@ function DeleteConfirmDialog({
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [workspacePath, setWorkspacePath] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  function copyName() {
+    navigator.clipboard.writeText(workspaceName).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1200)
+    })
+  }
 
   useState(() => {
     commands.getAppInfo().then((res) => {
@@ -91,9 +99,19 @@ function DeleteConfirmDialog({
       confirmByTypingLabel={
         <>
           Type{" "}
-          <span className="font-mono text-[0.786rem] text-error bg-error/10 border border-error/30 rounded-[3px] px-1.5 py-0.5">
+          <button
+            type="button"
+            onClick={copyName}
+            title="Click to copy"
+            className="inline-flex items-center gap-1 align-middle font-mono text-[0.786rem] text-error bg-error/10 border border-error/30 rounded-[3px] px-1.5 py-0.5 cursor-pointer hover:bg-error/20 transition-colors outline-none"
+          >
             {workspaceName}
-          </span>{" "}
+            <Glyph
+              kind={copied ? "check" : "copy"}
+              size={11}
+              color="var(--base08)"
+            />
+          </button>{" "}
           to confirm
         </>
       }

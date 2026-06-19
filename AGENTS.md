@@ -23,6 +23,8 @@ Applies to subagents/workflows spawned via the Agent/Workflow tools — pick `mo
 
 ## Code quality
 
+**KISS · DRY · YAGNI.** When planning and writing code, default to the simplest thing that works: stdlib or an already-installed dep before new code, one line before fifty, a native/CSS/DB feature before app code. Build nothing for a need that isn't here yet. Factor *real* duplication — never abstract speculatively (no interface with one impl, no config for a constant). Shortest working diff wins; if you can't name why a piece of code must exist, cut it.
+
 **Single Responsibility.** Each file/component/hook does one thing. If you describe it with "and," split it.
 
 **Readability over cleverness.** Functions short enough to read without scrolling. When a file grows, split into a directory: `index.tsx` orchestrates, hooks/sub-components own one concern each. Canonical examples: `components/ApiRequestTree/`, `views/ApiWorkspace/RequestPane/`, `views/ApiWorkspace/ResponsePane/TimelineTab/`.
@@ -31,9 +33,7 @@ Applies to subagents/workflows spawned via the Agent/Workflow tools — pick `mo
 
 **Comments document the non-obvious.** Only comment important or hard logic — if the code already explains itself, skip it. Skip `// Foo` above a `<Foo/>`, section labels for self-evident JSX, JSDoc that restates the signature. Reserve comments for load-bearing context, surprising trade-offs, "why this and not the natural alternative," and footguns that cost someone an afternoon. Useful: `// Drain hops BEFORE pushing the error event — the policy callback fires after the awaiting task throws.` Useless: `// Set the active tab to params` above `setActiveTab("params")`.
 
-**Keep the comments you keep terse.** When a comment earns its place, say it in the fewest words — one line where it fits, the *why* over the *what*. Prune words that restate the code: `/** Maps to RequestParameter.id in storage. */`, not `/** Stable ID that maps to the corresponding RequestParameter.id field in persistent storage. */`. Collapse multi-line `///` blocks that a single sentence covers.
-
-**Audit comments on every edit.** Both rules above apply to *existing* comments in any file you touch, not just new ones you add. If you scroll past a comment that restates the code, narrates obvious flow, or pads with words — tighten or delete it as part of the same change. Editing a file is the only reliable moment to pay down comment debt; don't leave it for a future "cleanup pass" that never comes.
+**Terse, and audited every edit.** When a comment earns its place, say it in the fewest words — the *why* over the *what*; prune words that restate the code, collapse multi-line `///` blocks a sentence covers. This applies to *existing* comments in any file you touch, not just new ones: tighten or delete padding as part of the same change — editing is the only reliable moment to pay comment debt, not a future "cleanup pass" that never comes.
 
 ## Numbered rules
 
