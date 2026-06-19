@@ -51,7 +51,16 @@ pub async fn import_read_file(path: String) -> Result<String, VoleeoError> {
 #[tauri::command]
 #[specta::specta]
 pub async fn import_fetch_url(url: String) -> Result<String, VoleeoError> {
-    let resp = reqwest::get(&url)
+    // Build a client per fetch (rare, user-triggered) so we can set a User-Agent —
+    // WAF-fronted hosts (e.g. the Swagger demo) 404 when the UA header is absent.
+    let client = reqwest::Client::builder()
+        .user_agent("Voleeo")
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| VoleeoError::Http(e.to_string()))?;
+    let resp = client
+        .get(&url)
+        .send()
         .await
         .map_err(|e| VoleeoError::Http(e.to_string()))?;
     if !resp.status().is_success() {

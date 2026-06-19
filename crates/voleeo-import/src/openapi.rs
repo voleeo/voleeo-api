@@ -6,13 +6,12 @@
 //! refs are skipped with a warning.
 
 use crate::ir::*;
-use crate::util::{parse_value, sanitize_var, schema_example, RefResolver};
+use crate::util::{
+    classify_param, group_by_path, merged_params, parse_value, path_template_to_segments,
+    resolve_one, schema_example, str_at, RefResolver, EXAMPLE_DEPTH, HTTP_METHODS,
+};
 use crate::ImportError;
 use serde_json::Value;
-use std::collections::BTreeMap;
-
-const HTTP_METHODS: [&str; 7] = ["get", "post", "put", "patch", "delete", "head", "options"];
-const EXAMPLE_DEPTH: u8 = 6;
 
 pub fn parse_openapi(content: &str) -> Result<ImportedCollection, ImportError> {
     let doc = parse_value(content)?;
@@ -50,7 +49,16 @@ pub fn parse_openapi(content: &str) -> Result<ImportedCollection, ImportError> {
             for method in HTTP_METHODS {
                 let Some(op) = item.get(method) else { continue };
                 let (req, mut op_warns) = build_operation(
-                    &resolver, schemes, base_prefix, path, method, op, shared, has_global,
+                    Ctx {
+                        resolver: &resolver,
+                        schemes,
+                        base_prefix,
+                        has_global,
+                    },
+                    path,
+                    method,
+                    op,
+                    shared,
                 );
                 col.warnings.append(&mut op_warns);
                 requests.push(req);
@@ -89,15 +97,19 @@ fn add_base_url(doc: &Value, col: &mut ImportedCollection) -> bool {
     true
 }
 
+struct Ctx<'a> {
+    resolver: &'a RefResolver,
+    schemes: Option<&'a Value>,
+    base_prefix: &'a str,
+    has_global: bool,
+}
+
 fn build_operation(
-    resolver: &RefResolver,
-    schemes: Option<&Value>,
-    base_prefix: &str,
+    ctx: Ctx,
     path: &str,
     method: &str,
     op: &Value,
     shared_params: Option<&Value>,
-    has_global: bool,
 ) -> (ImportedRequest, Vec<String>) {
     let mut warns = Vec::new();
     let name = op
@@ -107,7 +119,7 @@ fn build_operation(
         .map(str::to_string)
         .unwrap_or_else(|| format!("{} {path}", method.to_uppercase()));
 
-    let url = format!("{base_prefix}{}", path_template_to_segments(path));
+    let url = format!("{}{}", ctx.base_prefix, path_template_to_segments(path));
     let mut req = ImportedRequest {
         name,
         method: method.to_uppercase(),
@@ -116,97 +128,27 @@ fn build_operation(
         ..Default::default()
     };
 
-    for p in merged_params(resolver, shared_params, op.get("parameters")) {
-        classify_param(resolver, &p, &mut req, &mut warns);
+    for p in merged_params(ctx.resolver, shared_params, op.get("parameters")) {
+        classify_param(&p, &mut req, &mut warns);
     }
 
     req.body = op
         .get("requestBody")
-        .map(|rb| resolve_one(resolver, rb))
-        .and_then(|rb| request_body_to_body(resolver, &rb));
+        .map(|rb| resolve_one(ctx.resolver, rb))
+        .and_then(|rb| request_body_to_body(ctx.resolver, &rb));
 
     // Operation-level security overrides the global default.
     if let Some(sec) = op.get("security") {
-        let (auth, mut w) = security_to_auth(schemes, Some(sec));
+        let (auth, mut w) = security_to_auth(ctx.schemes, Some(sec));
         req.auth = auth;
         warns.append(&mut w);
-    } else if has_global {
+    } else if ctx.has_global {
         req.auth = ImportedAuth::Inherit;
     } else {
         req.auth = ImportedAuth::None;
     }
 
     (req, warns)
-}
-
-/// Merge path-item-level and operation-level `parameters`, resolving `$ref`s and
-/// deduping by `(name, in)` with the operation winning.
-fn merged_params(resolver: &RefResolver, shared: Option<&Value>, op: Option<&Value>) -> Vec<Value> {
-    let mut out: Vec<Value> = Vec::new();
-    let mut seen: Vec<(String, String)> = Vec::new();
-    for src in [op, shared].into_iter().flatten() {
-        let Some(arr) = src.as_array() else { continue };
-        for raw in arr {
-            let p = resolve_one(resolver, raw);
-            let key = (
-                p.get("name")
-                    .and_then(Value::as_str)
-                    .unwrap_or("")
-                    .to_string(),
-                p.get("in")
-                    .and_then(Value::as_str)
-                    .unwrap_or("")
-                    .to_string(),
-            );
-            if seen.contains(&key) {
-                continue;
-            }
-            seen.push(key);
-            out.push(p);
-        }
-    }
-    out
-}
-
-fn classify_param(
-    _resolver: &RefResolver,
-    p: &Value,
-    req: &mut ImportedRequest,
-    warns: &mut Vec<String>,
-) {
-    let name = p
-        .get("name")
-        .and_then(Value::as_str)
-        .unwrap_or("")
-        .to_string();
-    if name.is_empty() {
-        return;
-    }
-    let location = p.get("in").and_then(Value::as_str).unwrap_or("query");
-    let enabled = p.get("required").and_then(Value::as_bool).unwrap_or(false);
-    let param = ImportedParam {
-        name: name.clone(),
-        value: String::new(),
-        enabled,
-    };
-    match location {
-        "path" => req.path_params.push(ImportedParam {
-            enabled: true,
-            ..param
-        }),
-        "header" => req.headers.push(param),
-        "cookie" => {
-            warns.push(format!(
-                "Cookie parameter `{name}` imported as a Cookie header."
-            ));
-            req.headers.push(ImportedParam {
-                name: "Cookie".into(),
-                value: format!("{name}="),
-                enabled,
-            });
-        }
-        _ => req.query.push(param),
-    }
 }
 
 fn request_body_to_body(resolver: &RefResolver, rb: &Value) -> Option<ImportedBody> {
@@ -394,77 +336,4 @@ fn grant_for(flow: &str) -> OAuth2GrantKind {
         "password" => OAuth2GrantKind::Password,
         _ => OAuth2GrantKind::ClientCredentials,
     }
-}
-
-/// One node of the URL-path trie.
-#[derive(Default)]
-struct PathNode {
-    requests: Vec<ImportedRequest>,
-    children: BTreeMap<String, PathNode>,
-}
-
-/// Nest requests into folders by URL path segments. A segment becomes a folder
-/// when it holds more than one operation or has sub-paths; a lone leaf operation
-/// (e.g. `/pet/findByStatus`) collapses into its parent folder.
-fn group_by_path(requests: Vec<ImportedRequest>) -> Vec<ImportedItem> {
-    let mut root = PathNode::default();
-    for req in requests {
-        let mut node = &mut root;
-        for seg in req.path.split('/').filter(|s| !s.is_empty()) {
-            node = node.children.entry(seg.to_string()).or_default();
-        }
-        node.requests.push(req);
-    }
-    node_to_items(&mut root)
-}
-
-fn node_to_items(node: &mut PathNode) -> Vec<ImportedItem> {
-    let mut items: Vec<ImportedItem> =
-        node.requests.drain(..).map(ImportedItem::Request).collect();
-    for (seg, child) in &mut node.children {
-        if child.requests.len() > 1 || !child.children.is_empty() {
-            items.push(ImportedItem::Folder(ImportedFolder {
-                name: seg.clone(),
-                items: node_to_items(child),
-                ..Default::default()
-            }));
-        } else {
-            items.extend(child.requests.drain(..).map(ImportedItem::Request));
-        }
-    }
-    items
-}
-
-// ── small helpers ────────────────────────────────────────────────────────────
-
-fn str_at<'a>(doc: &'a Value, ptr: &str) -> Option<&'a str> {
-    doc.pointer(ptr).and_then(Value::as_str)
-}
-
-/// Resolve a single `$ref` (parameters / requestBody references) to an owned value.
-fn resolve_one(resolver: &RefResolver, value: &Value) -> Value {
-    let mut seen = std::collections::HashSet::new();
-    resolver.resolve(value, &mut seen).clone()
-}
-
-/// `/pets/{petId}/toys/{toyId}` → `/pets/:petId/toys/:toyId`.
-fn path_template_to_segments(path: &str) -> String {
-    let mut out = String::with_capacity(path.len());
-    let mut chars = path.chars().peekable();
-    while let Some(c) = chars.next() {
-        if c == '{' {
-            let mut name = String::new();
-            for n in chars.by_ref() {
-                if n == '}' {
-                    break;
-                }
-                name.push(n);
-            }
-            out.push(':');
-            out.push_str(&sanitize_var(&name));
-        } else {
-            out.push(c);
-        }
-    }
-    out
 }

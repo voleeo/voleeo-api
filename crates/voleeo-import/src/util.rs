@@ -2,9 +2,10 @@
 //! sanitization, and JSON-Schema example synthesis. Used by the OpenAPI and
 //! Swagger parsers (both speak JSON Schema + internal `$ref`s).
 
+use crate::ir::*;
 use crate::ImportError;
 use serde_json::{Map, Value};
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 
 /// Parse `content` as JSON, falling back to YAML (specs ship as either).
 pub fn parse_value(content: &str) -> Result<Value, ImportError> {
@@ -186,4 +187,155 @@ fn placeholder_string(schema: &Value) -> String {
         Some("uri") | Some("url") => "https://example.com".into(),
         _ => String::new(),
     }
+}
+
+// ── shared OpenAPI/Swagger plumbing ──────────────────────────────────────────
+// Both formats share JSON-Schema params, `{id}` path templating, and the
+// path-trie folder grouping; one copy lives here so each parser stays format-
+// specific (base URL, security, body media types).
+
+pub const HTTP_METHODS: [&str; 7] = ["get", "post", "put", "patch", "delete", "head", "options"];
+/// Bounded recursion depth for schema example synthesis (cycle-safe via the
+/// `$ref` visited-set in `schema_example`).
+pub const EXAMPLE_DEPTH: u8 = 6;
+
+pub fn str_at<'a>(doc: &'a Value, ptr: &str) -> Option<&'a str> {
+    doc.pointer(ptr).and_then(Value::as_str)
+}
+
+/// Resolve a single `$ref` (parameters / bodies) to an owned value.
+pub fn resolve_one(resolver: &RefResolver, value: &Value) -> Value {
+    let mut seen = HashSet::new();
+    resolver.resolve(value, &mut seen).clone()
+}
+
+/// `/pets/{petId}/toys/{toyId}` → `/pets/:petId/toys/:toyId`.
+pub fn path_template_to_segments(path: &str) -> String {
+    let mut out = String::with_capacity(path.len());
+    let mut chars = path.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '{' {
+            let mut name = String::new();
+            for n in chars.by_ref() {
+                if n == '}' {
+                    break;
+                }
+                name.push(n);
+            }
+            out.push(':');
+            out.push_str(&sanitize_var(&name));
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// Merge path-item-level and operation-level `parameters`, resolving `$ref`s and
+/// deduping by `(name, in)` with the operation winning.
+pub fn merged_params(
+    resolver: &RefResolver,
+    shared: Option<&Value>,
+    op: Option<&Value>,
+) -> Vec<Value> {
+    let mut out: Vec<Value> = Vec::new();
+    let mut seen: Vec<(String, String)> = Vec::new();
+    for src in [op, shared].into_iter().flatten() {
+        let Some(arr) = src.as_array() else { continue };
+        for raw in arr {
+            let p = resolve_one(resolver, raw);
+            let key = (
+                p.get("name")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string(),
+                p.get("in")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string(),
+            );
+            if seen.contains(&key) {
+                continue;
+            }
+            seen.push(key);
+            out.push(p);
+        }
+    }
+    out
+}
+
+/// Route a query/header/path/cookie parameter onto the request. `body`/`formData`
+/// (Swagger) are handled by the caller before this.
+pub fn classify_param(p: &Value, req: &mut ImportedRequest, warns: &mut Vec<String>) {
+    let name = p
+        .get("name")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+    if name.is_empty() {
+        return;
+    }
+    let location = p.get("in").and_then(Value::as_str).unwrap_or("query");
+    let enabled = p.get("required").and_then(Value::as_bool).unwrap_or(false);
+    let param = ImportedParam {
+        name: name.clone(),
+        value: String::new(),
+        enabled,
+    };
+    match location {
+        "path" => req.path_params.push(ImportedParam {
+            enabled: true,
+            ..param
+        }),
+        "header" => req.headers.push(param),
+        "cookie" => {
+            warns.push(format!(
+                "Cookie parameter `{name}` imported as a Cookie header."
+            ));
+            req.headers.push(ImportedParam {
+                name: "Cookie".into(),
+                value: format!("{name}="),
+                enabled,
+            });
+        }
+        _ => req.query.push(param),
+    }
+}
+
+/// One node of the URL-path trie.
+#[derive(Default)]
+struct PathNode {
+    requests: Vec<ImportedRequest>,
+    children: BTreeMap<String, PathNode>,
+}
+
+/// Nest requests into folders by URL path segments. A segment becomes a folder
+/// when it holds more than one operation or has sub-paths; a lone leaf operation
+/// (e.g. `/pet/findByStatus`) collapses into its parent folder.
+pub fn group_by_path(requests: Vec<ImportedRequest>) -> Vec<ImportedItem> {
+    let mut root = PathNode::default();
+    for req in requests {
+        let mut node = &mut root;
+        for seg in req.path.split('/').filter(|s| !s.is_empty()) {
+            node = node.children.entry(seg.to_string()).or_default();
+        }
+        node.requests.push(req);
+    }
+    node_to_items(&mut root)
+}
+
+fn node_to_items(node: &mut PathNode) -> Vec<ImportedItem> {
+    let mut items: Vec<ImportedItem> = node.requests.drain(..).map(ImportedItem::Request).collect();
+    for (seg, child) in &mut node.children {
+        if child.requests.len() > 1 || !child.children.is_empty() {
+            items.push(ImportedItem::Folder(ImportedFolder {
+                name: seg.clone(),
+                items: node_to_items(child),
+                ..Default::default()
+            }));
+        } else {
+            items.extend(child.requests.drain(..).map(ImportedItem::Request));
+        }
+    }
+    items
 }

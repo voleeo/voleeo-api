@@ -31,6 +31,8 @@ Applies to subagents/workflows spawned via the Agent/Workflow tools — pick `mo
 
 **File limit: 250 lines** for `.tsx`/`.ts` in `src-web/src/`. **500 lines** for `.rs` files, excluding `#[cfg(test)]` blocks. Stop and split before adding more code.
 
+**Rust test layout.** Public-API / fixture-driven tests live in `crates/<crate>/tests/<topic>.rs` with data under `tests/fixtures/<group>/`, `include_str!`'d instead of inline blobs — `voleeo-import` is the reference (`tests/openapi.rs` + `tests/fixtures/openapi/petstore.yaml`). Tests that exercise **private** items stay inline in `#[cfg(test)] mod tests` (the external `tests/` dir is a separate crate and can't see private/`pub(crate)` items) — never widen visibility just to relocate a test.
+
 **Comments document the non-obvious.** Only comment important or hard logic — if the code already explains itself, skip it. Skip `// Foo` above a `<Foo/>`, section labels for self-evident JSX, JSDoc that restates the signature. Reserve comments for load-bearing context, surprising trade-offs, "why this and not the natural alternative," and footguns that cost someone an afternoon. Useful: `// Drain hops BEFORE pushing the error event — the policy callback fires after the awaiting task throws.` Useless: `// Set the active tab to params` above `setActiveTab("params")`.
 
 **Terse, and audited every edit.** When a comment earns its place, say it in the fewest words — the *why* over the *what*; prune words that restate the code, collapse multi-line `///` blocks a sentence covers. This applies to *existing* comments in any file you touch, not just new ones: tighten or delete padding as part of the same change — editing is the only reliable moment to pay comment debt, not a future "cleanup pass" that never comes.
@@ -97,11 +99,7 @@ Several below are distilled from confirmed 100%+ CPU bugs in this codebase. Trea
 
 ### Pre-flight checklist
 
-- [ ] No bare `useStore()` — selectors or `useShallow`
-- [ ] No inline props that child effects depend on
-- [ ] Computed arrays/objects in effect deps wrapped in `useMemo`
-- [ ] All effects have explicit dep arrays
-- [ ] Document/window listeners cleaned up
+- [ ] React render-loop guards: no bare `useStore()`, no inline props child effects depend on, computed effect-deps memoized, explicit dep arrays, listeners cleaned up
 - [ ] No `invoke()` in render or high-frequency effects
 - [ ] No `unwrap`/`panic` in Rust command handlers
 - [ ] No blocking I/O in `async fn` without `spawn_blocking`
@@ -143,7 +141,9 @@ crates/           pure Rust, zero Tauri deps
   voleeo-core     types, errors, traits
   voleeo-storage  YAML storage (workspaces, requests, folders)
   voleeo-crypto   AES-256-GCM + OS keychain
+  voleeo-auth     request signing/encoding (digest, sigv4, oauth1, ntlm)
   voleeo-http     reqwest-based HTTP executor
+  voleeo-import   collection import — OpenAPI/Swagger/Postman/Insomnia → IR → core
   voleeo-ws       live WebSocket connections (Tauri-free HttpExecutor counterpart)
   voleeo-grpc     tonic-based gRPC — descriptor resolution, unary + streaming calls
   voleeo-cookies  cookie jar — model, matching, at-rest crypto
