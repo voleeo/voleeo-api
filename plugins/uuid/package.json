@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@voleeo/plugin-api": "workspace:*",
-    "uuid": "^11.0.0"
+    "uuid": "^14.0.0"
   },
   "devDependencies": {
     "@types/uuid": "^10.0.0"

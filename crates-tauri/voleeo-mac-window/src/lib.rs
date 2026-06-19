@@ -9,15 +9,36 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
     #[cfg(target_os = "macos")]
     {
         builder = builder.on_window_ready(|window| {
-            let label = window.label();
-            let chrome_window = label == "main" || label.starts_with("ws-");
-            if chrome_window && custom_title_bar_enabled(&window) {
+            if should_decorate(&window) {
                 mac::setup_traffic_light_positioner(&window);
             }
         });
     }
 
     builder.build()
+}
+
+// True for the windows that get the overlay title bar (main + per-workspace
+// chrome), and only when the user hasn't turned the custom bar off.
+#[cfg(target_os = "macos")]
+fn should_decorate<R: Runtime>(window: &tauri::Window<R>) -> bool {
+    let label = window.label();
+    let chrome = label == "main" || label.starts_with("ws-");
+    chrome && custom_title_bar_enabled(window)
+}
+
+/// Re-apply the custom traffic-light position. The frontend calls this (via the
+/// `reposition_window_controls` command) once it has rendered: the window is
+/// non-resizable, so no `windowDidResize` fires to correct the initial placement,
+/// which release builds apply before the title bar has finished laying out.
+/// Dispatches to the main thread — the command handler runs off it.
+#[cfg(target_os = "macos")]
+pub fn reposition_traffic_lights<R: Runtime>(window: &tauri::Window<R>) {
+    if !should_decorate(window) {
+        return;
+    }
+    let win = window.clone();
+    let _ = window.run_on_main_thread(move || mac::reposition(&win));
 }
 
 // Reads the persisted `custom_title_bar` setting straight from settings.json.
