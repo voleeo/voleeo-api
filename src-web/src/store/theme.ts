@@ -9,6 +9,10 @@ function findTheme(id: string): Theme | undefined {
   return registry.themes().find((t) => t.id === id)
 }
 
+function repositionWindowControls() {
+  void invoke("reposition_window_controls").catch(() => {})
+}
+
 export function applyThemeToCss(theme: Theme) {
   const root = document.documentElement
   const p = theme.palette
@@ -64,12 +68,14 @@ export const useThemeStore = create<ThemeStore>(() => ({
     const colorMode: ColorMode = rawMode === "light" ? "light" : "dark"
     const theme = (activeId ? findTheme(activeId) : null) ?? allThemes[0]
     applyThemeToCss(theme)
+    repositionWindowControls()
     useThemeStore.setState({ activeTheme: theme, colorMode })
 
     listen<{ id: string }>("theme:changed", (event) => {
       const changed = findTheme(event.payload.id)
       if (changed) {
         applyThemeToCss(changed)
+        repositionWindowControls()
         useThemeStore.setState({ activeTheme: changed })
       }
     })

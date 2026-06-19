@@ -137,7 +137,11 @@ impl WsManager {
                 match read.next().await {
                     Some(Ok(Message::Text(t))) => {
                         let size = t.len() as u32;
-                        sink(WsEvent::Message(incoming(WsMessageKind::Text, t, size)));
+                        sink(WsEvent::Message(incoming(
+                            WsMessageKind::Text,
+                            t.to_string(),
+                            size,
+                        )));
                     }
                     Some(Ok(Message::Binary(b))) => {
                         let size = b.len() as u32;
@@ -214,12 +218,12 @@ impl WsManager {
         .ok_or(VoleeoError::WebSocketClosed)?;
 
         let msg = match kind {
-            WsMessageKind::Text => Message::Text(data),
+            WsMessageKind::Text => Message::Text(data.into()),
             WsMessageKind::Binary => {
                 let bytes = base64::engine::general_purpose::STANDARD
                     .decode(data.as_bytes())
                     .map_err(|e| VoleeoError::WebSocket(format!("invalid base64: {e}")))?;
-                Message::Binary(bytes)
+                Message::Binary(bytes.into())
             }
         };
         tx.send(msg).map_err(|_| VoleeoError::WebSocketClosed)
