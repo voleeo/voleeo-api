@@ -12,6 +12,7 @@ import {
 import { formatKeyCombo, SHORTCUTS } from "@/config/shortcuts"
 import { useKeydown } from "@/hooks/useKeydown"
 import { useUiStore } from "@/store/workspace"
+import { ImportRequestsModal } from "./ImportRequestsModal"
 import { McpModal } from "./McpBridge/McpModal"
 import { McpStatusItem } from "./McpBridge/McpStatusItem"
 
@@ -38,6 +39,7 @@ async function openSettingsSection(section: "keyboard") {
 
 export function PreferencesButton() {
   const [showMcp, setShowMcp] = useState(false)
+  const [showImport, setShowImport] = useState(false)
   const activeTool = useUiStore((s) => s.activeTool)
   const panelLayout = useUiStore((s) => s.panelLayout)
   const togglePanelLayout = useUiStore((s) => s.togglePanelLayout)
@@ -56,6 +58,14 @@ export function PreferencesButton() {
           <Glyph kind="settings" size={14} color="var(--base04)" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-[210px]">
+          <DropdownMenuItem
+            className="font-sans text-[0.857rem] flex items-center gap-2 focus:bg-subtle focus:text-fg cursor-pointer"
+            onClick={() => setShowImport(true)}
+          >
+            <Glyph kind="import" size={13} color="var(--base04)" />
+            Import
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
           {activeTool === "api" && (
             <DropdownMenuItem
               className="font-sans text-[0.857rem] flex items-center gap-2 focus:bg-subtle focus:text-fg cursor-pointer"
@@ -90,6 +100,9 @@ export function PreferencesButton() {
       </DropdownMenu>
 
       {showMcp && <McpModal onClose={() => setShowMcp(false)} />}
+      {showImport && (
+        <ImportRequestsModal onClose={() => setShowImport(false)} />
+      )}
     </>
   )
 }

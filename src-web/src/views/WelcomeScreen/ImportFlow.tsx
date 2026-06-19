@@ -10,7 +10,7 @@ import { commands } from "../../../../packages/types/bindings"
 import { FlowBtn } from "./FlowBtn"
 import { FlowShell } from "./FlowShell"
 import { CARD, IconBox, isValidRepoUrl, Section } from "./ImportHomeUi"
-import { CollectionImportFlow } from "./import/CollectionImportFlow"
+import { ImportRequestsFlow } from "./import/ImportRequestsFlow"
 
 const INPUT =
   "w-full bg-bg border border-border rounded-[6px] px-2.5 py-2 text-[0.857rem] text-fg font-mono outline-none focus:border-accent"
@@ -34,10 +34,10 @@ export function ImportFlow({ onCancel }: ImportFlowProps) {
   const [cloneUser, setCloneUser] = useState("")
   const [cloneToken, setCloneToken] = useState("")
   const [cloneLoading, setCloneLoading] = useState(false)
-  const [collectionOpen, setCollectionOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
 
-  if (collectionOpen) {
-    return <CollectionImportFlow onCancel={() => setCollectionOpen(false)} />
+  if (importOpen) {
+    return <ImportRequestsFlow onCancel={() => setImportOpen(false)} />
   }
 
   const urlValid = isValidRepoUrl(cloneUrl)
@@ -218,7 +218,7 @@ export function ImportFlow({ onCancel }: ImportFlowProps) {
       <Section label="Import requests">
         <button
           type="button"
-          onClick={() => setCollectionOpen(true)}
+          onClick={() => setImportOpen(true)}
           className={cn(
             CARD,
             "w-full flex items-center gap-3.5 text-left cursor-pointer outline-none hover:border-accent/60 transition-colors",

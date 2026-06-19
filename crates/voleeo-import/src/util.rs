@@ -203,6 +203,11 @@ pub fn str_at<'a>(doc: &'a Value, ptr: &str) -> Option<&'a str> {
     doc.pointer(ptr).and_then(Value::as_str)
 }
 
+/// `str_at` defaulting to `""` — for callers that treat absence as empty.
+pub fn str_at_or<'a>(doc: &'a Value, ptr: &str) -> &'a str {
+    str_at(doc, ptr).unwrap_or("")
+}
+
 /// Resolve a single `$ref` (parameters / bodies) to an owned value.
 pub fn resolve_one(resolver: &RefResolver, value: &Value) -> Value {
     let mut seen = HashSet::new();

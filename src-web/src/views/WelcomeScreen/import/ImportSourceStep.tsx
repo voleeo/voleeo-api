@@ -141,12 +141,12 @@ export function ImportSourceStep({ onLoaded, onError }: ImportSourceStepProps) {
       <div className="flex flex-wrap items-center gap-2">
         <FormatChip label="OpenAPI 3.0 / 3.1" active />
         <FormatChip label="Swagger 2.0" active />
-        <FormatChip label="Postman" soon />
+        <FormatChip label="Postman" active />
         <FormatChip label="Insomnia" soon />
       </div>
       <p className="text-[0.714rem] text-muted leading-relaxed">
-        OpenAPI and Swagger 2.0 work today. Postman and Insomnia are coming in
-        later phases.
+        OpenAPI, Swagger 2.0, and Postman work today. Insomnia is coming in a
+        later phase.
       </p>
     </div>
   )

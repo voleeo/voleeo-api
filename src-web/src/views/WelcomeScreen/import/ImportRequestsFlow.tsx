@@ -3,6 +3,7 @@ import { useShallow } from "zustand/shallow"
 import { Glyph } from "@/components/Glyph"
 import { Spinner } from "@/components/ui/spinner"
 import { errorMessage } from "@/lib/error"
+import { useRequestStore } from "@/store/requests"
 import { useUiStore } from "@/store/workspace"
 import type {
   ImportDest,
@@ -15,11 +16,17 @@ import { ImportPreviewStep } from "./ImportPreviewStep"
 import { ImportSourceStep } from "./ImportSourceStep"
 import { formatLabel, requestIds } from "./importFilter"
 
-interface CollectionImportFlowProps {
+interface ImportRequestsFlowProps {
   onCancel: () => void
+  defaultDestId?: string
+  embedded?: boolean
 }
 
-export function CollectionImportFlow({ onCancel }: CollectionImportFlowProps) {
+export function ImportRequestsFlow({
+  onCancel,
+  defaultDestId,
+  embedded,
+}: ImportRequestsFlowProps) {
   const { workspaces, openWorkspace, loadWorkspaces } = useUiStore(
     useShallow((s) => ({
       workspaces: s.workspaces,
@@ -33,7 +40,7 @@ export function CollectionImportFlow({ onCancel }: CollectionImportFlowProps) {
   const [sourceLabel, setSourceLabel] = useState("")
   const [preview, setPreview] = useState<ImportPreview | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [destId, setDestId] = useState("new")
+  const [destId, setDestId] = useState(defaultDestId ?? "new")
   const [error, setError] = useState("")
   const [busy, setBusy] = useState(false)
 
@@ -89,6 +96,12 @@ export function CollectionImportFlow({ onCancel }: CollectionImportFlowProps) {
       }
       await loadWorkspaces()
       openWorkspace(res.data.workspaceId, "api")
+
+      const reqStore = useRequestStore.getState()
+      if (reqStore.loadedWorkspaceId === res.data.workspaceId) {
+        await reqStore.reload()
+      }
+      if (embedded) onCancel()
     } finally {
       setBusy(false)
     }
@@ -111,6 +124,7 @@ export function CollectionImportFlow({ onCancel }: CollectionImportFlowProps) {
       title="Import requests"
       description={description}
       wide={step === 2}
+      autoResizeWindow={!embedded}
       footer={
         <div className="flex items-center justify-between w-full">
           <FlowBtn onClick={step === 1 ? onCancel : () => setStep(1)}>
