@@ -8,7 +8,7 @@
 //! warning.
 
 use crate::ir::*;
-use crate::util::{parse_value, str_at_or};
+use crate::util::{disabled, name_of, parse_value, str_at_or, strip_query};
 use crate::ImportError;
 use serde_json::Value;
 
@@ -377,10 +377,6 @@ fn raw_kind(lang: &str) -> RawKind {
     }
 }
 
-fn strip_query(raw: &str) -> &str {
-    raw.split('?').next().unwrap_or(raw)
-}
-
 /// Rebuild a URL from the `host`/`path` arrays when `url.raw` is missing.
 fn reconstruct_raw(url: &Value) -> String {
     let host = join_arr(url.get("host"), ".");
@@ -402,15 +398,4 @@ fn join_arr(v: Option<&Value>, sep: &str) -> String {
                 .join(sep)
         })
         .unwrap_or_default()
-}
-
-fn disabled(v: &Value) -> bool {
-    v.get("disabled").and_then(Value::as_bool) == Some(true)
-}
-
-fn name_of(it: &Value) -> String {
-    it.get("name")
-        .and_then(Value::as_str)
-        .unwrap_or("Untitled")
-        .to_string()
 }

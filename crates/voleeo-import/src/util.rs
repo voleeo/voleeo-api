@@ -208,6 +208,24 @@ pub fn str_at_or<'a>(doc: &'a Value, ptr: &str) -> &'a str {
     str_at(doc, ptr).unwrap_or("")
 }
 
+/// A URL with its `?query` stripped (query is imported as separate params).
+pub fn strip_query(raw: &str) -> &str {
+    raw.split('?').next().unwrap_or(raw)
+}
+
+/// `disabled: true` flag on a Postman/Insomnia key-value entry.
+pub fn disabled(v: &Value) -> bool {
+    v.get("disabled").and_then(Value::as_bool) == Some(true)
+}
+
+/// `name` field defaulting to "Untitled" (Postman/Insomnia items).
+pub fn name_of(v: &Value) -> String {
+    v.get("name")
+        .and_then(Value::as_str)
+        .unwrap_or("Untitled")
+        .to_string()
+}
+
 /// Resolve a single `$ref` (parameters / bodies) to an owned value.
 pub fn resolve_one(resolver: &RefResolver, value: &Value) -> Value {
     let mut seen = HashSet::new();

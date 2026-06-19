@@ -142,11 +142,10 @@ export function ImportSourceStep({ onLoaded, onError }: ImportSourceStepProps) {
         <FormatChip label="OpenAPI 3.0 / 3.1" active />
         <FormatChip label="Swagger 2.0" active />
         <FormatChip label="Postman" active />
-        <FormatChip label="Insomnia" soon />
+        <FormatChip label="Insomnia" active />
       </div>
       <p className="text-[0.714rem] text-muted leading-relaxed">
-        OpenAPI, Swagger 2.0, and Postman work today. Insomnia is coming in a
-        later phase.
+        Import from OpenAPI, Swagger 2.0, Postman, or Insomnia.
       </p>
     </div>
   )
