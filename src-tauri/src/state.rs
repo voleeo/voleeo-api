@@ -1,5 +1,4 @@
 use crate::secret_store::SecretStore;
-use keyring;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};

@@ -38,7 +38,7 @@ pub(super) fn replace_path_param(url: &str, name: &str, replacement: &str) -> St
         let boundary = after
             .chars()
             .next()
-            .map_or(true, |c| !c.is_alphanumeric() && c != '_');
+            .is_none_or(|c| !c.is_alphanumeric() && c != '_');
         if boundary {
             result.push_str(&rest[..pos]);
             result.push_str(replacement);
@@ -78,7 +78,7 @@ fn hex_digit(n: u8) -> char {
 /// Standard base64 encoding (RFC 4648), used for Basic auth.
 pub(super) fn base64_encode(input: &[u8]) -> String {
     const TABLE: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity((input.len() + 2) / 3 * 4);
+    let mut out = String::with_capacity(input.len().div_ceil(3) * 4);
     for chunk in input.chunks(3) {
         let b0 = chunk[0] as u32;
         let b1 = chunk.get(1).copied().unwrap_or(0) as u32;

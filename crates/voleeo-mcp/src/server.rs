@@ -133,9 +133,7 @@ async fn dispatch(backend: &ApiBackend, raw: &str, enabled: bool) -> Option<Json
     };
 
     // Notifications have no id and must not receive a response.
-    if req.id.is_none() {
-        return None;
-    }
+    req.id.as_ref()?;
 
     let id = req.id.clone();
 
