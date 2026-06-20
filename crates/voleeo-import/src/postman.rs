@@ -61,6 +61,7 @@ pub fn parse_postman(content: &str) -> Result<ImportedCollection, ImportError> {
             .to_string(),
         version: Some(version.to_string()),
         variables: variables(doc.get("variable")),
+        environments: Vec::new(),
         root_auth,
         items,
         warnings: acc.warnings,

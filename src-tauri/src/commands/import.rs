@@ -3,7 +3,7 @@ use crate::commands::request::{
 };
 use crate::state::AppState;
 use tauri::State;
-use voleeo_core::{AuthConfig, VoleeoError};
+use voleeo_core::{AuthConfig, EnvironmentVariable, VoleeoError};
 use voleeo_crypto as workspace_key;
 use voleeo_import::{
     build_plan, detect_format, parse, select, ImportDest, ImportFormat, ImportPreview,
@@ -179,10 +179,32 @@ pub async fn import_commit(
             .filter(|v| !existing.contains(&v.key))
             .cloned()
             .collect();
-        let variables_created = added.len() as u32;
+        let mut variables_created = added.len() as u32;
         if !added.is_empty() {
             env.variables.extend(added);
             environments.save(&env)?;
+        }
+
+        // Named sub-environments → one Voleeo environment each (never colorless).
+        for ie in col.environments.iter().filter(|e| !e.variables.is_empty()) {
+            let mut new_env = environments.create_personal(
+                workspace_id.clone(),
+                ie.name.clone(),
+                random_env_color(),
+                false,
+            )?;
+            new_env.variables = ie
+                .variables
+                .iter()
+                .map(|v| EnvironmentVariable {
+                    key: v.key.clone(),
+                    value: v.value.clone(),
+                    encrypted: false,
+                    enabled: true,
+                })
+                .collect();
+            variables_created += new_env.variables.len() as u32;
+            environments.save(&new_env)?;
         }
 
         Ok(ImportSummary {
@@ -216,6 +238,17 @@ fn next_order_base(
             Ok(max + 1.0)
         }
     }
+}
+
+/// A random theme accent slot for a new environment — imported envs are never
+/// colorless. Slots are `var(--baseXX)` refs so they track the active theme.
+fn random_env_color() -> String {
+    use rand::RngExt;
+    const SLOTS: [&str; 8] = [
+        "--base08", "--base09", "--base0A", "--base0B", "--base0C", "--base0D", "--base0E",
+        "--base0F",
+    ];
+    format!("var({})", SLOTS[rand::rng().random_range(0..SLOTS.len())])
 }
 
 /// Flag the auth's secret fields encrypted then encrypt them with the workspace

@@ -13,12 +13,21 @@ pub enum ImportFormat {
     Swagger2,
     Postman,
     Insomnia,
+    Bruno,
+    Yaak,
 }
 
 /// Sniff the format from JSON/YAML content. Returns `None` when nothing matches.
 pub fn detect_format(content: &str) -> Option<ImportFormat> {
     let v = parse_value_opt(content)?;
 
+    // Bruno OpenCollection (YAML) and Yaak (JSON) carry unique root keys.
+    if v.get("opencollection").is_some() {
+        return Some(ImportFormat::Bruno);
+    }
+    if v.get("yaakSchema").is_some() {
+        return Some(ImportFormat::Yaak);
+    }
     if v.get("swagger")
         .and_then(Value::as_str)
         .is_some_and(|s| s.starts_with("2."))

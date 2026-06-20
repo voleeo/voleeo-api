@@ -143,9 +143,11 @@ export function ImportSourceStep({ onLoaded, onError }: ImportSourceStepProps) {
         <FormatChip label="Swagger 2.0" active />
         <FormatChip label="Postman" active />
         <FormatChip label="Insomnia" active />
+        <FormatChip label="Bruno" active />
+        <FormatChip label="Yaak" active />
       </div>
       <p className="text-[0.714rem] text-muted leading-relaxed">
-        Import from OpenAPI, Swagger 2.0, Postman, or Insomnia.
+        Import from OpenAPI, Swagger 2.0, Postman, Insomnia, Bruno, or Yaak.
       </p>
     </div>
   )

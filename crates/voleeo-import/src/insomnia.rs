@@ -50,18 +50,7 @@ pub fn parse_insomnia(content: &str) -> Result<ImportedCollection, ImportError> 
                 .into(),
         );
     }
-    // Only the base environment is imported; flag dropped sub-environments.
-    if resources
-        .iter()
-        .filter(|r| type_of(r) == "environment")
-        .count()
-        > 1
-    {
-        warnings.push(
-            "Only the base environment was imported; Insomnia sub-environments were skipped."
-                .into(),
-        );
-    }
+    let (variables, environments) = collect_environments(resources, root_id);
 
     Ok(ImportedCollection {
         name: workspace
@@ -69,7 +58,8 @@ pub fn parse_insomnia(content: &str) -> Result<ImportedCollection, ImportError> 
             .unwrap_or("Imported API")
             .to_string(),
         version: Some("4".into()),
-        variables: collect_variables(resources, root_id),
+        variables,
+        environments,
         root_auth: ImportedAuth::None,
         items: build_children(resources, root_id, false),
         warnings,
@@ -240,13 +230,26 @@ fn to_auth(a: &Value) -> ImportedAuth {
     }
 }
 
-/// Base-environment `data` map (the environment whose parent is the workspace).
-fn collect_variables(resources: &[Value], root_id: &str) -> Vec<ImportedVariable> {
-    resources
-        .iter()
-        .find(|r| type_of(r) == "environment" && parent_of(r) == root_id)
-        .map(|e| env_data(e.get("data")))
-        .unwrap_or_default()
+/// Split environments: the base env (parent is the workspace) → Global variables;
+/// every other `environment` resource → a named Voleeo environment.
+fn collect_environments(
+    resources: &[Value],
+    root_id: &str,
+) -> (Vec<ImportedVariable>, Vec<ImportedEnvironment>) {
+    let mut base = Vec::new();
+    let mut named = Vec::new();
+    for e in resources.iter().filter(|r| type_of(r) == "environment") {
+        let vars = env_data(e.get("data"));
+        if parent_of(e) == root_id {
+            base = vars;
+        } else {
+            named.push(ImportedEnvironment {
+                name: name_of(e),
+                variables: vars,
+            });
+        }
+    }
+    (base, named)
 }
 
 fn env_data(v: Option<&Value>) -> Vec<ImportedVariable> {

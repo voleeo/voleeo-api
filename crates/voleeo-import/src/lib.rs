@@ -3,6 +3,7 @@
 //! storage, no disk. The Tauri command layer drives parse → filter → build_plan
 //! → persist.
 
+mod bruno;
 pub mod convert;
 pub mod detect;
 mod insomnia;
@@ -11,6 +12,7 @@ mod openapi;
 mod postman;
 mod swagger;
 mod util;
+mod yaak;
 
 use std::collections::HashSet;
 
@@ -35,6 +37,8 @@ pub fn parse(format: ImportFormat, content: &str) -> Result<ImportedCollection, 
         ImportFormat::Swagger2 => swagger::parse_swagger2(content),
         ImportFormat::Postman => postman::parse_postman(content),
         ImportFormat::Insomnia => insomnia::parse_insomnia(content),
+        ImportFormat::Bruno => bruno::parse_bruno(content),
+        ImportFormat::Yaak => yaak::parse_yaak(content),
     }
 }
 
@@ -46,7 +50,12 @@ pub fn preview(format: ImportFormat, content: &str) -> Result<ImportPreview, Imp
         format_version: col.version.clone(),
         suggested_name: col.name.clone(),
         tree: preview_nodes(&col.items),
-        variable_count: col.variables.len() as u32,
+        variable_count: (col.variables.len()
+            + col
+                .environments
+                .iter()
+                .map(|e| e.variables.len())
+                .sum::<usize>()) as u32,
         warnings: col.warnings.clone(),
     })
 }

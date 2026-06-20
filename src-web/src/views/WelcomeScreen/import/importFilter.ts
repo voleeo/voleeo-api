@@ -77,18 +77,22 @@ export function filterTree(nodes: ImportNode[], query: string): ImportNode[] {
 }
 
 /** Human label for the source-format subtitle, e.g. "OpenAPI 3.0". */
+const FORMAT_LABELS: Record<ImportFormat, string> = {
+  open_api: "OpenAPI",
+  swagger2: "Swagger",
+  postman: "Postman",
+  insomnia: "Insomnia",
+  bruno: "Bruno",
+  yaak: "Yaak",
+}
+
 export function formatLabel(
   format: ImportFormat,
   version?: string | null,
 ): string {
-  const base =
-    format === "open_api"
-      ? "OpenAPI"
-      : format === "swagger2"
-        ? "Swagger"
-        : format === "postman"
-          ? "Postman"
-          : "Insomnia"
+  const base = FORMAT_LABELS[format] ?? format
+  // Bruno/Yaak "versions" are internal schema numbers, not a spec version to show.
+  if (format === "bruno" || format === "yaak") return base
   // Show only the major.minor of a semver-ish version (3.0.3 → 3.0).
   const short = version?.split(".").slice(0, 2).join(".")
   return short ? `${base} ${short}` : base

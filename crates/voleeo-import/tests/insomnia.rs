@@ -108,17 +108,18 @@ fn warns_about_unsupported_tags() {
 }
 
 #[test]
-fn warns_about_filter_and_sub_environments() {
+fn warns_about_filter_and_imports_sub_environment() {
     // A `|` filter inside a tag, plus a second (sub-)environment resource.
     let spec = r#"{"_type":"export","__export_format":4,"resources":[
       {"_id":"wrk_1","_type":"workspace","parentId":null,"name":"X"},
       {"_id":"env_base","_type":"environment","parentId":"wrk_1","data":{"k":"v"}},
-      {"_id":"env_sub","_type":"environment","parentId":"env_base","data":{"k":"v2"}},
+      {"_id":"env_sub","_type":"environment","parentId":"env_base","name":"Staging","data":{"k":"v2"}},
       {"_id":"r1","_type":"request","parentId":"wrk_1","name":"R","method":"GET",
        "url":"{{ _.base | upper }}/x","authentication":{}}]}"#;
     let col = parse(ImportFormat::Insomnia, spec).unwrap();
     assert!(col.warnings.iter().any(|w| w.contains("filters")));
-    assert!(col.warnings.iter().any(|w| w.contains("sub-environments")));
+    // The sub-environment is imported as its own environment (no warning).
+    assert!(col.environments.iter().any(|e| e.name == "Staging"));
     // A plain `|` in a JSON value (not inside a tag) must not trip the filter warning.
     let clean = r#"{"_type":"export","__export_format":4,"resources":[
       {"_id":"w","_type":"workspace","parentId":null,"name":"Y"},

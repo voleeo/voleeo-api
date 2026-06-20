@@ -90,8 +90,7 @@ fn loopback_port(uri: &str) -> Result<u16, VoleeoError> {
         .split('/')
         .next()
         .unwrap_or("");
-    let is_loopback =
-        host_port.starts_with("127.0.0.1:") || host_port.starts_with("localhost:");
+    let is_loopback = host_port.starts_with("127.0.0.1:") || host_port.starts_with("localhost:");
     match (is_loopback, host_port.rsplit(':').next().and_then(|p| p.parse().ok())) {
         (true, Some(port)) => Ok(port),
         _ => Err(VoleeoError::InvalidConfig(

@@ -5,13 +5,23 @@ pub struct ImportedCollection {
     pub name: String,
     /// Source spec version (e.g. `3.0.3`), shown in the preview subtitle.
     pub version: Option<String>,
-    /// Collection/server variables → an "Imported" environment + `{{ key }}` use.
+    /// Collection/base variables → the workspace's Global environment.
     pub variables: Vec<ImportedVariable>,
+    /// Named sub-environments (dev/staging/…) → one Voleeo environment each.
+    pub environments: Vec<ImportedEnvironment>,
     /// Collection-level / global security → workspace auth (new workspace only).
     pub root_auth: ImportedAuth,
     pub items: Vec<ImportedItem>,
     /// Unsupported features surfaced to the user (skipped scripts, external refs…).
     pub warnings: Vec<String>,
+}
+
+/// A named environment from the source (Insomnia sub-env, Yaak sub-env, Bruno
+/// `config.environments` entry) → its own Voleeo environment on import.
+#[derive(Debug, Clone)]
+pub struct ImportedEnvironment {
+    pub name: String,
+    pub variables: Vec<ImportedVariable>,
 }
 
 #[derive(Debug, Clone)]

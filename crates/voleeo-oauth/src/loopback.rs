@@ -295,9 +295,15 @@ mod tests {
     #[test]
     fn implicit_relays_then_parses_token() {
         // First hit (no query) → relay the fragment back.
-        assert!(matches!(parse_token("/callback", "xyz"), TokenOutcome::Relay));
+        assert!(matches!(
+            parse_token("/callback", "xyz"),
+            TokenOutcome::Relay
+        ));
         // Relayed query carries the token.
-        match parse_token("/callback?access_token=tok&state=xyz&expires_in=3600", "xyz") {
+        match parse_token(
+            "/callback?access_token=tok&state=xyz&expires_in=3600",
+            "xyz",
+        ) {
             TokenOutcome::Token(t) => {
                 assert_eq!(t.access_token, "tok");
                 assert!(t.expires_at > 0);
