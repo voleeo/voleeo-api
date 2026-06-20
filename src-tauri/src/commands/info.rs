@@ -24,11 +24,14 @@ pub async fn get_app_info(app: tauri::AppHandle) -> Result<AppInfo, VoleeoError>
         .app_log_dir()
         .map_err(|e| VoleeoError::Storage(e.to_string()))?;
 
+    // EXE_SUFFIX is ".exe" on Windows, "" elsewhere — the sidecar is bundled
+    // next to the main executable as voleeo-mcp-bridge[.exe].
+    let bridge_name = format!("voleeo-mcp-bridge{}", std::env::consts::EXE_SUFFIX);
     let bridge_path = std::env::current_exe()
         .ok()
-        .and_then(|p| p.parent().map(|d| d.join("voleeo-mcp-bridge")))
+        .and_then(|p| p.parent().map(|d| d.join(&bridge_name)))
         .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_else(|| "voleeo-mcp-bridge".to_string());
+        .unwrap_or(bridge_name);
 
     Ok(AppInfo {
         version: app.package_info().version.to_string(),
