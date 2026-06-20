@@ -79,6 +79,8 @@
   font-size: var(--interface-font-size);
   color: var(--base05);
   background-color: var(--base00);
+  scrollbar-width: thin;
+  scrollbar-color: var(--base03) transparent;
 }
 
 *,
