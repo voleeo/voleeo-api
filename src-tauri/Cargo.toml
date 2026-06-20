@@ -10,19 +10,9 @@ default-run = "voleeo"
 name = "voleeo_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
-[features]
-codegen = ["dep:specta-typescript"]
-
 [[bin]]
 name = "voleeo"
 path = "src/main.rs"
-
-# required-features keeps codegen out of `tauri build` — an ungated extra bin
-# gets copied into Voleeo.app/Contents/MacOS unsigned and breaks codesign.
-[[bin]]
-name = "codegen"
-path = "src/bin/codegen.rs"
-required-features = ["codegen"]
 
 [[bin]]
 name = "voleeo-mcp-bridge"
@@ -53,7 +43,6 @@ tokio = { workspace = true }
 tauri = { workspace = true }
 tauri-specta = { workspace = true }
 specta = { workspace = true }
-specta-typescript = { workspace = true, optional = true }
 tauri-plugin-dialog = { workspace = true }
 tauri-plugin-updater = { workspace = true }
 tauri-plugin-process = { workspace = true }

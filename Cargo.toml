@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "src-tauri",
+    "codegen",
     "crates/voleeo-core",
     "crates/voleeo-cookies",
     "crates/voleeo-crypto",
