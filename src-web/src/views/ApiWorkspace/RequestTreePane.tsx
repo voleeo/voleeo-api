@@ -186,8 +186,12 @@ export function RequestTreePane() {
           description={
             <>
               Revert <code>{actions.pendingRollback.name}</code> to its last
-              committed version. Uncommitted changes to this{" "}
-              {actions.pendingRollback.kind} will be discarded.
+              committed version.{" "}
+              {actions.pendingRollback.target === "folder-requests"
+                ? "Uncommitted changes to requests in this folder will be discarded."
+                : actions.pendingRollback.target === "folder"
+                  ? "Uncommitted changes to this folder will be discarded."
+                  : "Uncommitted changes to this request will be discarded."}
             </>
           }
           confirmLabel="Rollback"
