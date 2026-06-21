@@ -15,6 +15,10 @@ fn default_custom_title_bar() -> bool {
     cfg!(target_os = "macos")
 }
 
+fn default_auto_update() -> bool {
+    true
+}
+
 #[derive(serde::Serialize, serde::Deserialize)]
 struct PersistedSettings {
     active_theme_id: String,
@@ -24,6 +28,8 @@ struct PersistedSettings {
     color_mode: Option<String>,
     #[serde(default = "default_custom_title_bar")]
     custom_title_bar: bool,
+    #[serde(default = "default_auto_update")]
+    auto_update: bool,
 }
 
 pub struct AppState {
@@ -51,6 +57,7 @@ pub struct AppState {
     pub mcp_enabled: Arc<RwLock<bool>>,
     pub mcp_token: Arc<RwLock<Option<String>>>,
     pub custom_title_bar: Arc<RwLock<bool>>,
+    pub auto_update: Arc<RwLock<bool>>,
     pub ws_settings_lock: Arc<Mutex<()>>,
 }
 
@@ -93,6 +100,7 @@ impl AppState {
             .as_ref()
             .map(|s| s.custom_title_bar)
             .unwrap_or_else(default_custom_title_bar);
+        let auto_update = settings.as_ref().map(|s| s.auto_update).unwrap_or(true);
         let mcp_token = secrets.get("mcp_token").map(str::to_string);
 
         let executor = voleeo_http::HttpExecutor::new()?;
@@ -126,6 +134,7 @@ impl AppState {
             mcp_enabled: Arc::new(RwLock::new(mcp_enabled)),
             mcp_token: Arc::new(RwLock::new(mcp_token)),
             custom_title_bar: Arc::new(RwLock::new(custom_title_bar)),
+            auto_update: Arc::new(RwLock::new(auto_update)),
             ws_settings_lock: Arc::new(Mutex::new(())),
         })
     }
@@ -135,11 +144,13 @@ impl AppState {
         let color_mode = Some(self.color_mode.read().await.clone());
         let mcp_enabled = *self.mcp_enabled.read().await;
         let custom_title_bar = *self.custom_title_bar.read().await;
+        let auto_update = *self.auto_update.read().await;
         let settings = PersistedSettings {
             active_theme_id,
             mcp_enabled,
             color_mode,
             custom_title_bar,
+            auto_update,
         };
         let json = match serde_json::to_string(&settings) {
             Ok(json) => json,
