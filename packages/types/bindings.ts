@@ -386,6 +386,11 @@ state?: string; username?: string; password?: string; password_encrypted?: boole
 	themeGetColorMode: () => typedError<string, VoleeoError>(__TAURI_INVOKE("theme_get_color_mode")),
 	themeSetColorMode: (mode: string) => typedError<null, VoleeoError>(__TAURI_INVOKE("theme_set_color_mode", { mode })),
 	getAppInfo: () => typedError<AppInfo, VoleeoError>(__TAURI_INVOKE("get_app_info")),
+	/**
+	 *  Toggle the main window's native menu bar (Windows auto-hide menu, revealed
+	 *  with Alt). No-op off Windows.
+	 */
+	toggleMainMenu: () => typedError<null, VoleeoError>(__TAURI_INVOKE("toggle_main_menu")),
 	debugEntityInfo: (workspaceId: string, kind: string, id: string) => typedError<EntityDebugInfo, VoleeoError>(__TAURI_INVOKE("debug_entity_info", { workspaceId, kind, id })),
 	/**  Retrieve a stored value by key. Returns `null` if the key does not exist. */
 	pluginStoreGet: (pluginId: string, key: string) => typedError<string | null, VoleeoError>(__TAURI_INVOKE("plugin_store_get", { pluginId, key })),

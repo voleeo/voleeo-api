@@ -4,10 +4,63 @@ mod secret_store;
 mod state;
 
 use state::AppState;
-use tauri::{
-    menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder},
-    Emitter, Manager,
-};
+use tauri::{Emitter, Manager};
+
+/// The Voleeo + Edit menu. macOS shows it in the global bar; Windows attaches it
+/// to the window but hides it by default (revealed with Alt — the OS default).
+/// Linux gets no menu. macOS-only predefined items are included only there.
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn build_app_menu(app: &tauri::App) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
+    use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
+
+    let settings_item = MenuItemBuilder::with_id("settings", "Settings")
+        .accelerator("CmdOrCtrl+,")
+        .build(app)?;
+    let close_workspace_item =
+        MenuItemBuilder::with_id("close_workspace", "Close Workspace").build(app)?;
+
+    let mut app_menu = SubmenuBuilder::new(app, "Voleeo")
+        .item(&PredefinedMenuItem::about(app, None, None)?)
+        .separator()
+        .item(&settings_item)
+        .item(&close_workspace_item);
+
+    #[cfg(target_os = "macos")]
+    {
+        app_menu = app_menu
+            .separator()
+            .item(&PredefinedMenuItem::services(app, None)?)
+            .separator()
+            .item(&PredefinedMenuItem::hide(app, None)?)
+            .item(&PredefinedMenuItem::hide_others(app, None)?)
+            .item(&PredefinedMenuItem::show_all(app, None)?);
+    }
+
+    let app_menu = app_menu
+        .separator()
+        .item(&PredefinedMenuItem::quit(app, None)?)
+        .build()?;
+
+    let menu = MenuBuilder::new(app).item(&app_menu);
+
+    // Edit menu only on macOS: it owns the standard clipboard shortcuts there.
+    // On Windows the webview already handles copy/paste/undo natively, so a
+    // second set of menu accelerators would just conflict.
+    #[cfg(target_os = "macos")]
+    let menu = menu.item(
+        &SubmenuBuilder::new(app, "Edit")
+            .item(&PredefinedMenuItem::undo(app, None)?)
+            .item(&PredefinedMenuItem::redo(app, None)?)
+            .separator()
+            .item(&PredefinedMenuItem::cut(app, None)?)
+            .item(&PredefinedMenuItem::copy(app, None)?)
+            .item(&PredefinedMenuItem::paste(app, None)?)
+            .item(&PredefinedMenuItem::select_all(app, None)?)
+            .build()?,
+    );
+
+    menu.build()
+}
 
 pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
     tauri_specta::Builder::<tauri::Wry>::new().commands(tauri_specta::collect_commands![
@@ -118,6 +171,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::theme::theme_get_color_mode,
         commands::theme::theme_set_color_mode,
         commands::info::get_app_info,
+        commands::info::toggle_main_menu,
         commands::debug::debug_entity_info,
         commands::plugin_store::plugin_store_get,
         commands::plugin_store::plugin_store_set,
@@ -196,43 +250,16 @@ pub fn run() {
 
     builder
         .setup(|app| {
-            let settings_item = MenuItemBuilder::with_id("settings", "Settings")
-                .accelerator("CmdOrCtrl+,")
-                .build(app)?;
+            #[cfg(target_os = "macos")]
+            app.set_menu(build_app_menu(app)?)?;
 
-            let close_workspace_item =
-                MenuItemBuilder::with_id("close_workspace", "Close Workspace").build(app)?;
-
-            let app_menu = SubmenuBuilder::new(app, "Voleeo")
-                .item(&PredefinedMenuItem::about(app, None, None)?)
-                .separator()
-                .item(&settings_item)
-                .item(&close_workspace_item)
-                .separator()
-                .item(&PredefinedMenuItem::services(app, None)?)
-                .separator()
-                .item(&PredefinedMenuItem::hide(app, None)?)
-                .item(&PredefinedMenuItem::hide_others(app, None)?)
-                .item(&PredefinedMenuItem::show_all(app, None)?)
-                .separator()
-                .item(&PredefinedMenuItem::quit(app, None)?)
-                .build()?;
-
-            let edit_menu = SubmenuBuilder::new(app, "Edit")
-                .item(&PredefinedMenuItem::undo(app, None)?)
-                .item(&PredefinedMenuItem::redo(app, None)?)
-                .separator()
-                .item(&PredefinedMenuItem::cut(app, None)?)
-                .item(&PredefinedMenuItem::copy(app, None)?)
-                .item(&PredefinedMenuItem::paste(app, None)?)
-                .item(&PredefinedMenuItem::select_all(app, None)?)
-                .build()?;
-
-            let menu = MenuBuilder::new(app)
-                .item(&app_menu)
-                .item(&edit_menu)
-                .build()?;
-            app.set_menu(menu)?;
+            // Windows: attach the menu but hide it; Alt reveals it (handled in
+            // the webview). Linux keeps no menu.
+            #[cfg(target_os = "windows")]
+            if let Some(win) = app.get_webview_window("main") {
+                win.set_menu(build_app_menu(app)?)?;
+                let _ = win.hide_menu();
+            }
 
             let app_dir = app
                 .path()
@@ -397,6 +424,7 @@ pub fn run() {
             commands::theme::theme_get_color_mode,
             commands::theme::theme_set_color_mode,
             commands::info::get_app_info,
+            commands::info::toggle_main_menu,
             commands::debug::debug_entity_info,
             commands::plugin_store::plugin_store_get,
             commands::plugin_store::plugin_store_set,

@@ -40,3 +40,21 @@ pub async fn get_app_info(app: tauri::AppHandle) -> Result<AppInfo, VoleeoError>
         bridge_path,
     })
 }
+
+/// Toggle the main window's native menu bar (Windows auto-hide menu, revealed
+/// with Alt). No-op off Windows.
+#[tauri::command]
+#[specta::specta]
+pub async fn toggle_main_menu(app: tauri::AppHandle) -> Result<(), VoleeoError> {
+    #[cfg(target_os = "windows")]
+    if let Some(win) = app.get_webview_window("main") {
+        let toggle = if win.is_menu_visible().unwrap_or(false) {
+            win.hide_menu()
+        } else {
+            win.show_menu()
+        };
+        toggle.map_err(|e| VoleeoError::Storage(e.to_string()))?;
+    }
+    let _ = &app;
+    Ok(())
+}
