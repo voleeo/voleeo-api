@@ -37,8 +37,11 @@ jobs:
       - name: Install JS dependencies
         run: bun install --frozen-lockfile
 
-      - name: Generate TS bindings
-        run: bun run codegen
+      - name: Generate TS bindings and verify they're committed
+        run: |
+          bun run codegen
+          git diff --exit-code packages/types/bindings.ts \
+            || (echo "::error::bindings.ts is stale — run 'bun run codegen' and commit the result" && exit 1)
 
       - name: Typecheck
         run: bun run typecheck

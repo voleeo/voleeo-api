@@ -1,0 +1,12 @@
+# Dev-only: regenerates packages/types/bindings.ts. Kept OUT of the voleeo
+# package because Tauri bundles every [[bin]] there into the app — an extra
+# bin breaks codesign (macOS) and bundle copying (deb/nsis).
+[package]
+name = "codegen"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+voleeo = { path = "../src-tauri" }
+specta-typescript = { workspace = true }

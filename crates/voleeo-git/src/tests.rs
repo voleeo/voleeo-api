@@ -258,6 +258,58 @@ fn timestamp_only_change_is_hidden() {
 }
 
 #[test]
+fn gitignore_hidden_from_status_but_committed() {
+    let (_d, path) = setup();
+    write(&path, ".gitignore", ".DS_Store\n");
+    write(&path, "req_a.yaml", "id: a\nname: A\n");
+
+    // `.gitignore` never shows as a user-facing change…
+    let st = status(&path).unwrap();
+    assert!(st.files.iter().all(|f| f.path != ".gitignore"));
+    assert_eq!(st.files.len(), 1);
+
+    // …but committing the entity sweeps `.gitignore` into the commit, leaving the
+    // worktree clean (no perpetually-dirty untracked file).
+    stage(&path, &["req_a.yaml".into()]).unwrap();
+    commit(&path, "add a", None).unwrap();
+    assert!(status(&path).unwrap().files.is_empty());
+    assert_eq!(log_for_path(&path, ".gitignore", 10).unwrap().len(), 1);
+}
+
+#[test]
+fn discard_volatile_changes_reverts_timestamp_only_edits() {
+    let (_d, path) = setup();
+    write(
+        &path,
+        "req_a.yaml",
+        "id: a\nname: A\nupdatedAt: 2026-01-01T00:00:00\n",
+    );
+    write(&path, "req_b.yaml", "id: b\nname: B\n");
+    stage_all(&path).unwrap();
+    commit(&path, "init", None).unwrap();
+
+    // req_a: only updatedAt churned (an edit-then-undo). req_b: real content change.
+    write(
+        &path,
+        "req_a.yaml",
+        "id: a\nname: A\nupdatedAt: 2099-12-31T00:00:00\n",
+    );
+    write(&path, "req_b.yaml", "id: b\nname: CHANGED\n");
+
+    discard_volatile_changes(&path).unwrap();
+
+    // req_a is reset to HEAD on disk — raw git sees it clean again.
+    assert_eq!(
+        fs::read_to_string(path.join("req_a.yaml")).unwrap(),
+        "id: a\nname: A\nupdatedAt: 2026-01-01T00:00:00\n"
+    );
+    // req_b's real change is untouched.
+    assert!(fs::read_to_string(path.join("req_b.yaml"))
+        .unwrap()
+        .contains("CHANGED"));
+}
+
+#[test]
 fn stage_all_includes_new_files() {
     let (_d, path) = setup();
     write(&path, "req_a.yaml", "id: a\n");

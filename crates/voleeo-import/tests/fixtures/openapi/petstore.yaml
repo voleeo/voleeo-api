@@ -1,0 +1,88 @@
+openapi: 3.0.3
+info:
+  title: Swagger Petstore
+  version: 1.0.0
+servers:
+  - url: https://api.example.com/{basePath}
+    variables:
+      basePath:
+        default: v2
+  - url: https://staging.example.com/v2
+tags:
+  - name: pets
+    description: Everything about your Pets
+  - name: store
+components:
+  securitySchemes:
+    api_key:
+      type: apiKey
+      name: X-API-Key
+      in: header
+    petstore_auth:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://api.example.com/oauth/token
+          scopes:
+            read:pets: read your pets
+            write:pets: modify pets
+security:
+  - api_key: []
+paths:
+  /pets:
+    get:
+      summary: List pets
+      operationId: listPets
+      tags: [pets]
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: X-Request-Id
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ok
+    post:
+      summary: Create a pet
+      tags: [pets]
+      security:
+        - petstore_auth: [write:pets]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                age:
+                  type: integer
+      responses:
+        "201":
+          description: created
+  /pets/{petId}:
+    get:
+      summary: Get a pet
+      tags: [pets]
+      parameters:
+        - name: petId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ok
+  /store/inventory:
+    get:
+      summary: Inventory
+      tags: [store]
+      responses:
+        "200":
+          description: ok

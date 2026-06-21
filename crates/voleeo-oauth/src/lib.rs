@@ -92,10 +92,9 @@ pub async fn ensure_token(
     let result = match config.grant {
         OAuth2Grant::ClientCredentials => flow::fetch_client_credentials(&client, config).await?,
         OAuth2Grant::Password => flow::fetch_password(&client, config).await?,
-        OAuth2Grant::AuthorizationCode => {
+        OAuth2Grant::AuthorizationCode | OAuth2Grant::Implicit => {
             return Err(VoleeoError::Http(
-                "No OAuth2 token — acquire it interactively (Get Token in the Auth tab) first"
-                    .into(),
+                "No OAuth2 token — acquire it interactively first".into(),
             ));
         }
     };

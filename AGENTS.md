@@ -23,17 +23,19 @@ Applies to subagents/workflows spawned via the Agent/Workflow tools — pick `mo
 
 ## Code quality
 
+**KISS · DRY · YAGNI.** When planning and writing code, default to the simplest thing that works: stdlib or an already-installed dep before new code, one line before fifty, a native/CSS/DB feature before app code. Build nothing for a need that isn't here yet. Factor *real* duplication — never abstract speculatively (no interface with one impl, no config for a constant). Shortest working diff wins; if you can't name why a piece of code must exist, cut it.
+
 **Single Responsibility.** Each file/component/hook does one thing. If you describe it with "and," split it.
 
 **Readability over cleverness.** Functions short enough to read without scrolling. When a file grows, split into a directory: `index.tsx` orchestrates, hooks/sub-components own one concern each. Canonical examples: `components/ApiRequestTree/`, `views/ApiWorkspace/RequestPane/`, `views/ApiWorkspace/ResponsePane/TimelineTab/`.
 
 **File limit: 250 lines** for `.tsx`/`.ts` in `src-web/src/`. **500 lines** for `.rs` files, excluding `#[cfg(test)]` blocks. Stop and split before adding more code.
 
+**Rust test layout.** Public-API / fixture-driven tests live in `crates/<crate>/tests/<topic>.rs` with data under `tests/fixtures/<group>/`, `include_str!`'d instead of inline blobs — `voleeo-import` is the reference (`tests/openapi.rs` + `tests/fixtures/openapi/petstore.yaml`). Tests that exercise **private** items stay inline in `#[cfg(test)] mod tests` (the external `tests/` dir is a separate crate and can't see private/`pub(crate)` items) — never widen visibility just to relocate a test.
+
 **Comments document the non-obvious.** Only comment important or hard logic — if the code already explains itself, skip it. Skip `// Foo` above a `<Foo/>`, section labels for self-evident JSX, JSDoc that restates the signature. Reserve comments for load-bearing context, surprising trade-offs, "why this and not the natural alternative," and footguns that cost someone an afternoon. Useful: `// Drain hops BEFORE pushing the error event — the policy callback fires after the awaiting task throws.` Useless: `// Set the active tab to params` above `setActiveTab("params")`.
 
-**Keep the comments you keep terse.** When a comment earns its place, say it in the fewest words — one line where it fits, the *why* over the *what*. Prune words that restate the code: `/** Maps to RequestParameter.id in storage. */`, not `/** Stable ID that maps to the corresponding RequestParameter.id field in persistent storage. */`. Collapse multi-line `///` blocks that a single sentence covers.
-
-**Audit comments on every edit.** Both rules above apply to *existing* comments in any file you touch, not just new ones you add. If you scroll past a comment that restates the code, narrates obvious flow, or pads with words — tighten or delete it as part of the same change. Editing a file is the only reliable moment to pay down comment debt; don't leave it for a future "cleanup pass" that never comes.
+**Terse, and audited every edit.** When a comment earns its place, say it in the fewest words — the *why* over the *what*; prune words that restate the code, collapse multi-line `///` blocks a sentence covers. This applies to *existing* comments in any file you touch, not just new ones: tighten or delete padding as part of the same change — editing is the only reliable moment to pay comment debt, not a future "cleanup pass" that never comes.
 
 ## Numbered rules
 
@@ -97,11 +99,7 @@ Several below are distilled from confirmed 100%+ CPU bugs in this codebase. Trea
 
 ### Pre-flight checklist
 
-- [ ] No bare `useStore()` — selectors or `useShallow`
-- [ ] No inline props that child effects depend on
-- [ ] Computed arrays/objects in effect deps wrapped in `useMemo`
-- [ ] All effects have explicit dep arrays
-- [ ] Document/window listeners cleaned up
+- [ ] React render-loop guards: no bare `useStore()`, no inline props child effects depend on, computed effect-deps memoized, explicit dep arrays, listeners cleaned up
 - [ ] No `invoke()` in render or high-frequency effects
 - [ ] No `unwrap`/`panic` in Rust command handlers
 - [ ] No blocking I/O in `async fn` without `spawn_blocking`
@@ -126,7 +124,7 @@ cargo test -p voleeo-storage test_name
 
 ## Commits & releases
 
-**Conventional commits are mandatory** — versioning and release notes derive from them (`cliff.toml`). On every push to `main`, `release.yml` computes the next semver with git-cliff (`feat:` → minor, `fix:`/`perf:` → patch; `chore:`/`docs:`/`ci:`/`refactor:` → no release), builds, and publishes a GitHub release. The version lives in git tags only — CI injects it into `tauri.conf.json` at build time; never bump version fields manually. No `Co-Authored-By: Claude` trailers or AI attribution in commits/PRs.
+**Conventional commits are mandatory** — versioning and release notes derive from them (`cliff.toml`). `release.yml` is **manual-only** (`workflow_dispatch` from the Actions tab or `gh workflow run release.yml`); it computes the next semver with git-cliff (`feat:` → minor, `fix:`/`perf:` → patch; `chore:`/`docs:`/`ci:`/`refactor:` → no release) and skips when there are no releasable commits since the last tag. The version lives in git tags only — CI injects it into `tauri.conf.json` at build time; never bump version fields manually. No `Co-Authored-By: Claude` trailers or AI attribution in commits/PRs.
 
 ## Toolchain
 
@@ -143,7 +141,9 @@ crates/           pure Rust, zero Tauri deps
   voleeo-core     types, errors, traits
   voleeo-storage  YAML storage (workspaces, requests, folders)
   voleeo-crypto   AES-256-GCM + OS keychain
+  voleeo-auth     request signing/encoding (digest, sigv4, oauth1, ntlm)
   voleeo-http     reqwest-based HTTP executor
+  voleeo-import   collection import — OpenAPI/Swagger/Postman/Insomnia → IR → core
   voleeo-ws       live WebSocket connections (Tauri-free HttpExecutor counterpart)
   voleeo-grpc     tonic-based gRPC — descriptor resolution, unary + streaming calls
   voleeo-cookies  cookie jar — model, matching, at-rest crypto

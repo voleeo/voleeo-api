@@ -60,6 +60,45 @@ fn preview(token: &str) -> String {
     }
 }
 
+/// CSRF state + a bound loopback + the redirect URI for an interactive grant,
+/// honoring user-pinned `state`/`redirect_uri` (empty = auto: random state,
+/// random loopback port).
+async fn interactive_setup(
+    config: &OAuth2Config,
+) -> Result<(String, Loopback, String), VoleeoError> {
+    let csrf = if config.state.trim().is_empty() {
+        voleeo_auth::oauth2::gen_state()
+    } else {
+        config.state.trim().to_string()
+    };
+    if config.redirect_uri.trim().is_empty() {
+        let lb = Loopback::bind().await?;
+        let redirect = lb.redirect_uri();
+        return Ok((csrf, lb, redirect));
+    }
+    let uri = config.redirect_uri.trim();
+    let lb = Loopback::bind_port(loopback_port(uri)?).await?;
+    Ok((csrf, lb, uri.to_string()))
+}
+
+/// Port from a `http://127.0.0.1:<port>/...` loopback redirect. The desktop flow
+/// can only catch loopback redirects, so anything else is rejected.
+fn loopback_port(uri: &str) -> Result<u16, VoleeoError> {
+    let host_port = uri
+        .split_once("://")
+        .map_or(uri, |(_, rest)| rest)
+        .split('/')
+        .next()
+        .unwrap_or("");
+    let is_loopback = host_port.starts_with("127.0.0.1:") || host_port.starts_with("localhost:");
+    match (is_loopback, host_port.rsplit(':').next().and_then(|p| p.parse().ok())) {
+        (true, Some(port)) => Ok(port),
+        _ => Err(VoleeoError::InvalidConfig(
+            "Redirect URI must be a loopback address with a port, e.g. http://127.0.0.1:8080/callback".into(),
+        )),
+    }
+}
+
 fn config_of(auth: &AuthConfig) -> Result<OAuth2Config, VoleeoError> {
     OAuth2Config::from_auth(auth)
         .ok_or_else(|| VoleeoError::InvalidConfig("not an OAuth2 auth config".into()))
@@ -148,7 +187,8 @@ pub async fn oauth2_fetch_token(
     auth: AuthConfig,
 ) -> Result<Oauth2TokenStatus, VoleeoError> {
     let config = config_of(&auth)?;
-    if config.token_url.trim().is_empty() {
+    // Implicit has no token endpoint; every other grant needs one.
+    if config.grant != OAuth2Grant::Implicit && config.token_url.trim().is_empty() {
         return Err(VoleeoError::InvalidConfig(
             "OAuth2 token URL is required".into(),
         ));
@@ -157,6 +197,20 @@ pub async fn oauth2_fetch_token(
     let result = match config.grant {
         OAuth2Grant::ClientCredentials => flow::fetch_client_credentials(&client, &config).await?,
         OAuth2Grant::Password => flow::fetch_password(&client, &config).await?,
+        OAuth2Grant::Implicit => {
+            if config.auth_url.trim().is_empty() {
+                return Err(VoleeoError::InvalidConfig(
+                    "OAuth2 authorization URL is required".into(),
+                ));
+            }
+            let (csrf, loopback, redirect) = interactive_setup(&config).await?;
+            let url = flow::build_auth_url(&config, &redirect, &csrf, None);
+            open::that(&url)
+                .map_err(|e| VoleeoError::Http(format!("Failed to open browser: {e}")))?;
+            loopback
+                .wait_for_token(&csrf, Duration::from_secs(120))
+                .await?
+        }
         OAuth2Grant::AuthorizationCode => {
             if config.auth_url.trim().is_empty() {
                 return Err(VoleeoError::InvalidConfig(
@@ -180,9 +234,7 @@ pub async fn oauth2_fetch_token(
                     challenge,
                 }
             });
-            let csrf = voleeo_auth::oauth2::gen_state();
-            let loopback = Loopback::bind().await?;
-            let redirect = loopback.redirect_uri();
+            let (csrf, loopback, redirect) = interactive_setup(&config).await?;
             let url = flow::build_auth_url(
                 &config,
                 &redirect,
