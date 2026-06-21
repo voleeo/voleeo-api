@@ -4,7 +4,10 @@ import {
   LogicalPosition,
   LogicalSize,
 } from "@tauri-apps/api/window"
+import { isMac } from "@/lib/platform"
 import { patchSettings } from "@/lib/workspaceSettings"
+
+export const WELCOME_RESIZABLE = !isMac
 
 export const WELCOME_WIDTH = 900
 export const WELCOME_HEIGHT = 680
@@ -48,7 +51,7 @@ export async function applyWindowSize(
 
 /** Resize + centre the window to the welcome-screen dimensions. */
 export function applyWelcomeWindowSize() {
-  return applyWindowSize(WELCOME_WIDTH, WELCOME_HEIGHT, false)
+  return applyWindowSize(WELCOME_WIDTH, WELCOME_HEIGHT, WELCOME_RESIZABLE)
 }
 
 /** Persist user-driven window resizes (debounced) for the active workspace. */
