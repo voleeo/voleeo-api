@@ -33,6 +33,10 @@ export const SHORTCUTS = {
   /** Toggle the left tree panel visibility */
   TOGGLE_TREE: { key: "h", meta: true } satisfies KeyCombo,
 
+  /** Open the Settings window. On macOS the native menu accelerator handles
+   *  this; Windows/Linux hide the menu, so a frontend handler covers it. */
+  SETTINGS: { key: ",", meta: true } satisfies KeyCombo,
+
   /** Open the Keyboard Shortcuts modal */
   SHOW_SHORTCUTS: { key: "/", meta: true, alt: true } satisfies KeyCombo,
 
@@ -93,9 +97,7 @@ export const SHORTCUT_HELP: {
     description: "Open the command palette",
   },
   {
-    // Handled by the native menu accelerator (`CmdOrCtrl+,`), not useKeydown —
-    // this entry only documents it in the shortcuts modal.
-    combo: { key: ",", meta: true },
+    combo: SHORTCUTS.SETTINGS,
     description: "Open settings",
   },
   {
