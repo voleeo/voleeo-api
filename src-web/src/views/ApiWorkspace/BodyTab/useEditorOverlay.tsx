@@ -31,7 +31,7 @@ export function useEditorOverlay(onChange: (text: string) => void) {
   )
   openFuncRef.current = funcModal.openFunc
 
-  return { overlay, funcModal }
+  return { overlay, funcModal, varKeys }
 }
 
 export function EditorOverlayPortal({

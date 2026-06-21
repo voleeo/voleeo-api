@@ -15,7 +15,7 @@ function rewrite(value: string, oldToken: string, newToken: string): string {
 /** Rewrite tokens in every string field of an auth config. Discriminant/enum
  *  strings (`kind`, `signature_method`, …) never match a `{{ token }}`, and
  *  ciphertext secret values don't either, so a blanket string rewrite is safe. */
-function rewriteAuth(
+export function rewriteAuth(
   auth: AuthConfig | null | undefined,
   oldToken: string,
   newToken: string,
@@ -37,7 +37,7 @@ function rewriteAuth(
 
 /** Rewrite tokens in a request body's text, non-file field values, and GraphQL
  *  variables. File paths and content types are left untouched. */
-function rewriteBody(
+export function rewriteBody(
   body: RequestBody | null | undefined,
   oldToken: string,
   newToken: string,

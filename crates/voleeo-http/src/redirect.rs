@@ -45,7 +45,7 @@ pub(crate) fn compute_redirect_warning(
     // 301/302/303 turn a non-GET/HEAD request into GET, discarding the body.
     let body_dropped = had_body
         && !matches!(method.as_str(), "GET" | "HEAD")
-        && hops.iter().any(|h| matches!(h.status, 301 | 302 | 303));
+        && hops.iter().any(|h| matches!(h.status, 301..=303));
 
     // Cross-origin redirects strip sensitive headers (reqwest's behaviour).
     const SENSITIVE: &[&str] = &["authorization", "cookie", "proxy-authorization"];

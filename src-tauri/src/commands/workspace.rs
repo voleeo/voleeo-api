@@ -300,7 +300,21 @@ pub async fn delete_workspace(
     // remove_dir_all, keychain delete, and YAML cleanup all block; the secrets
     // guard is taken via blocking_write so it never crosses an .await.
     run_blocking(move || {
-        workspaces.delete(&workspace_id)?;
+        // When synced, workspaces/{id} is a symlink to a custom folder.
+        // storage.delete() can't recurse a symlink — it would orphan the files
+        // in the sync dir. Delete the real folder, then drop the symlink.
+        let internal_dir = app_data_dir.join("workspaces").join(&workspace_id);
+        if internal_dir.is_symlink() {
+            if let Ok(target) = std::fs::read_link(&internal_dir) {
+                if let Err(e) = std::fs::remove_dir_all(&target) {
+                    eprintln!("[workspace] failed to delete sync folder {target:?}: {e}");
+                }
+            }
+            std::fs::remove_file(&internal_dir)
+                .map_err(|e| VoleeoError::Storage(format!("remove symlink: {e}")))?;
+        } else {
+            workspaces.delete(&workspace_id)?;
+        }
         // Best-effort cleanup of secrets, encryption key, and machine-local env files.
         let _ = secrets.blocking_write().remove(&workspace_id);
         workspace_key::delete_key(&workspace_id, &app_data_dir);
@@ -372,6 +386,23 @@ pub async fn workspace_set_sync_dir(
                 } else {
                     internal_dir.clone()
                 };
+
+                // Refuse a folder that already holds another workspace's data —
+                // copying into it would clobber it. Re-selecting the current sync
+                // dir is a no-op and allowed.
+                let same_as_current = match (
+                    std::fs::canonicalize(&new_dir),
+                    std::fs::canonicalize(&copy_src),
+                ) {
+                    (Ok(a), Ok(b)) => a == b,
+                    _ => false,
+                };
+                if !same_as_current && dir_has_workspace_data(&new_dir) {
+                    return Err(VoleeoError::InvalidConfig(format!(
+                        "{} already contains workspace files. Choose an empty folder.",
+                        new_dir.display()
+                    )));
+                }
 
                 copy_workspace_files(&copy_src, &new_dir)?;
                 ensure_gitignore(&new_dir)?;
@@ -680,6 +711,26 @@ pub async fn workspace_save_settings(
     .map_err(|e| VoleeoError::Storage(e.to_string()))?
 }
 
+/// True if `dir` already looks like a Voleeo workspace — a `workspace.yaml` or
+/// any per-entity `{req,ws,grpc,folder}_*.yaml`. Used to refuse syncing into a
+/// folder whose contents we'd overwrite.
+fn dir_has_workspace_data(dir: &Path) -> bool {
+    if dir.join("workspace.yaml").exists() {
+        return true;
+    }
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return false;
+    };
+    entries.flatten().any(|e| {
+        let name = e.file_name();
+        let name = name.to_string_lossy();
+        name.ends_with(".yaml")
+            && ["req_", "ws_", "grpc_", "folder_"]
+                .iter()
+                .any(|p| name.starts_with(p))
+    })
+}
+
 fn copy_workspace_files(src: &Path, dst: &Path) -> Result<(), VoleeoError> {
     std::fs::create_dir_all(dst)
         .map_err(|e| VoleeoError::Storage(format!("cannot create dir {dst:?}: {e}")))?;
@@ -697,4 +748,33 @@ fn copy_workspace_files(src: &Path, dst: &Path) -> Result<(), VoleeoError> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::dir_has_workspace_data;
+
+    #[test]
+    fn detects_workspace_data_and_ignores_unrelated() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path();
+        assert!(!dir_has_workspace_data(p), "empty dir is fine");
+
+        std::fs::write(p.join("README.md"), "hi").unwrap();
+        std::fs::write(p.join("notes.yaml"), "x").unwrap();
+        assert!(!dir_has_workspace_data(p), "unrelated files are fine");
+
+        std::fs::write(p.join("req_abc.yaml"), "x").unwrap();
+        assert!(
+            dir_has_workspace_data(p),
+            "per-entity yaml is workspace data"
+        );
+
+        std::fs::remove_file(p.join("req_abc.yaml")).unwrap();
+        std::fs::write(p.join("workspace.yaml"), "x").unwrap();
+        assert!(
+            dir_has_workspace_data(p),
+            "workspace.yaml is workspace data"
+        );
+    }
 }

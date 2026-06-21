@@ -12,7 +12,6 @@ import { light } from "./themes/light"
 import { lightOwl } from "./themes/light-owl"
 import { nightOwl } from "./themes/night-owl"
 import { nord } from "./themes/nord"
-import { onedark } from "./themes/onedark"
 import { rosePine } from "./themes/rose-pine"
 import { rosePineDawn } from "./themes/rose-pine-dawn"
 import { rosePineMoon } from "./themes/rose-pine-moon"
@@ -27,7 +26,6 @@ export const plugin: VoleeoPlugin = {
   themes: [
     dark,
     light,
-    onedark,
     nord,
     nightOwl,
     lightOwl,

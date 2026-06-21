@@ -1,0 +1,115 @@
+{
+  "yaakVersion": "2024.1.0",
+  "yaakSchema": 4,
+  "timestamp": "2024-01-01T00:00:00",
+  "resources": {
+    "workspaces": [
+      {
+        "model": "workspace",
+        "id": "wk_1",
+        "name": "Sample API",
+        "authenticationType": "bearer",
+        "authentication": { "token": "${[ token ]}" }
+      }
+    ],
+    "environments": [
+      {
+        "model": "environment",
+        "id": "ev_base",
+        "name": "Global",
+        "workspaceId": "wk_1",
+        "parentModel": "workspace",
+        "parentId": null,
+        "variables": [
+          { "name": "base_url", "value": "https://api.example.com", "enabled": true }
+        ]
+      },
+      {
+        "model": "environment",
+        "id": "ev_sub",
+        "name": "Sub",
+        "workspaceId": "wk_1",
+        "parentModel": "environment",
+        "parentId": "ev_base",
+        "variables": [{ "name": "x", "value": "y" }]
+      }
+    ],
+    "folders": [
+      {
+        "model": "folder",
+        "id": "fl_users",
+        "workspaceId": "wk_1",
+        "folderId": null,
+        "name": "Users",
+        "sortPriority": -100
+      }
+    ],
+    "httpRequests": [
+      {
+        "model": "http_request",
+        "id": "rq_get",
+        "workspaceId": "wk_1",
+        "folderId": "fl_users",
+        "name": "Get user",
+        "method": "GET",
+        "url": "${[ base_url ]}/users/:id",
+        "urlParameters": [
+          { "name": ":id", "value": "1", "enabled": true },
+          { "name": "expand", "value": "profile", "enabled": true },
+          { "name": "fields", "value": "name", "enabled": false }
+        ],
+        "headers": [{ "name": "Accept", "value": "application/json", "enabled": true }],
+        "sortPriority": -90,
+        "authenticationType": null,
+        "authentication": {}
+      },
+      {
+        "model": "http_request",
+        "id": "rq_create",
+        "workspaceId": "wk_1",
+        "folderId": "fl_users",
+        "name": "Create user",
+        "method": "POST",
+        "url": "${[ base_url ]}/users",
+        "bodyType": "application/json",
+        "body": { "text": "{\"name\":\"Ada\"}" },
+        "sortPriority": -80,
+        "authenticationType": null,
+        "authentication": {}
+      },
+      {
+        "model": "http_request",
+        "id": "rq_upload",
+        "workspaceId": "wk_1",
+        "folderId": null,
+        "name": "Upload avatar",
+        "method": "POST",
+        "url": "${[ base_url ]}/avatar",
+        "bodyType": "multipart/form-data",
+        "body": {
+          "form": [
+            { "enabled": true, "name": "caption", "value": "me" },
+            { "enabled": true, "name": "file", "file": "/tmp/a.png" }
+          ]
+        },
+        "sortPriority": -70,
+        "authenticationType": "basic",
+        "authentication": { "username": "u", "password": "p" }
+      },
+      {
+        "model": "http_request",
+        "id": "rq_gql",
+        "workspaceId": "wk_1",
+        "folderId": null,
+        "name": "GraphQL",
+        "method": "POST",
+        "url": "${[ base_url ]}/graphql",
+        "bodyType": "graphql",
+        "body": { "query": "query { me { id } }", "variables": "{}" },
+        "sortPriority": -60,
+        "authenticationType": "none",
+        "authentication": {}
+      }
+    ]
+  }
+}

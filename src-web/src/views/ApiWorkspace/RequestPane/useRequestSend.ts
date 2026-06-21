@@ -179,7 +179,6 @@ export function useRequestSend({
     else void handleSend()
   }
   useKeydown(SHORTCUTS.SEND_REQUEST, sendOrCancel)
-  useKeydown(SHORTCUTS.SEND_REQUEST_CTRL, sendOrCancel)
 
   return { isSending, commitUrl, commitMethod, handleSend, cancelActive }
 }

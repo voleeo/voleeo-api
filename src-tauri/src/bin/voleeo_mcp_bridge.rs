@@ -1,7 +1,8 @@
-//! Thin stdio ↔ Unix socket bridge for the Voleeo MCP server.
+//! Thin stdio ↔ local-IPC bridge for the Voleeo MCP server.
 //!
 //! Claude Desktop / Claude Code spawns this binary per session. The bridge:
-//!   1. Connects to the Voleeo app's Unix socket (retries with backoff).
+//!   1. Connects to the Voleeo app (Unix socket on macOS/Linux, named pipe on
+//!      Windows) — retries with backoff.
 //!   2. Sends the auth token on the first line.
 //!   3. Checks the server's OK response.
 //!   4. Relays stdin → socket and socket → stdout transparently.
@@ -11,12 +12,11 @@
 //!   VOLEEO_MCP_TOKEN  — auth token shown in Voleeo's gear menu › MCP Bridge.
 //!
 //! Optional env vars:
-//!   VOLEEO_SOCKET_PATH — override the socket path (default: platform standard).
+//!   VOLEEO_SOCKET_PATH — override the socket path / pipe name (default: platform standard).
 
 use std::time::Duration;
 
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::UnixStream;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 #[tokio::main]
 async fn main() {
@@ -71,11 +71,33 @@ enum SessionResult {
 }
 
 async fn try_session(token: &str, socket_path: &str) -> SessionResult {
-    let mut stream = match UnixStream::connect(socket_path).await {
-        Ok(s) => s,
-        Err(e) => return SessionResult::ConnectError(e),
+    #[cfg(unix)]
+    let stream = {
+        use tokio::net::UnixStream;
+        match UnixStream::connect(socket_path).await {
+            Ok(s) => s,
+            Err(e) => return SessionResult::ConnectError(e),
+        }
+    };
+    #[cfg(windows)]
+    let stream = {
+        use tokio::net::windows::named_pipe::ClientOptions;
+        // A busy pipe surfaces as ConnectError → the outer loop backs off and retries.
+        match ClientOptions::new().open(socket_path) {
+            Ok(s) => s,
+            Err(e) => return SessionResult::ConnectError(e),
+        }
     };
 
+    relay(stream, token).await
+}
+
+/// Auth handshake then transparent stdin↔stream relay. Generic over the
+/// transport so Unix sockets and Windows named pipes share one code path.
+async fn relay<S>(mut stream: S, token: &str) -> SessionResult
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+{
     // Auth handshake: send token, read one-line response.
     if stream
         .write_all(format!("{token}\n").as_bytes())
@@ -142,8 +164,7 @@ fn default_socket_path() -> String {
     }
     #[cfg(target_os = "windows")]
     {
-        let app_data = std::env::var("APPDATA").unwrap_or_else(|_| ".".into());
-        format!("{app_data}\\com.voleeo.desktop\\mcp.sock")
+        voleeo_mcp::WINDOWS_PIPE_NAME.to_string()
     }
     #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
     {

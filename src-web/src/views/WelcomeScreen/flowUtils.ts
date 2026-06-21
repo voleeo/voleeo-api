@@ -4,10 +4,12 @@ import {
   LogicalPosition,
   LogicalSize,
 } from "@tauri-apps/api/window"
+import { isMac } from "@/lib/platform"
 
 export const FLOW_WIDTH = 900
 const MIN_HEIGHT = 280
-const TOPBAR_HEIGHT = 44
+
+const TOP_CHROME = isMac ? 40 : 0
 
 export async function applyFlowWindowHeight(height: number) {
   try {
@@ -17,11 +19,15 @@ export async function applyFlowWindowHeight(height: number) {
     const maxH = monitor
       ? Math.floor(monitor.size.height / monitor.scaleFactor) - 80
       : 900
-    const contentH = Math.max(
-      MIN_HEIGHT,
-      Math.min(height, maxH - TOPBAR_HEIGHT),
-    )
-    const windowH = contentH + TOPBAR_HEIGHT
+    const contentH = Math.max(MIN_HEIGHT, Math.min(height, maxH - TOP_CHROME))
+    const windowH = contentH + TOP_CHROME
+    // Lower the OS min-height first: the window's configured minHeight (680)
+    // would otherwise clamp short flows back up on resizable Windows/Linux,
+    // re-introducing the empty space. Width stays at the 900 floor. Its own
+    // try/catch so a failure here never skips the setSize below.
+    try {
+      await win.setMinSize(new LogicalSize(FLOW_WIDTH, MIN_HEIGHT))
+    } catch {}
     await win.setSize(new LogicalSize(FLOW_WIDTH, windowH))
     if (monitor) {
       const sf = monitor.scaleFactor

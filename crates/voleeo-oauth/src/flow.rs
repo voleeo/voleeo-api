@@ -19,6 +19,8 @@ pub struct OAuth2Config {
     pub use_pkce: bool,
     pub code_challenge_method: OAuth2PkceMethod,
     pub code_verifier: String,
+    pub redirect_uri: String,
+    pub state: String,
     pub username: String,
     pub password: String,
 }
@@ -38,6 +40,8 @@ impl OAuth2Config {
                 use_pkce,
                 code_challenge_method,
                 code_verifier,
+                redirect_uri,
+                state,
                 username,
                 password,
                 ..
@@ -53,6 +57,8 @@ impl OAuth2Config {
                 use_pkce: *use_pkce,
                 code_challenge_method: *code_challenge_method,
                 code_verifier: code_verifier.clone(),
+                redirect_uri: redirect_uri.clone(),
+                state: state.clone(),
                 username: username.clone(),
                 password: password.clone(),
             }),
@@ -65,6 +71,7 @@ impl OAuth2Config {
             OAuth2Grant::ClientCredentials => "client_credentials",
             OAuth2Grant::AuthorizationCode => "authorization_code",
             OAuth2Grant::Password => "password",
+            OAuth2Grant::Implicit => "implicit",
         }
     }
 
@@ -116,8 +123,13 @@ pub fn build_auth_url(
     state: &str,
     code_challenge: Option<&str>,
 ) -> String {
+    let response_type = if config.grant == OAuth2Grant::Implicit {
+        "token"
+    } else {
+        "code"
+    };
     let mut q = vec![
-        "response_type=code".to_string(),
+        format!("response_type={response_type}"),
         format!("client_id={}", uri_encode(&config.client_id)),
         format!("redirect_uri={}", uri_encode(redirect_uri)),
         format!("state={}", uri_encode(state)),

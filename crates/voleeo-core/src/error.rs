@@ -59,4 +59,6 @@ pub enum VoleeoError {
     Grpc(String),
     #[error("grpc: {0}")]
     GrpcFailed(GrpcFailure),
+    #[error("import: {0}")]
+    Import(String),
 }

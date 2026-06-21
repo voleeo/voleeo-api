@@ -1,0 +1,88 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "__export_source": "insomnia.desktop.app:v2023.5.8",
+  "resources": [
+    { "_id": "wrk_1", "_type": "workspace", "parentId": null, "name": "Sample API" },
+    {
+      "_id": "env_base",
+      "_type": "environment",
+      "parentId": "wrk_1",
+      "name": "Base Environment",
+      "data": { "base_url": "https://api.example.com" }
+    },
+    {
+      "_id": "fld_users",
+      "_type": "request_group",
+      "parentId": "wrk_1",
+      "name": "Users",
+      "metaSortKey": -100,
+      "authentication": { "type": "bearer", "token": "{{ _.token }}" },
+      "headers": [],
+      "environment": {}
+    },
+    {
+      "_id": "req_get",
+      "_type": "request",
+      "parentId": "fld_users",
+      "name": "Get user",
+      "method": "GET",
+      "url": "{{ _.base_url }}/users/:id",
+      "metaSortKey": -90,
+      "parameters": [
+        { "name": "expand", "value": "profile" },
+        { "name": "fields", "value": "name", "disabled": true }
+      ],
+      "headers": [{ "name": "Accept", "value": "application/json" }],
+      "authentication": {},
+      "body": {}
+    },
+    {
+      "_id": "req_create",
+      "_type": "request",
+      "parentId": "fld_users",
+      "name": "Create user",
+      "method": "POST",
+      "url": "{{ _.base_url }}/users",
+      "metaSortKey": -80,
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "X-Time", "value": "{% now 'iso-8601' %}" }
+      ],
+      "body": { "mimeType": "application/json", "text": "{\n  \"name\": \"Ada\"\n}" },
+      "authentication": {}
+    },
+    {
+      "_id": "req_upload",
+      "_type": "request",
+      "parentId": "wrk_1",
+      "name": "Upload avatar",
+      "method": "POST",
+      "url": "{{ _.base_url }}/avatar",
+      "metaSortKey": -70,
+      "body": {
+        "mimeType": "multipart/form-data",
+        "params": [
+          { "name": "caption", "value": "me" },
+          { "name": "file", "type": "file", "fileName": "/tmp/a.png" }
+        ]
+      },
+      "authentication": { "type": "basic", "username": "u", "password": "p" }
+    },
+    {
+      "_id": "req_gql",
+      "_type": "request",
+      "parentId": "wrk_1",
+      "name": "GraphQL search",
+      "method": "POST",
+      "url": "{{ _.base_url }}/graphql",
+      "metaSortKey": -60,
+      "body": {
+        "mimeType": "application/graphql",
+        "text": "{\"query\":\"query { me { id } }\",\"variables\":{}}"
+      },
+      "authentication": {}
+    },
+    { "_id": "spec_1", "_type": "api_spec", "parentId": "wrk_1", "contents": "ignored" }
+  ]
+}

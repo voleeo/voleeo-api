@@ -3,7 +3,6 @@ target/
 dist/
 .DS_Store
 src-web/dist/
-packages/types/bindings.ts
 .idea/
 src-web/tsconfig.tsbuildinfo
 src-tauri/binaries/
