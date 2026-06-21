@@ -112,6 +112,7 @@ const KIND_MAP: Record<string, Icon> = {
   "arrow-left": ArrowLeftIcon,
   "arrows-left-right": ArrowsLeftRightIcon,
   import: DownloadSimpleIcon,
+  "download-simple": DownloadSimpleIcon,
   grid: SquaresFourIcon,
   list: ListIcon,
   terminal: TerminalIcon,

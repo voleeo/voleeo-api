@@ -78,6 +78,23 @@ pub async fn settings_set_custom_title_bar(
 
 #[tauri::command]
 #[specta::specta]
+pub async fn settings_get_auto_update(state: State<'_, AppState>) -> Result<bool, VoleeoError> {
+    Ok(*state.auto_update.read().await)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn settings_set_auto_update(
+    state: State<'_, AppState>,
+    enabled: bool,
+) -> Result<(), VoleeoError> {
+    *state.auto_update.write().await = enabled;
+    state.save_settings().await;
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
 pub async fn reposition_window_controls(window: tauri::Window) -> Result<(), VoleeoError> {
     #[cfg(target_os = "macos")]
     voleeo_mac_window::reposition_traffic_lights(&window);
