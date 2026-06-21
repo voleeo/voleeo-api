@@ -4,54 +4,60 @@
 [![CI](https://github.com/coffeein-dev/voleeo-api/actions/workflows/ci.yml/badge.svg)](https://github.com/coffeein-dev/voleeo-api/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+  <h1 align="center">AI-friendly API client</h1>
 </div>
 
-An **AI-native local toolkit with an MCP bridge**. 
+<p align="center">
+One native, <strong>AI-friendly</strong> client for HTTP, gRPC, WebSocket, and GraphQL.
+The local-first client for the AI era.
+</p>
 
-Voleeo is an open-source, AI-native desktop API client for HTTP, HTTPS, and WebSocket — built so a
-human developer and an AI agent (over [MCP](https://modelcontextprotocol.io)) drive the same workspace.
+<img src=".github/assets/voleeo-demo.png" alt="Voleeo" />
 
-With Voleeo you can:
+**One client. Every protocol.** Voleeo is a free, open-source, local-first API client for
+HTTP, gRPC, WebSocket, and GraphQL — built for the AI era.
 
-- **Hand your workspace to an AI agent** — any MCP client drives the exact requests, environments, and cookie jars you see on screen.
-- **Send and dissect requests** over HTTP/HTTPS and WebSocket, with a phase-by-phase timeline (DNS, redirects, chunks, errors) and in-flight cancellation.
-- **Tame huge responses** — stream and window 20MB+ bodies, filter with JSONPath, fold code, and search them server-side.
-- **Template anything** — `{{ ENV_VAR }}`, `{{ uuid.v4() }}`, and plugin functions resolve at send time and render as chips.
-- **Version collections in Git** — review, commit, push/pull, branch, and resolve conflicts, with per-file history and revert.
-- **Keep secrets encrypted at rest** — per-workspace AES-256-GCM with keys in the OS keychain.
-- **Extend it with plugins** — contribute base16 themes, template functions, and request actions.
+> [!WARNING]
+> **Voleeo is in early access (EA).**<br />
+> Expect rough edges and the occasional bug while we move fast.
+> Don't rely on it for production work yet — and if something breaks, [open an issue](https://github.com/voleeo/voleeo-app/issues).<br />
+> Your feedback shapes what ships next.
 
-> Status: pre-release. Formats and APIs may change without migration shims.
+## Features
 
-## Build from source
+Voleeo runs natively on your machine — no browser CORS limits, no payload caps, no 30-second timeouts. 
+Zero telemetry, no account, no cloud lock-in: your workspaces and secrets live on disk and stay there.
 
-Requires [Bun](https://bun.sh), a Rust toolchain, and **Node 24.15.0** (pinned in `.nvmrc`).
+### ⚡ Every protocol, one window
 
-```bash
-nvm use            # activate Node 24.15.0
-bun install        # install JS deps
-bun run dev        # Tauri + Vite with HMR (dev window)
-bun run build      # production build
-```
+- Send requests over HTTP/HTTPS, gRPC, WebSocket, and GraphQL — one app, one UI.
+- Import collections/workspaces from OpenAPI, Swagger, Postman, Insomnia, Bruno or Yaak.
+- Inspect each request with a phase-by-phase timeline (DNS, redirects, chunks, errors) and in-flight cancellation.
+- Stream and window 20 MB+ responses, filter with JSONPath, fold, and search them server-side.
 
-Tauri also needs your platform's system webview/build dependencies — see the
-[Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/).
+### 🤖 Built for AI agents
 
-Useful checks:
+- Voleeo is an [MCP](https://modelcontextprotocol.io) server — point any MCP client at it and your agent shares the workspace you see on screen.
+- Agents read, create, and edit requests, run calls, and manage environments without leaving the chat.
 
-```bash
-bun run typecheck
-bun run lint               # biome
-cargo check --workspace
-cargo clippy --workspace
-cargo test --workspace
-```
+### 🔐 Stay secure
 
-## MCP quickstart
+- Authenticate with OAuth 2.0, Bearer, Basic, AWS SigV4, Digest, or NTLM.
+- Encrypt sensitive values per workspace with AES-256-GCM.
+- Store keys in your OS keychain, outside the synced workspace.
 
-Voleeo is an MCP **server**. Enable the bridge in the app, then point your MCP client at the bundled
-`voleeo-mcp-bridge` sidecar — the app's `get_app_info` returns its on-disk path to wire into your
-client config, and the in-app MCP modal shows per-client setup steps.
+### 🔀 Organize & collaborate
+
+- Group requests into workspaces and nested folders.
+- Switch between dev, staging, and prod with global, personal, and folder-scoped variables.
+- Version collections in Git — commit, push/pull, branch, and resolve conflicts, with per-file history and revert.
+
+### 🛠️ Extend & customize
+
+- Insert dynamic values like `{{ uuid.v4() }}` or timestamps with template functions, rendered as chips.
+- Chain values from earlier responses into the next request.
+- Pick from built-in base16 themes or build your own.
+- Write plugins that add themes, template functions, and request actions.
 
 ## Contributing
 

@@ -7,8 +7,6 @@ import {
 import { isMac } from "@/lib/platform"
 import { patchSettings } from "@/lib/workspaceSettings"
 
-export const WELCOME_RESIZABLE = !isMac
-
 export const WELCOME_WIDTH = 900
 export const WELCOME_HEIGHT = 680
 export const DEFAULT_WORKSPACE_WIDTH = 1000
@@ -49,9 +47,11 @@ export async function applyWindowSize(
   }
 }
 
-/** Resize + centre the window to the welcome-screen dimensions. */
+/** Resize + centre the window to the welcome-screen dimensions. Fixed-size on
+ *  macOS (the launcher auto-fits its content there); resizable on Windows/Linux,
+ *  where the launcher fills and centres instead. */
 export function applyWelcomeWindowSize() {
-  return applyWindowSize(WELCOME_WIDTH, WELCOME_HEIGHT, WELCOME_RESIZABLE)
+  return applyWindowSize(WELCOME_WIDTH, WELCOME_HEIGHT, !isMac)
 }
 
 /** Persist user-driven window resizes (debounced) for the active workspace. */

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
+import { isMac } from "@/lib/platform"
+import { cn } from "@/lib/utils"
 import { applyWelcomeWindowSize, useUiStore } from "@/store/workspace"
 import { ApiClientFlow } from "./ApiClientFlow"
 import { HomeView } from "./HomeView"
@@ -19,11 +21,18 @@ export function WelcomeScreen() {
     applyWelcomeWindowSize()
   }, [])
 
-  // Flow modes use a plain div (no h-full, no flex) so FlowShell sizes to
-  // its own content height and ResizeObserver reads the correct value.
+  // On macOS the flow uses a plain div (no h-full/flex) so FlowShell can grow
+  // the fixed window to its own content height. On resizable platforms the
+  // window doesn't auto-fit, so fill and centre the flow instead.
   if (mode !== "home") {
     return (
-      <div className="bg-bg">
+      <div
+        className={cn(
+          "bg-bg",
+          !isMac &&
+            "h-full flex flex-col items-center [justify-content:safe_center] overflow-auto",
+        )}
+      >
         {mode === "api" && <ApiClientFlow onCancel={goHome} />}
         {mode === "import" && <ImportFlow onCancel={goHome} />}
       </div>

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react"
 import { useEffect, useRef } from "react"
 import { Glyph } from "@/components/Glyph"
+import { isMac } from "@/lib/platform"
 import { applyFlowWindowHeight } from "./flowUtils"
 
 interface FlowShellProps {
@@ -25,7 +26,9 @@ export function FlowShell({
   const shellRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (!autoResizeWindow) return
+    // Only macOS auto-fits the fixed launcher window to content; on resizable
+    // platforms the flow fills and centres instead (see WelcomeScreen).
+    if (!autoResizeWindow || !isMac) return
     function measure() {
       const h = shellRef.current?.offsetHeight ?? 0
       if (h > 0) applyFlowWindowHeight(h)
