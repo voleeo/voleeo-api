@@ -19,12 +19,9 @@ export function MainLayout() {
   }, [])
 
   return (
-    <div
-      className="grid h-screen"
-      style={{ gridTemplateRows: "var(--topbar-height) 1fr" }}
-    >
+    <div className="flex flex-col h-screen">
       {activeTool === "welcome" ? <WelcomeTitleBar /> : <TopBar />}
-      <div className="overflow-hidden h-full">
+      <div className="flex-1 min-h-0 overflow-hidden">
         <ToolViewport activeTool={activeTool} />
       </div>
       <CommandPalette />
