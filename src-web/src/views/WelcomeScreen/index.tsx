@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useState } from "react"
-import { isMac } from "@/lib/platform"
-import { cn } from "@/lib/utils"
 import { applyWelcomeWindowSize, useUiStore } from "@/store/workspace"
 import { ApiClientFlow } from "./ApiClientFlow"
 import { HomeView } from "./HomeView"
@@ -23,7 +21,7 @@ export function WelcomeScreen() {
 
   if (mode !== "home") {
     return (
-      <div className={cn("bg-bg", !isMac && "h-full")}>
+      <div className="bg-bg h-full overflow-auto">
         {mode === "api" && <ApiClientFlow onCancel={goHome} />}
         {mode === "import" && <ImportFlow onCancel={goHome} />}
       </div>

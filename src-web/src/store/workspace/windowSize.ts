@@ -25,6 +25,11 @@ export async function applyWindowSize(
     const monitor = await currentMonitor()
     ignoringResizeCount += 1
     await win.setResizable(resizable)
+    // Restore the standard floor (flows lower it to fit short content). Own
+    // try/catch so a failure never skips the setSize below.
+    try {
+      await win.setMinSize(new LogicalSize(WELCOME_WIDTH, WELCOME_HEIGHT))
+    } catch {}
     await win.setSize(new LogicalSize(width, height))
     if (monitor) {
       const sf = monitor.scaleFactor
