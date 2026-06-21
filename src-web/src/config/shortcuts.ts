@@ -9,8 +9,8 @@ import { isMac } from "@/lib/platform"
  *
  * KeyCombo fields:
  *   key   — the key string (case-insensitive), e.g. "n", "k", "/"
- *   meta  — Cmd on macOS / Win on Windows
- *   ctrl  — Ctrl key
+ *   meta  — primary modifier: Cmd on macOS, Ctrl on Windows/Linux
+ *   ctrl  — literal Ctrl on every platform
  *   shift — Shift key
  *   alt   — Alt / Option key
  */
@@ -21,17 +21,11 @@ export const SHORTCUTS = {
   /** Open Command Palette */
   COMMAND_PALETTE: { key: "k", meta: true } satisfies KeyCombo,
 
-  /** Show & focus the request search field (macOS) */
+  /** Show & focus the request search field */
   SEARCH: { key: "f", meta: true } satisfies KeyCombo,
 
-  /** Show & focus the request search field (Windows / Linux) */
-  SEARCH_CTRL: { key: "f", ctrl: true } satisfies KeyCombo,
-
-  /** Send the selected API request (macOS) */
+  /** Send the selected API request */
   SEND_REQUEST: { key: "Enter", meta: true } satisfies KeyCombo,
-
-  /** Send the selected API request (Windows / Linux) */
-  SEND_REQUEST_CTRL: { key: "Enter", ctrl: true } satisfies KeyCombo,
 
   /** Toggle the request/response split between columns and rows */
   TOGGLE_LAYOUT: { key: "/", meta: true } satisfies KeyCombo,
@@ -75,8 +69,8 @@ export const SHORTCUTS = {
 /** Which workspace a shortcut applies to. `shared` works everywhere. */
 
 /**
- * Display metadata for the Keyboard Shortcuts modal. One entry per *logical*
- * shortcut (SEARCH_CTRL is the Windows alias of SEARCH, so it isn't listed).
+ * Display metadata for the Keyboard Shortcuts modal. `meta` renders as ⌘ on
+ * macOS and Ctrl on Windows/Linux, so one entry covers every platform.
  */
 export const SHORTCUT_HELP: {
   combo: KeyCombo

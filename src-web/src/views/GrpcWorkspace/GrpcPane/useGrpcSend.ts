@@ -62,7 +62,6 @@ export function useGrpcSend(
     else handlers.onSend()
   }
   useKeydown(SHORTCUTS.SEND_REQUEST, onSendShortcut)
-  useKeydown(SHORTCUTS.SEND_REQUEST_CTRL, onSendShortcut)
 
   return { status, kind, canSend, handlers, onSendShortcut }
 }

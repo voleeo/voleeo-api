@@ -54,7 +54,6 @@ export function RequestTreePane() {
   }, [searchVisible])
 
   useKeydown(SHORTCUTS.SEARCH, revealSearch)
-  useKeydown(SHORTCUTS.SEARCH_CTRL, revealSearch)
 
   useEffect(() => {
     if (activeWorkspaceId) load(activeWorkspaceId)
