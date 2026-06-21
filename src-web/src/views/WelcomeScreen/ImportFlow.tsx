@@ -118,7 +118,7 @@ export function ImportFlow({ onCancel }: ImportFlowProps) {
       }
     >
       <Section label="Open a folder">
-        <div className={cn(CARD, "flex items-center gap-3.5")}>
+        <div className={cn(CARD, "flex items-center gap-4 mb-4")}>
           <IconBox kind="folder" />
           <div className="flex-1 min-w-0">
             <div className="font-sans text-[0.95rem] font-semibold text-fg">
@@ -141,7 +141,7 @@ export function ImportFlow({ onCancel }: ImportFlowProps) {
       </Section>
 
       <Section label="Clone a git repository">
-        <div className={cn(CARD, "flex flex-col gap-3")}>
+        <div className={cn(CARD, "flex flex-col gap-4 mb-4")}>
           <div className="flex flex-col gap-1.5">
             <span className="text-[0.786rem] text-fg">
               Repository URL <span className="text-muted">(SSH or HTTPS)</span>
@@ -221,7 +221,7 @@ export function ImportFlow({ onCancel }: ImportFlowProps) {
           onClick={() => setImportOpen(true)}
           className={cn(
             CARD,
-            "w-full flex items-center gap-3.5 text-left cursor-pointer outline-none hover:border-accent/60 transition-colors",
+            "w-full flex items-center gap-4 text-left cursor-pointer outline-none hover:border-accent/60 transition-colors",
           )}
         >
           <IconBox kind="import" accent />

@@ -5,15 +5,12 @@ import { useRequestActions } from "@/plugins/hooks"
 import type { BoundRequestAction } from "@/plugins/types"
 import { useGitStore } from "@/store/git"
 import { useRequestStore } from "@/store/requests"
+import { CreateItems } from "./CreateItems"
+import { ITEM_CLASSES, SEP } from "./contextMenuStyles"
+import { RollbackSection } from "./RollbackSection"
+import type { CtxMenuState, ItemKindUi, RollbackTarget } from "./types"
 
-export type CtxMenuState =
-  | { kind: "workspace"; x: number; y: number }
-  | { kind: "request"; id: string; x: number; y: number }
-  | { kind: "folder"; id: string; x: number; y: number }
-  | { kind: "websocket"; id: string; x: number; y: number }
-  | { kind: "grpc"; id: string; x: number; y: number }
-
-type ItemKindUi = "request" | "folder" | "websocket" | "grpc"
+export type { CtxMenuState, RollbackTarget } from "./types"
 
 interface Props {
   state: CtxMenuState
@@ -26,13 +23,9 @@ interface Props {
   onRename: (id: string) => void
   onDuplicate: (kind: ItemKindUi, id: string) => void
   onDelete: (kind: ItemKindUi, id: string) => void
-  onRollback: (kind: "request" | "folder", id: string) => void
+  onRollback: (target: RollbackTarget, id: string) => void
   onShowHistory: (kind: "request" | "folder", id: string) => void
 }
-
-const ITEM_CLASSES =
-  "w-full flex items-center gap-2 px-1.5 py-1 rounded-md cursor-pointer font-sans text-[0.857rem] text-fg hover:bg-subtle focus:bg-subtle outline-none"
-const SEP = "-mx-1 my-1 h-px bg-border"
 
 export function RequestContextMenu({
   state,
@@ -51,9 +44,17 @@ export function RequestContextMenu({
   const requests = useRequestStore((s) => s.requests)
   const requestActions = useRequestActions()
   const changeByNode = useGitStore((s) => s.changeByNode)
+  const ownChangeByNode = useGitStore((s) => s.ownChangeByNode)
+  const folderDescendantChanged = useGitStore((s) => s.folderDescendantChanged)
   const isRepo = useGitStore((s) => s.repo?.isRepo ?? false)
   const changed = state.kind !== "workspace" && Boolean(changeByNode[state.id])
+
+  const folderOwnChanged =
+    state.kind === "folder" && Boolean(ownChangeByNode[state.id])
+  const folderReqChanged =
+    state.kind === "folder" && folderDescendantChanged.has(state.id)
   const [copyAsSubOpen, setCopyAsSubOpen] = useState(false)
+  const [rollbackSubOpen, setRollbackSubOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
   // Close on outside pointerdown or Escape.
@@ -80,7 +81,10 @@ export function RequestContextMenu({
     void action.onInvoke(req)
   }
 
-  const collapseSub = () => setCopyAsSubOpen(false)
+  const collapseSub = () => {
+    setCopyAsSubOpen(false)
+    setRollbackSubOpen(false)
+  }
 
   return (
     <div
@@ -89,49 +93,13 @@ export function RequestContextMenu({
       style={{ top: state.y, left: state.x }}
     >
       {state.kind === "workspace" && (
-        <>
-          <button
-            type="button"
-            className={ITEM_CLASSES}
-            onClick={() => onCreateRequest()}
-          >
-            <Glyph kind="plus" size={13} color="var(--base04)" />
-            <span>Request</span>
-          </button>
-          <button
-            type="button"
-            className={ITEM_CLASSES}
-            onClick={() => onCreateGraphql()}
-          >
-            <Glyph kind="plus" size={13} color="var(--base04)" />
-            <span>GraphQL</span>
-          </button>
-          <button
-            type="button"
-            className={ITEM_CLASSES}
-            onClick={() => onCreateConnection()}
-          >
-            <Glyph kind="plus" size={13} color="var(--base04)" />
-            <span>WebSocket</span>
-          </button>
-          <button
-            type="button"
-            className={ITEM_CLASSES}
-            onClick={() => onCreateGrpc()}
-          >
-            <Glyph kind="plus" size={13} color="var(--base04)" />
-            <span>gRPC</span>
-          </button>
-          <div className={SEP} />
-          <button
-            type="button"
-            className={ITEM_CLASSES}
-            onClick={() => onCreateFolder()}
-          >
-            <Glyph kind="plus" size={13} color="var(--base04)" />
-            <span>Folder</span>
-          </button>
-        </>
+        <CreateItems
+          onCreateRequest={onCreateRequest}
+          onCreateGraphql={onCreateGraphql}
+          onCreateConnection={onCreateConnection}
+          onCreateGrpc={onCreateGrpc}
+          onCreateFolder={onCreateFolder}
+        />
       )}
       {state.kind !== "workspace" && (
         <>
@@ -158,47 +126,14 @@ export function RequestContextMenu({
       {state.kind === "folder" && (
         <>
           <div className={SEP} />
-          <button
-            type="button"
-            className={ITEM_CLASSES}
-            onClick={() => onCreateRequest(state.id)}
-          >
-            <Glyph kind="plus" size={13} color="var(--base04)" />
-            <span>Request</span>
-          </button>
-          <button
-            type="button"
-            className={ITEM_CLASSES}
-            onClick={() => onCreateGraphql(state.id)}
-          >
-            <Glyph kind="plus" size={13} color="var(--base04)" />
-            <span>GraphQL</span>
-          </button>
-          <button
-            type="button"
-            className={ITEM_CLASSES}
-            onClick={() => onCreateConnection(state.id)}
-          >
-            <Glyph kind="plus" size={13} color="var(--base04)" />
-            <span>WebSocket</span>
-          </button>
-          <button
-            type="button"
-            className={ITEM_CLASSES}
-            onClick={() => onCreateGrpc(state.id)}
-          >
-            <Glyph kind="plus" size={13} color="var(--base04)" />
-            <span>gRPC</span>
-          </button>
-          <div className={SEP} />
-          <button
-            type="button"
-            className={ITEM_CLASSES}
-            onClick={() => onCreateFolder(state.id)}
-          >
-            <Glyph kind="plus" size={13} color="var(--base04)" />
-            <span>Folder</span>
-          </button>
+          <CreateItems
+            folderId={state.id}
+            onCreateRequest={onCreateRequest}
+            onCreateGraphql={onCreateGraphql}
+            onCreateConnection={onCreateConnection}
+            onCreateGrpc={onCreateGrpc}
+            onCreateFolder={onCreateFolder}
+          />
         </>
       )}
       {state.kind === "request" &&
@@ -273,35 +208,18 @@ export function RequestContextMenu({
         })()}
       {state.kind !== "workspace" && (
         <>
-          {isRepo && (state.kind === "request" || state.kind === "folder") && (
-            <>
-              <div className={SEP} />
-              {changed && (
-                <button
-                  type="button"
-                  className={ITEM_CLASSES}
-                  onMouseEnter={collapseSub}
-                  onClick={() => onRollback(state.kind, state.id)}
-                >
-                  <Glyph
-                    kind="arrow-counter-clockwise"
-                    size={13}
-                    color="var(--base04)"
-                  />
-                  <span>Rollback changes</span>
-                </button>
-              )}
-              <button
-                type="button"
-                className={ITEM_CLASSES}
-                onMouseEnter={collapseSub}
-                onClick={() => onShowHistory(state.kind, state.id)}
-              >
-                <Glyph kind="history" size={13} color="var(--base04)" />
-                <span>Show History</span>
-              </button>
-            </>
-          )}
+          <RollbackSection
+            state={state}
+            isRepo={isRepo}
+            changed={changed}
+            folderOwnChanged={folderOwnChanged}
+            folderReqChanged={folderReqChanged}
+            rollbackSubOpen={rollbackSubOpen}
+            setRollbackSubOpen={setRollbackSubOpen}
+            collapseSub={collapseSub}
+            onRollback={onRollback}
+            onShowHistory={onShowHistory}
+          />
           <div className={SEP} />
           <button
             type="button"

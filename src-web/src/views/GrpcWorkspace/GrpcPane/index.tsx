@@ -1,6 +1,8 @@
 import { type ReactNode, useMemo, useRef, useState } from "react"
 import { useShallow } from "zustand/react/shallow"
 import { FolderScopeProvider } from "@/components/TemplateInput/folderScope"
+import { SHORTCUTS } from "@/config/shortcuts"
+import { matchesCombo } from "@/hooks/useKeydown"
 import { usePaneTabsStore } from "@/store/paneTabs"
 import {
   type GrpcRequest,
@@ -158,7 +160,7 @@ function GrpcPaneInner({ request }: { request: GrpcRequest }) {
           // from the message form fields here (only when focus is in an input,
           // to avoid double-firing with the global hook).
           onKeyDown={(e) => {
-            if (!(e.metaKey || e.ctrlKey) || e.key !== "Enter") return
+            if (!matchesCombo(e, SHORTCUTS.SEND_REQUEST)) return
             const t = e.target as HTMLElement
             if (
               t.tagName === "INPUT" ||

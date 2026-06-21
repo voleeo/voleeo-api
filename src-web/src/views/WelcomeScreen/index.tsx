@@ -19,11 +19,9 @@ export function WelcomeScreen() {
     applyWelcomeWindowSize()
   }, [])
 
-  // Flow modes use a plain div (no h-full, no flex) so FlowShell sizes to
-  // its own content height and ResizeObserver reads the correct value.
   if (mode !== "home") {
     return (
-      <div className="bg-bg">
+      <div className="bg-bg h-full overflow-auto">
         {mode === "api" && <ApiClientFlow onCancel={goHome} />}
         {mode === "import" && <ImportFlow onCancel={goHome} />}
       </div>

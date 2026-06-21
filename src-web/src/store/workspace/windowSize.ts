@@ -4,6 +4,7 @@ import {
   LogicalPosition,
   LogicalSize,
 } from "@tauri-apps/api/window"
+import { isMac } from "@/lib/platform"
 import { patchSettings } from "@/lib/workspaceSettings"
 
 export const WELCOME_WIDTH = 900
@@ -24,6 +25,11 @@ export async function applyWindowSize(
     const monitor = await currentMonitor()
     ignoringResizeCount += 1
     await win.setResizable(resizable)
+    // Restore the standard floor (flows lower it to fit short content). Own
+    // try/catch so a failure never skips the setSize below.
+    try {
+      await win.setMinSize(new LogicalSize(WELCOME_WIDTH, WELCOME_HEIGHT))
+    } catch {}
     await win.setSize(new LogicalSize(width, height))
     if (monitor) {
       const sf = monitor.scaleFactor
@@ -46,9 +52,11 @@ export async function applyWindowSize(
   }
 }
 
-/** Resize + centre the window to the welcome-screen dimensions. */
+/** Resize + centre the window to the welcome-screen dimensions. Fixed-size on
+ *  macOS (the launcher auto-fits its content there); resizable on Windows/Linux,
+ *  where the launcher fills and centres instead. */
 export function applyWelcomeWindowSize() {
-  return applyWindowSize(WELCOME_WIDTH, WELCOME_HEIGHT, false)
+  return applyWindowSize(WELCOME_WIDTH, WELCOME_HEIGHT, !isMac)
 }
 
 /** Persist user-driven window resizes (debounced) for the active workspace. */

@@ -25,6 +25,8 @@ export function FlowShell({
   const shellRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    // Fit the window to the flow's content height on every platform — the window
+    // is sized to fit (macOS fixed, Windows/Linux resizable but still fit).
     if (!autoResizeWindow) return
     function measure() {
       const h = shellRef.current?.offsetHeight ?? 0
