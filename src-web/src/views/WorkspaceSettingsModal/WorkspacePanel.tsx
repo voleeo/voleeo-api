@@ -1,12 +1,10 @@
 import { useEffect, useState } from "react"
 import { Glyph } from "@/components/Glyph"
 import { MonoLabel } from "@/components/Primitives"
-import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog"
-import { errorMessage } from "@/lib/error"
 import { useRequestStore } from "@/store/requests"
 import type { Workspace } from "@/store/workspace"
-import { useUiStore } from "@/store/workspace"
 import { commands } from "../../../../packages/types/bindings"
+import { DeleteWorkspaceDialog } from "./DeleteWorkspaceDialog"
 import { PanelHeading } from "./PanelHeading"
 
 function StatCell({ label, value }: { label: string; value: string }) {
@@ -17,112 +15,6 @@ function StatCell({ label, value }: { label: string; value: string }) {
       </MonoLabel>
       <span className="font-sans text-[0.929rem] text-fg">{value}</span>
     </div>
-  )
-}
-
-function DeleteConfirmDialog({
-  workspaceName,
-  workspaceId,
-  onCancel,
-}: {
-  workspaceName: string
-  workspaceId: string
-  onCancel: () => void
-}) {
-  const loadWorkspaces = useUiStore((s) => s.loadWorkspaces)
-  const setActiveTool = useUiStore((s) => s.setActiveTool)
-  const [deleting, setDeleting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [workspacePath, setWorkspacePath] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
-
-  function copyName() {
-    navigator.clipboard.writeText(workspaceName).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1200)
-    })
-  }
-
-  useState(() => {
-    commands.getAppInfo().then((res) => {
-      if (res.status === "ok") {
-        const sep = res.data.data_dir.includes("\\") ? "\\" : "/"
-        setWorkspacePath(
-          `${res.data.data_dir}${sep}workspaces${sep}${workspaceId}`,
-        )
-      }
-    })
-  })
-
-  async function handleDelete() {
-    setDeleting(true)
-    setError(null)
-    try {
-      const res = await commands.deleteWorkspace(workspaceId)
-      if (res.status === "ok") {
-        await loadWorkspaces()
-        setActiveTool("welcome")
-      } else {
-        setError(errorMessage(res.error))
-        setDeleting(false)
-      }
-    } catch {
-      setError("Unexpected error. Please try again.")
-      setDeleting(false)
-    }
-  }
-
-  return (
-    <ConfirmationDialog
-      title="Delete Workspace"
-      icon="warning"
-      description={
-        <>
-          Are you sure you want to permanently delete{" "}
-          <span className="font-semibold">"{workspaceName}"</span>?
-        </>
-      }
-      infoBox={
-        <>
-          <span className="font-sans text-[0.929rem] font-semibold text-fg">
-            {workspaceName}
-          </span>
-          {workspacePath && (
-            <span className="font-mono text-[0.75rem] text-muted break-all">
-              {workspacePath}
-            </span>
-          )}
-        </>
-      }
-      warningText="The workspace files will be permanently deleted from disk."
-      confirmByTyping={workspaceName}
-      confirmByTypingLabel={
-        <>
-          Type{" "}
-          <button
-            type="button"
-            onClick={copyName}
-            title="Click to copy"
-            className="inline-flex items-center gap-1 align-middle font-mono text-[0.786rem] text-error bg-error/10 border border-error/30 rounded-[3px] px-1.5 py-0.5 cursor-pointer hover:bg-error/20 transition-colors outline-none"
-          >
-            {workspaceName}
-            <Glyph
-              kind={copied ? "check" : "copy"}
-              size={11}
-              color="var(--base08)"
-            />
-          </button>{" "}
-          to confirm
-        </>
-      }
-      onCancel={onCancel}
-      onConfirm={handleDelete}
-      confirmLabel="Delete"
-      confirmVariant="destructive"
-      isLoading={deleting}
-      loadingLabel="Deleting"
-      error={error}
-    />
   )
 }
 
@@ -227,9 +119,9 @@ export function WorkspacePanel({
       </div>
 
       {deleteOpen && (
-        <DeleteConfirmDialog
-          workspaceName={workspace.name}
-          workspaceId={workspace.id}
+        <DeleteWorkspaceDialog
+          workspace={workspace}
+          requestCount={totalRequests}
           onCancel={() => setDeleteOpen(false)}
         />
       )}

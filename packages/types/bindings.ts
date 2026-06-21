@@ -380,6 +380,8 @@ state?: string; username?: string; password?: string; password_encrypted?: boole
 	settingsRegenerateMcpToken: () => typedError<string, VoleeoError>(__TAURI_INVOKE("settings_regenerate_mcp_token")),
 	settingsGetCustomTitleBar: () => typedError<boolean, VoleeoError>(__TAURI_INVOKE("settings_get_custom_title_bar")),
 	settingsSetCustomTitleBar: (enabled: boolean) => typedError<null, VoleeoError>(__TAURI_INVOKE("settings_set_custom_title_bar", { enabled })),
+	settingsGetAutoUpdate: () => typedError<boolean, VoleeoError>(__TAURI_INVOKE("settings_get_auto_update")),
+	settingsSetAutoUpdate: (enabled: boolean) => typedError<null, VoleeoError>(__TAURI_INVOKE("settings_set_auto_update", { enabled })),
 	repositionWindowControls: () => typedError<null, VoleeoError>(__TAURI_INVOKE("reposition_window_controls")),
 	themeGetActive: () => typedError<string, VoleeoError>(__TAURI_INVOKE("theme_get_active")),
 	themeActivate: (id: string) => typedError<null, VoleeoError>(__TAURI_INVOKE("theme_activate", { id })),
