@@ -95,6 +95,14 @@ jobs:
           - platform: ubuntu-22.04-arm
             target: aarch64-unknown-linux-gnu
             args: --target aarch64-unknown-linux-gnu
+          # NSIS only on Windows — WiX/MSI (light.exe) is flaky in CI and MSI is
+          # only needed for enterprise GPO deploys. NSIS covers install + updater.
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            args: --target x86_64-pc-windows-msvc --bundles nsis
+          - platform: windows-11-arm
+            target: aarch64-pc-windows-msvc
+            args: --target aarch64-pc-windows-msvc --bundles nsis
 
     runs-on: ${{ matrix.platform }}
     timeout-minutes: 40
@@ -119,10 +127,8 @@ jobs:
       - name: Install JS dependencies
         run: bun install --frozen-lockfile
 
-      - name: Generate TS bindings
-        run: bun run codegen
-
       - name: Inject release version into tauri.conf.json
+        shell: bash
         env:
           VERSION: ${{ needs.version.outputs.version }}
         run: |
@@ -136,6 +142,13 @@ jobs:
           # Updater signing - tauri-action signs bundles and uploads latest.json + .sig files
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Apple signing + notarization (macOS only; tauri-action imports the cert into a keychain itself)
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.args }}
@@ -150,3 +163,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
         run: gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" -F draft=false --jq .html_url
+
+      # Redeploy the marketing site
+      - name: Trigger Web redeploy
+        env:
+          GH_TOKEN: ${{ secrets.WEB_DEPLOY_PAT }}
+        run: gh api -X POST repos/voleeo/voleeo-web/dispatches -f event_type=release-published

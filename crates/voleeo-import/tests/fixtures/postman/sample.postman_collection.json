@@ -1,0 +1,105 @@
+{
+  "info": {
+    "name": "Sample API",
+    "_postman_id": "abc-123-def",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+  },
+  "variable": [
+    { "key": "base_url", "value": "https://api.example.com" },
+    { "key": "token", "value": "" }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": { "type": "text/javascript", "exec": ["console.log('hi')"] }
+    }
+  ],
+  "item": [
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Get user",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "X-Debug", "value": "1", "disabled": true }
+            ],
+            "url": {
+              "raw": "{{base_url}}/users/:id?expand=profile",
+              "host": ["{{base_url}}"],
+              "path": ["users", ":id"],
+              "query": [
+                { "key": "expand", "value": "profile" },
+                { "key": "fields", "value": "name", "disabled": true }
+              ],
+              "variable": [{ "key": "id", "value": "1" }]
+            }
+          }
+        },
+        {
+          "name": "Create user",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ada\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/users",
+              "host": ["{{base_url}}"],
+              "path": ["users"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Upload avatar",
+      "request": {
+        "method": "POST",
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            { "key": "caption", "value": "me", "type": "text" },
+            { "key": "file", "type": "file", "src": "/tmp/a.png" }
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/avatar",
+          "host": ["{{base_url}}"],
+          "path": ["avatar"]
+        },
+        "auth": {
+          "type": "basic",
+          "basic": [
+            { "key": "username", "value": "u" },
+            { "key": "password", "value": "p" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "GraphQL search",
+      "request": {
+        "method": "POST",
+        "body": {
+          "mode": "graphql",
+          "graphql": { "query": "query { me { id } }", "variables": "{}" }
+        },
+        "url": {
+          "raw": "{{base_url}}/graphql",
+          "host": ["{{base_url}}"],
+          "path": ["graphql"]
+        }
+      }
+    }
+  ]
+}

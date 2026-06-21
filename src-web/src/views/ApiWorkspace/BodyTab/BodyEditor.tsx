@@ -22,6 +22,7 @@ import type { useBodyOverlay } from "./useBodyOverlay"
 interface Props {
   bodyKind: BodyKind
   bodyText: string
+  varKeys: string[]
   onVarClickRef: RefObject<((name: string) => void) | null>
   onFuncClickRef?: RefObject<
     ((token: string, from: number, to: number) => void) | null
@@ -34,6 +35,7 @@ interface Props {
 export function BodyEditor({
   bodyKind,
   bodyText,
+  varKeys,
   onVarClickRef,
   onFuncClickRef,
   overlay,
@@ -42,6 +44,7 @@ export function BodyEditor({
 }: Props) {
   const activeTheme = useThemeStore((s) => s.activeTheme)
   const isDark = activeTheme?.kind !== "light"
+  const varKeysSet = useMemo(() => new Set(varKeys), [varKeys])
 
   const langExt = useMemo(() => {
     if (bodyKind === "json") return jsonLang()
@@ -58,8 +61,8 @@ export function BodyEditor({
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: refs are stable
   const chipDecorations = useMemo(
-    () => createTemplateDecorations(onVarClickRef, onFuncClickRef),
-    [],
+    () => createTemplateDecorations(onVarClickRef, onFuncClickRef, varKeysSet),
+    [varKeysSet],
   )
 
   const extensions = useMemo(

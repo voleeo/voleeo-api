@@ -929,6 +929,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "codegen"
+version = "0.1.0"
+dependencies = [
+ "specta-typescript",
+ "voleeo",
+]
+
+[[package]]
 name = "colorchoice"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8187,7 +8195,6 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "specta",
- "specta-typescript",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
@@ -8204,6 +8211,7 @@ dependencies = [
  "voleeo-git",
  "voleeo-grpc",
  "voleeo-http",
+ "voleeo-import",
  "voleeo-mac-window",
  "voleeo-mcp",
  "voleeo-oauth",
@@ -8311,6 +8319,18 @@ dependencies = [
  "tokio-rustls",
  "voleeo-auth",
  "voleeo-cookies",
+ "voleeo-core",
+]
+
+[[package]]
+name = "voleeo-import"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "specta",
+ "thiserror 2.0.18",
  "voleeo-core",
 ]
 

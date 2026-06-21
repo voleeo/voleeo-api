@@ -63,6 +63,7 @@ pub enum OAuth2Grant {
     ClientCredentials,
     AuthorizationCode,
     Password,
+    Implicit,
 }
 
 /// How client credentials reach the token endpoint: HTTP Basic header (default)
@@ -230,6 +231,14 @@ pub enum AuthConfig {
         /// authorization. Advanced/debug use only.
         #[serde(default, skip_serializing_if = "String::is_empty")]
         code_verifier: String,
+        /// Redirect URI for the interactive grants. Empty = a random loopback
+        /// (`http://127.0.0.1:<port>/callback`). Set it to a fixed loopback when
+        /// the provider requires a pre-registered redirect.
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        redirect_uri: String,
+        /// Optional CSRF `state` override — empty means generate a fresh one.
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        state: String,
         #[serde(default, skip_serializing_if = "String::is_empty")]
         username: String,
         #[serde(default, skip_serializing_if = "String::is_empty")]

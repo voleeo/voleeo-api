@@ -20,7 +20,7 @@ const RAW_KINDS = new Set(["json", "xml", "text", "html"])
 
 export function BodyTab({ body, onVarClick }: Props) {
   const { bodyKind, bodyText, setBodyText } = body
-  const { overlay, funcModal } = useEditorOverlay(setBodyText)
+  const { overlay, funcModal, varKeys } = useEditorOverlay(setBodyText)
 
   // Stable ref so the CM chip-click handler never captures a stale callback.
   const onVarClickRef = useRef<((name: string) => void) | null>(onVarClick)
@@ -52,6 +52,7 @@ export function BodyTab({ body, onVarClick }: Props) {
           <BodyEditor
             bodyKind={bodyKind}
             bodyText={bodyText}
+            varKeys={varKeys}
             onVarClickRef={onVarClickRef}
             onFuncClickRef={funcModal.onFuncClickRef}
             overlay={overlay}

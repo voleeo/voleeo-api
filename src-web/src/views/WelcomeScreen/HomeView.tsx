@@ -46,7 +46,7 @@ export function HomeView({ onSelect }: HomeViewProps) {
   }, [])
 
   return (
-    <div className="relative flex-1 flex flex-col items-center justify-center overflow-hidden py-16 px-6">
+    <div className="relative flex-1 flex flex-col items-center [justify-content:safe_center] overflow-auto py-16 px-6">
       <div className="w-full max-w-[680px] flex flex-col gap-8">
         <div>
           <div
@@ -72,7 +72,7 @@ export function HomeView({ onSelect }: HomeViewProps) {
           <WorkspaceTypeCard
             icon="api"
             title="New Workspace"
-            description="HTTP requests / WebSockets / gRPC"
+            description="HTTP / WebSockets / gRPC / GraphQL"
             onClick={() => onSelect("api")}
           />
           <WorkspaceTypeCard

@@ -15,27 +15,48 @@ export function EndpointFields({
   onVarClick,
 }: FieldsProps<"oauth2">) {
   const grant = auth.grant_type ?? "client_credentials"
+  const implicit = grant === "implicit"
   const set = <K extends keyof typeof auth>(key: K, value: (typeof auth)[K]) =>
     setAuth((p) => (p.kind === "oauth2" ? { ...p, [key]: value } : p))
 
   return (
     <>
-      {grant === "authorization_code" && (
+      {(grant === "authorization_code" || implicit) && (
+        <>
+          <PlainField
+            label="Authorization URL"
+            value={auth.auth_url ?? ""}
+            placeholder="https://provider.com/authorize"
+            onChange={(v) => set("auth_url", v)}
+            onVarClick={onVarClick}
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <PlainField
+              label="Redirect URI"
+              value={auth.redirect_uri ?? ""}
+              placeholder="http://127.0.0.1:0/callback (auto)"
+              onChange={(v) => set("redirect_uri", v)}
+              onVarClick={onVarClick}
+            />
+            <PlainField
+              label="State"
+              value={auth.state ?? ""}
+              placeholder="Auto-generated"
+              onChange={(v) => set("state", v)}
+              onVarClick={onVarClick}
+            />
+          </div>
+        </>
+      )}
+      {!implicit && (
         <PlainField
-          label="Authorization URL"
-          value={auth.auth_url ?? ""}
-          placeholder="https://provider.com/authorize"
-          onChange={(v) => set("auth_url", v)}
+          label="Access Token URL"
+          value={auth.token_url}
+          placeholder="https://provider.com/oauth/token"
+          onChange={(v) => set("token_url", v)}
           onVarClick={onVarClick}
         />
       )}
-      <PlainField
-        label="Access Token URL"
-        value={auth.token_url}
-        placeholder="https://provider.com/oauth/token"
-        onChange={(v) => set("token_url", v)}
-        onVarClick={onVarClick}
-      />
       <PlainField
         label="Client ID"
         value={auth.client_id}
@@ -43,15 +64,17 @@ export function EndpointFields({
         onChange={(v) => set("client_id", v)}
         onVarClick={onVarClick}
       />
-      <SecretField
-        label="Client Secret"
-        value={auth.client_secret ?? ""}
-        placeholder="Client secret"
-        encrypted={auth.client_secret_encrypted ?? false}
-        onChange={(v) => set("client_secret", v)}
-        onEncryptedChange={(v) => set("client_secret_encrypted", v)}
-        onVarClick={onVarClick}
-      />
+      {!implicit && (
+        <SecretField
+          label="Client Secret"
+          value={auth.client_secret ?? ""}
+          placeholder="Client secret"
+          encrypted={auth.client_secret_encrypted ?? false}
+          onChange={(v) => set("client_secret", v)}
+          onEncryptedChange={(v) => set("client_secret_encrypted", v)}
+          onVarClick={onVarClick}
+        />
+      )}
       {grant === "password" && (
         <>
           <PlainField
@@ -88,7 +111,12 @@ export function EndpointFields({
           onVarClick={onVarClick}
         />
       </div>
-      <div className="flex items-center gap-3 flex-wrap">
+      <div
+        className={cn(
+          "flex items-center gap-3 flex-wrap",
+          implicit && "hidden",
+        )}
+      >
         <span className="font-sans text-[0.857rem] text-muted">
           Client auth
         </span>

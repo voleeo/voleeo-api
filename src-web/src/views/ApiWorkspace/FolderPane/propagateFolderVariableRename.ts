@@ -1,6 +1,10 @@
 import { ancestorChainRootFirst } from "@/lib/folderChain"
 import { serialize } from "@/lib/template"
 import { useRequestStore } from "@/store/requests"
+import {
+  rewriteAuth,
+  rewriteBody,
+} from "../../EnvironmentsModal/VariablesEditor/propagateRename"
 
 /**
  * Rewrite `{{ oldKey }}` → `{{ newKey }}` everywhere a folder variable resolves:
@@ -40,10 +44,22 @@ export async function propagateFolderVariableRename(
       const next = sub(h.value)
       return next !== h.value ? { ...h, value: next } : h
     })
+    const { auth: newAuth, changed: authChanged } = rewriteAuth(
+      req.auth,
+      oldToken,
+      newToken,
+    )
+    const { body: newBody, changed: bodyChanged } = rewriteBody(
+      req.body,
+      oldToken,
+      newToken,
+    )
     const changed =
       newUrl !== req.url ||
       newParameters.some((p, i) => p !== (req.parameters ?? [])[i]) ||
-      newHeaders.some((h, i) => h !== (req.headers ?? [])[i])
+      newHeaders.some((h, i) => h !== (req.headers ?? [])[i]) ||
+      authChanged ||
+      bodyChanged
     if (changed) {
       await updateRequest(
         workspaceId,
@@ -52,6 +68,8 @@ export async function propagateFolderVariableRename(
         newUrl,
         newParameters,
         newHeaders,
+        newBody,
+        newAuth,
       ).catch(() => {})
     }
   }
@@ -65,13 +83,13 @@ export async function propagateFolderVariableRename(
       const next = sub(h.value)
       return next !== h.value ? { ...h, value: next } : h
     })
-    if (newHeaders.some((h, i) => h !== (f.headers ?? [])[i])) {
-      await updateFolder(
-        workspaceId,
-        f.id,
-        newHeaders,
-        f.auth ?? { kind: "none" },
-      ).catch(() => {})
+    const { auth: newAuth, changed: authChanged } = rewriteAuth(
+      f.auth,
+      oldToken,
+      newToken,
+    )
+    if (newHeaders.some((h, i) => h !== (f.headers ?? [])[i]) || authChanged) {
+      await updateFolder(workspaceId, f.id, newHeaders, newAuth).catch(() => {})
     }
     const newVars = (f.variables ?? []).map((v) => {
       const next = sub(v.value)
