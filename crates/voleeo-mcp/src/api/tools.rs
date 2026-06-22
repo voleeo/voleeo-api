@@ -1,4 +1,14 @@
 use crate::protocol::{bool_schema, obj_schema, str_schema, ToolDef};
+use serde_json::Value;
+
+/// Optional `reveal` arg shared by read tools that mask secrets by default.
+fn reveal_arg() -> (&'static str, &'static str, Value) {
+    (
+        "reveal",
+        "Return secret values (auth tokens, passwords, env var values, cookie values) as plaintext instead of the default masked placeholder. Default false.",
+        bool_schema(),
+    )
+}
 
 pub(super) fn definitions() -> Vec<ToolDef> {
     vec![
@@ -18,7 +28,10 @@ pub(super) fn definitions() -> Vec<ToolDef> {
         ToolDef {
             name: "request.list".into(),
             description: "List all requests and folders in a workspace.".into(),
-            input_schema: obj_schema(&[("workspaceId", "Workspace ID", str_schema())], &[]),
+            input_schema: obj_schema(
+                &[("workspaceId", "Workspace ID", str_schema())],
+                &[reveal_arg()],
+            ),
         },
         ToolDef {
             name: "request.get".into(),
@@ -28,7 +41,7 @@ pub(super) fn definitions() -> Vec<ToolDef> {
                     ("workspaceId", "Workspace ID", str_schema()),
                     ("requestId", "Request ID", str_schema()),
                 ],
-                &[],
+                &[reveal_arg()],
             ),
         },
         ToolDef {
@@ -136,7 +149,10 @@ pub(super) fn definitions() -> Vec<ToolDef> {
         ToolDef {
             name: "env.list".into(),
             description: "List all environments in a workspace.".into(),
-            input_schema: obj_schema(&[("workspaceId", "Workspace ID", str_schema())], &[]),
+            input_schema: obj_schema(
+                &[("workspaceId", "Workspace ID", str_schema())],
+                &[reveal_arg()],
+            ),
         },
         ToolDef {
             name: "env.get".into(),
@@ -146,7 +162,7 @@ pub(super) fn definitions() -> Vec<ToolDef> {
                     ("workspaceId", "Workspace ID", str_schema()),
                     ("envId", "Environment ID", str_schema()),
                 ],
-                &[],
+                &[reveal_arg()],
             ),
         },
         ToolDef {
@@ -171,25 +187,31 @@ pub(super) fn definitions() -> Vec<ToolDef> {
                     ("workspaceId", "Workspace ID", str_schema()),
                     ("envId", "Environment ID", str_schema()),
                     ("key", "Variable key", str_schema()),
-                    ("value", "Variable value", str_schema()),
+                    ("value", "Variable value (plaintext; encrypted at rest when `encrypted` is true on an encrypted workspace)", str_schema()),
                 ],
-                &[("enabled", "Whether the variable is active (default true)", bool_schema())],
+                &[
+                    ("enabled", "Whether the variable is active (default true)", bool_schema()),
+                    ("encrypted", "Store this value encrypted at rest (encrypted workspaces only). Defaults to the variable's current setting, or false for a new variable.", bool_schema()),
+                ],
             ),
         },
         ToolDef {
             name: "cookie.list_jars".into(),
-            description: "List all cookie jars in a workspace, including each jar's cookies (decrypted). Use this to discover which jar is currently active before sending a request.".into(),
-            input_schema: obj_schema(&[("workspaceId", "Workspace ID", str_schema())], &[]),
+            description: "List all cookie jars in a workspace, including each jar's cookies (values masked unless reveal=true). Use this to discover which jar is currently active before sending a request.".into(),
+            input_schema: obj_schema(
+                &[("workspaceId", "Workspace ID", str_schema())],
+                &[reveal_arg()],
+            ),
         },
         ToolDef {
             name: "cookie.get_jar".into(),
-            description: "Get a single cookie jar by ID, with all cookies decrypted. Useful for inspecting cookie state after a request.send to debug auth flows.".into(),
+            description: "Get a single cookie jar by ID (cookie values masked unless reveal=true). Useful for inspecting cookie state after a request.send to debug auth flows.".into(),
             input_schema: obj_schema(
                 &[
                     ("workspaceId", "Workspace ID", str_schema()),
                     ("jarId", "Cookie jar ID. Use 'default' for the auto-created default jar.", str_schema()),
                 ],
-                &[],
+                &[reveal_arg()],
             ),
         },
         ToolDef {
@@ -238,7 +260,10 @@ pub(super) fn definitions() -> Vec<ToolDef> {
         ToolDef {
             name: "websocket.list".into(),
             description: "List all saved WebSocket connections in a workspace.".into(),
-            input_schema: obj_schema(&[("workspaceId", "Workspace ID", str_schema())], &[]),
+            input_schema: obj_schema(
+                &[("workspaceId", "Workspace ID", str_schema())],
+                &[reveal_arg()],
+            ),
         },
         ToolDef {
             name: "websocket.create".into(),
@@ -297,7 +322,10 @@ pub(super) fn definitions() -> Vec<ToolDef> {
         ToolDef {
             name: "grpc.list".into(),
             description: "List all gRPC requests in a workspace.".into(),
-            input_schema: obj_schema(&[("workspaceId", "Workspace ID", str_schema())], &[]),
+            input_schema: obj_schema(
+                &[("workspaceId", "Workspace ID", str_schema())],
+                &[reveal_arg()],
+            ),
         },
         ToolDef {
             name: "grpc.create".into(),

@@ -1,53 +1,22 @@
 import type { RefObject } from "react"
 import { useCallback, useEffect, useRef, useState } from "react"
-import { MANAGED_CONTENT_TYPE } from "@/lib/contentTypes"
-import { randomId } from "@/lib/ids"
 import type {
   BodyField,
   BodyKind,
   HttpRequest,
   RequestBody,
-  RequestParameter,
 } from "@/store/requests"
 import { useRequestStore } from "@/store/requests"
 import { useUiStore } from "@/store/workspace"
+import {
+  type BodyWorking,
+  bodySig,
+  composeBody,
+  reconcileContentTypeHeader,
+  workingFromBody,
+} from "./bodyCompose"
 
 export type { BodyKind } from "@/store/requests"
-
-const MANAGED_VALUES = new Set(Object.values(MANAGED_CONTENT_TYPE))
-
-/** Build the persisted RequestBody for a given kind + working state. */
-function composeBody(
-  kind: BodyKind,
-  text: string,
-  fields: BodyField[],
-  filePath: string | null,
-  contentType: string | null,
-  graphqlVariables: string,
-): RequestBody | null {
-  switch (kind) {
-    case "none":
-      return null
-    case "form_url_encoded":
-    case "multipart":
-      return { kind, text: "", fields }
-    case "binary":
-      return {
-        kind,
-        text: "",
-        filePath: filePath ?? undefined,
-        contentType: contentType ?? undefined,
-      }
-    case "graphql":
-      return {
-        kind,
-        text,
-        graphqlVariables: graphqlVariables || undefined,
-      }
-    default:
-      return { kind, text }
-  }
-}
 
 export interface UseBodyEditorResult {
   bodyKind: BodyKind
@@ -70,29 +39,26 @@ export function useBodyEditor(
   const updateRequest = useRequestStore((s) => s.updateRequest)
   const activeWorkspaceId = useUiStore((s) => s.activeWorkspaceId)
 
-  const stored = request?.body
-  const [bodyKind, setBodyKindState] = useState<BodyKind>(
-    stored?.kind ?? "none",
+  const [working, setWorking] = useState<BodyWorking>(() =>
+    workingFromBody(request?.body),
   )
-  const [bodyText, setBodyTextState] = useState(stored?.text ?? "")
-  const [bodyFields, setBodyFieldsState] = useState<BodyField[]>(
-    stored?.fields ?? [],
-  )
-  const [binaryPath, setBinaryPath] = useState<string | null>(
-    stored?.filePath ?? null,
-  )
-  const [binaryContentType, setBinaryContentType] = useState<string | null>(
-    stored?.contentType ?? null,
-  )
-  const [graphqlVariables, setGraphqlVariablesState] = useState(
-    stored?.graphqlVariables ?? "",
-  )
+  const workingRef = useRef(working)
+  workingRef.current = working
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const writtenSigRef = useRef(bodySig(request?.body))
+
+  const cancelPendingSave = useCallback(() => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current)
+      debounceRef.current = null
+    }
+  }, [])
 
   const save = useCallback(
     async (body: RequestBody | null) => {
       if (!activeWorkspaceId || !request) return
+      writtenSigRef.current = bodySig(body)
       await updateRequest(
         activeWorkspaceId,
         request.id,
@@ -106,189 +72,85 @@ export function useBodyEditor(
     [activeWorkspaceId, request, updateRequest],
   )
 
-  // Expose an immediate flush so RequestPane can await it before sending.
-  useEffect(() => {
-    commitRef.current = async () => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current)
-        debounceRef.current = null
-      }
-      await save(
-        composeBody(
-          bodyKind,
-          bodyText,
-          bodyFields,
-          binaryPath,
-          binaryContentType,
-          graphqlVariables,
-        ),
-      )
-    }
-  })
-
-  // Reset working state when the active request changes.
-  const prevIdRef = useRef(request?.id ?? null)
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional — fires on id change only
-  useEffect(() => {
-    const id = request?.id ?? null
-    if (id === prevIdRef.current) return
-    prevIdRef.current = id
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current)
-      debounceRef.current = null
-    }
-    const b = request?.body
-    setBodyKindState(b?.kind ?? "none")
-    setBodyTextState(b?.text ?? "")
-    setBodyFieldsState(b?.fields ?? [])
-    setBinaryPath(b?.filePath ?? null)
-    setBinaryContentType(b?.contentType ?? null)
-    setGraphqlVariablesState(b?.graphqlVariables ?? "")
-  }, [request?.id])
-
   const debouncedSave = useCallback(
     (body: RequestBody | null) => {
-      if (debounceRef.current) clearTimeout(debounceRef.current)
+      cancelPendingSave()
       debounceRef.current = setTimeout(() => {
         debounceRef.current = null
         void save(body)
       }, 400)
     },
-    [save],
+    [save, cancelPendingSave],
   )
 
-  const setBodyText = useCallback(
-    (text: string) => {
-      setBodyTextState(text)
-      debouncedSave(
-        composeBody(
-          bodyKind,
-          text,
-          bodyFields,
-          binaryPath,
-          binaryContentType,
-          graphqlVariables,
-        ),
-      )
+  // Expose an immediate flush so RequestPane can await it before sending.
+  useEffect(() => {
+    commitRef.current = async () => {
+      cancelPendingSave()
+      await save(composeBody(workingRef.current))
+    }
+  })
+
+  const prevIdRef = useRef(request?.id ?? null)
+  useEffect(() => {
+    const b = request?.body
+    const idChanged = (request?.id ?? null) !== prevIdRef.current
+    const sig = bodySig(b)
+    if (!idChanged && sig === writtenSigRef.current) return
+    prevIdRef.current = request?.id ?? null
+    cancelPendingSave()
+    writtenSigRef.current = sig
+    const next = workingFromBody(b)
+    workingRef.current = next
+    setWorking(next)
+  }, [request?.id, request?.body, cancelPendingSave])
+
+  const patch = useCallback(
+    (p: Partial<BodyWorking>) => {
+      const next = { ...workingRef.current, ...p }
+      workingRef.current = next
+      setWorking(next)
+      debouncedSave(composeBody(next))
     },
-    [
-      bodyKind,
-      bodyFields,
-      binaryPath,
-      binaryContentType,
-      graphqlVariables,
-      debouncedSave,
-    ],
+    [debouncedSave],
   )
 
+  const setBodyText = useCallback((text: string) => patch({ text }), [patch])
   const setGraphqlVariables = useCallback(
-    (variables: string) => {
-      setGraphqlVariablesState(variables)
-      debouncedSave(
-        composeBody(
-          bodyKind,
-          bodyText,
-          bodyFields,
-          binaryPath,
-          binaryContentType,
-          variables,
-        ),
-      )
-    },
-    [
-      bodyKind,
-      bodyText,
-      bodyFields,
-      binaryPath,
-      binaryContentType,
-      debouncedSave,
-    ],
+    (graphqlVariables: string) => patch({ graphqlVariables }),
+    [patch],
   )
-
   const setBodyFields = useCallback(
-    (fields: BodyField[]) => {
-      setBodyFieldsState(fields)
-      debouncedSave(
-        composeBody(
-          bodyKind,
-          bodyText,
-          fields,
-          binaryPath,
-          binaryContentType,
-          graphqlVariables,
-        ),
-      )
-    },
-    [
-      bodyKind,
-      bodyText,
-      binaryPath,
-      binaryContentType,
-      graphqlVariables,
-      debouncedSave,
-    ],
+    (fields: BodyField[]) => patch({ fields }),
+    [patch],
   )
-
   const setBinary = useCallback(
-    (filePath: string | null, contentType?: string | null) => {
-      const ct = contentType === undefined ? binaryContentType : contentType
-      setBinaryPath(filePath)
-      setBinaryContentType(ct)
-      debouncedSave(
-        composeBody("binary", bodyText, bodyFields, filePath, ct, ""),
-      )
-    },
-    [bodyText, bodyFields, binaryContentType, debouncedSave],
+    (filePath: string | null, contentType?: string | null) =>
+      patch({
+        kind: "binary",
+        filePath,
+        contentType:
+          contentType === undefined
+            ? workingRef.current.contentType
+            : contentType,
+      }),
+    [patch],
   )
 
   const setBodyKind = useCallback(
     (kind: BodyKind) => {
-      setBodyKindState(kind)
+      const next = { ...workingRef.current, kind }
+      workingRef.current = next
+      setWorking(next)
       if (!activeWorkspaceId || !request) return
 
-      // Reconcile the auto-managed Content-Type header.
-      const current = request.headers ?? []
-      const ct = MANAGED_CONTENT_TYPE[kind]
-      const idx = current.findIndex(
-        (h) => h.name.toLowerCase() === "content-type",
-      )
-      let nextHeaders: RequestParameter[]
-      if (ct) {
-        nextHeaders =
-          idx === -1
-            ? [
-                ...current,
-                {
-                  id: randomId(),
-                  name: "Content-Type",
-                  value: ct,
-                  enabled: true,
-                },
-              ]
-            : current.map((h, i) => (i === idx ? { ...h, value: ct } : h))
-      } else {
-        // Drop only headers whose value we previously auto-injected.
-        nextHeaders = current.filter(
-          (h) =>
-            !(
-              h.name.toLowerCase() === "content-type" &&
-              MANAGED_VALUES.has(h.value)
-            ),
-        )
-      }
-
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current)
-        debounceRef.current = null
-      }
-      const body = composeBody(
+      cancelPendingSave()
+      const nextHeaders = reconcileContentTypeHeader(
+        request.headers ?? [],
         kind,
-        bodyText,
-        bodyFields,
-        binaryPath,
-        binaryContentType,
-        graphqlVariables,
       )
+      const body = composeBody(next)
+      writtenSigRef.current = bodySig(body)
       // GraphQL over HTTP is sent as POST (our only GraphQL send path), so the
       // method is forced and the picker locks while this body kind is active.
       const nextMethod = kind === "graphql" ? "POST" : request.method
@@ -302,25 +164,16 @@ export function useBodyEditor(
         body,
       )
     },
-    [
-      activeWorkspaceId,
-      request,
-      bodyText,
-      bodyFields,
-      binaryPath,
-      binaryContentType,
-      graphqlVariables,
-      updateRequest,
-    ],
+    [activeWorkspaceId, request, updateRequest, cancelPendingSave],
   )
 
   return {
-    bodyKind,
-    bodyText,
-    bodyFields,
-    binaryPath,
-    binaryContentType,
-    graphqlVariables,
+    bodyKind: working.kind,
+    bodyText: working.text,
+    bodyFields: working.fields,
+    binaryPath: working.filePath,
+    binaryContentType: working.contentType,
+    graphqlVariables: working.graphqlVariables,
     setBodyKind,
     setBodyText,
     setBodyFields,

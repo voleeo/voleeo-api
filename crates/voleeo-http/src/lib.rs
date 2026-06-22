@@ -31,6 +31,10 @@ tokio::task_local! {
     /// Active workspace DNS overrides for this send. The custom resolver reads
     /// this and prefers any hostname match over system DNS.
     pub(crate) static DNS_OVERRIDES: Arc<Vec<(String, IpAddr)>>;
+    /// When true, the resolver refuses link-local / cloud-metadata targets.
+    /// Set by `send_guarded` for AI/MCP-initiated sends; re-evaluated on every
+    /// redirect hop because reqwest re-resolves each hop through the resolver.
+    pub(crate) static GUARD_INTERNAL: bool;
 }
 
 /// Shared HTTP client: one `reqwest::Client` (and its connection pool) reused
@@ -104,6 +108,30 @@ impl HttpExecutor {
         attach_cookies: Vec<StoredCookie>,
         dns_overrides: Vec<DnsOverride>,
     ) -> Result<HttpResponse, VoleeoError> {
+        self.send_scoped(request, attach_cookies, dns_overrides, false)
+            .await
+    }
+
+    /// Like `send`, but refuses to connect to link-local / cloud-metadata
+    /// addresses (re-checked on each redirect hop). Use for AI/MCP-initiated
+    /// sends, where the destination is not vetted by a human.
+    pub async fn send_guarded(
+        &self,
+        request: &HttpRequest,
+        attach_cookies: Vec<StoredCookie>,
+        dns_overrides: Vec<DnsOverride>,
+    ) -> Result<HttpResponse, VoleeoError> {
+        self.send_scoped(request, attach_cookies, dns_overrides, true)
+            .await
+    }
+
+    async fn send_scoped(
+        &self,
+        request: &HttpRequest,
+        attach_cookies: Vec<StoredCookie>,
+        dns_overrides: Vec<DnsOverride>,
+        guard_internal: bool,
+    ) -> Result<HttpResponse, VoleeoError> {
         let resolved_overrides: Arc<Vec<(String, IpAddr)>> = Arc::new(
             dns_overrides
                 .into_iter()
@@ -135,24 +163,27 @@ impl HttpExecutor {
             }
         }
 
-        let result = REQ_START
+        let result = GUARD_INTERNAL
             .scope(
-                started,
-                REDIRECT_SINK.scope(
-                    sink_clone,
-                    ATTACH_COOKIES.scope(
-                        attach.clone(),
-                        CAPTURE_SINK.scope(
-                            capture_clone,
-                            ATTACHED_SINK.scope(
-                                attached_clone,
-                                DNS_OVERRIDES.scope(resolved_overrides, async {
-                                    tokio::select! {
-                                        biased;
-                                        _ = cancel_rx => Err(VoleeoError::Cancelled),
-                                        r = self.send_with_auth_retry(request, started, sink, &attach, &capture, &attached) => r,
-                                    }
-                                }),
+                guard_internal,
+                REQ_START.scope(
+                    started,
+                    REDIRECT_SINK.scope(
+                        sink_clone,
+                        ATTACH_COOKIES.scope(
+                            attach.clone(),
+                            CAPTURE_SINK.scope(
+                                capture_clone,
+                                ATTACHED_SINK.scope(
+                                    attached_clone,
+                                    DNS_OVERRIDES.scope(resolved_overrides, async {
+                                        tokio::select! {
+                                            biased;
+                                            _ = cancel_rx => Err(VoleeoError::Cancelled),
+                                            r = self.send_with_auth_retry(request, started, sink, &attach, &capture, &attached) => r,
+                                        }
+                                    }),
+                                ),
                             ),
                         ),
                     ),

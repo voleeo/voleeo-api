@@ -50,7 +50,15 @@ pub async fn git_status(
     workspace_id: String,
 ) -> Result<GitStatus, VoleeoError> {
     let path = path_of(&state, &workspace_id);
-    run(move || voleeo_git::status(&path)).await
+    run(move || {
+        // Editing then undoing an entity still rewrites its `updatedAt`, leaving a
+        // timestamp-only diff that the UI hides but raw `git` (and any push) would
+        // surface. Revert those on disk before reporting so the worktree matches
+        // what the user actually sees.
+        voleeo_git::discard_volatile_changes(&path)?;
+        voleeo_git::status(&path)
+    })
+    .await
 }
 
 /// All pending changes as decrypted entity snapshots (HEAD `old` vs working

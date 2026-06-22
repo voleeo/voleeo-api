@@ -20,8 +20,6 @@ export function GitVars() {
     /* Divider under the native title bar (the old toolbar used to provide it). */
     border-top: 1px solid var(--border);
   }
-  .git-root *::-webkit-scrollbar { width: 11px; height: 11px; }
-  .git-root *::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 6px; border: 3px solid var(--bg); }
   `}</style>
   )
 }

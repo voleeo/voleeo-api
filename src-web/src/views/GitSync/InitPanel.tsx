@@ -37,7 +37,11 @@ export function InitPanel() {
           </div>
         )}
 
-        <Button onClick={() => init()} disabled={op === "init"}>
+        <Button
+          onClick={() => init()}
+          disabled={op === "init"}
+          className="cursor-pointer hover:bg-primary/90"
+        >
           {op === "init" ? "Initializing…" : "Initialize repository"}
         </Button>
       </div>

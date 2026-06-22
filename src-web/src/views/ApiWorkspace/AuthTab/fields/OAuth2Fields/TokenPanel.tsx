@@ -6,7 +6,6 @@ import { cn } from "@/lib/utils"
 import {
   type Oauth2TokenStatus,
   oauth2ClearToken,
-  oauth2FetchToken,
   oauth2Status,
   oauth2TokenDetails,
   resolveOAuth2Templates,
@@ -78,12 +77,12 @@ export function TokenPanel({ auth }: { auth: OAuth2 }) {
     void reloadStatus()
   }, [cacheId, reloadStatus])
 
-  const run = async (fn: (ws: string, a: AuthConfig) => Promise<unknown>) => {
+  const clearToken = async () => {
     if (!workspaceId) return
     setBusy(true)
     setError(null)
     try {
-      await fn(workspaceId, resolved)
+      await oauth2ClearToken(workspaceId, resolved)
       await reloadStatus()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -107,86 +106,63 @@ export function TokenPanel({ auth }: { auth: OAuth2 }) {
   }
 
   const { dot, text } = describe(status)
-  const hasToken = !!status?.hasToken
-  const autoFetches =
-    auth.grant_type === "client_credentials" || auth.grant_type === "password"
-  if (!hasToken && autoFetches) return null
+  // Tokens are acquired automatically on send now, so the panel only manages an
+  // existing token — nothing to show (or fetch) until one exists.
+  if (!status?.hasToken) return null
 
   return (
     <div className="flex flex-col gap-2 rounded-md border border-border bg-surface px-2.5 py-2">
-      {hasToken ? (
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          aria-expanded={expanded}
-          className="group flex items-center gap-2 w-full text-left p-0 border-0 bg-transparent outline-none cursor-pointer"
-        >
-          <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", dot)} />
-          <span className="font-sans text-[0.857rem] text-fg">{text}</span>
-          {status?.tokenPreview && (
-            <span className="font-mono text-[0.786rem] text-muted">
-              {status.tokenPreview}
-            </span>
-          )}
-          <span
-            className="ml-auto shrink-0 inline-flex text-muted group-hover:text-fg transition-[color,transform] duration-100"
-            style={{ transform: expanded ? "rotate(90deg)" : "none" }}
-          >
-            <Glyph kind="chevron" size={12} color="currentColor" />
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        className="group flex items-center gap-2 w-full text-left p-0 border-0 bg-transparent outline-none cursor-pointer"
+      >
+        <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", dot)} />
+        <span className="font-sans text-[0.857rem] text-fg">{text}</span>
+        {status?.tokenPreview && (
+          <span className="font-mono text-[0.786rem] text-muted">
+            {status.tokenPreview}
           </span>
-        </button>
-      ) : (
-        <div className="flex items-center gap-2">
-          <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", dot)} />
-          <span className="font-sans text-[0.857rem] text-fg">{text}</span>
-        </div>
-      )}
+        )}
+        <span
+          className="ml-auto shrink-0 inline-flex text-muted group-hover:text-fg transition-[color,transform] duration-100"
+          style={{ transform: expanded ? "rotate(90deg)" : "none" }}
+        >
+          <Glyph kind="chevron" size={12} color="currentColor" />
+        </span>
+      </button>
 
       <div className="flex items-center gap-1.5">
-        {!hasToken && (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => run(oauth2FetchToken)}
-            className="inline-flex items-center gap-1 h-6 px-2 rounded-[5px] border border-border bg-bg font-sans text-[0.786rem] text-fg cursor-pointer hover:border-accent/50 disabled:opacity-50 transition-colors"
-          >
-            <Glyph kind="lightning" size={11} color="currentColor" />
-            Get token
-          </button>
-        )}
-        {hasToken && (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={copyToken}
-            className={cn(
-              "inline-flex items-center gap-1 h-6 px-2 rounded-[5px] border bg-bg font-sans text-[0.786rem] cursor-pointer transition-colors outline-none disabled:opacity-50",
-              copied
-                ? "border-success/40 text-success"
-                : "border-border text-muted hover:text-fg",
-            )}
-          >
-            <Glyph
-              kind={copied ? "check" : "copy"}
-              size={11}
-              color="currentColor"
-            />
-            {copied ? "Copied" : "Copy"}
-          </button>
-        )}
-        {hasToken && (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => run(oauth2ClearToken)}
-            className="inline-flex items-center gap-1 h-6 px-2 rounded-[5px] border border-border bg-bg font-sans text-[0.786rem] text-muted cursor-pointer hover:text-error disabled:opacity-50 transition-colors"
-          >
-            Clear
-          </button>
-        )}
+        <button
+          type="button"
+          disabled={busy}
+          onClick={copyToken}
+          className={cn(
+            "inline-flex items-center gap-1 h-6 px-2 rounded-[5px] border bg-bg font-sans text-[0.786rem] cursor-pointer transition-colors outline-none disabled:opacity-50",
+            copied
+              ? "border-success/40 text-success"
+              : "border-border text-muted hover:text-fg",
+          )}
+        >
+          <Glyph
+            kind={copied ? "check" : "copy"}
+            size={11}
+            color="currentColor"
+          />
+          {copied ? "Copied" : "Copy"}
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={clearToken}
+          className="inline-flex items-center gap-1 h-6 px-2 rounded-[5px] border border-border bg-bg font-sans text-[0.786rem] text-muted cursor-pointer hover:text-error disabled:opacity-50 transition-colors"
+        >
+          Clear
+        </button>
       </div>
 
-      {expanded && hasToken && workspaceId && (
+      {expanded && workspaceId && (
         <TokenDetails workspaceId={workspaceId} auth={resolved} />
       )}
 

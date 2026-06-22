@@ -30,6 +30,8 @@ export interface GitStore {
   repo: GitRepoInfo | null
   files: GitFileChange[]
   changeByNode: Record<string, GitChange>
+  ownChangeByNode: Record<string, GitChange>
+  folderDescendantChanged: Set<string>
   changes: GitEntityChange[]
   entityConflicts: GitEntityConflict[]
   log: GitCommit[]
@@ -51,7 +53,7 @@ export interface GitStore {
   loadLog: (limit?: number) => Promise<void>
   logForPath: (path: string, limit?: number) => Promise<GitCommit[]>
   commitChanges: (commitId: string) => Promise<GitEntityChange[]>
-  rollback: (path: string) => Promise<void>
+  rollback: (path: string | string[]) => Promise<void>
   /** Undo a commit into the working tree as pending changes (whole commit, or
    *  one entity when `path` is given), then surface the Changes view. */
   revertCommit: (commitId: string, path?: string | null) => Promise<void>
@@ -59,7 +61,7 @@ export interface GitStore {
   reset: () => void
 }
 
-function mapFor(files: GitFileChange[]): Record<string, GitChange> {
+function mapFor(files: GitFileChange[]) {
   const { requests, folders, connections, grpcRequests } =
     useRequestStore.getState()
   return buildChangeMap(files, requests, folders, connections, grpcRequests)
@@ -70,6 +72,8 @@ export const useGitStore = create<GitStore>((set, get) => ({
   repo: null,
   files: [],
   changeByNode: {},
+  ownChangeByNode: {},
+  folderDescendantChanged: new Set(),
   changes: [],
   entityConflicts: [],
   log: [],
@@ -86,7 +90,14 @@ export const useGitStore = create<GitStore>((set, get) => ({
       const repo = await unwrap(commands.gitRepoInfo(workspaceId))
       set({ repo })
       if (!repo.isRepo) {
-        set({ files: [], changeByNode: {}, changes: [], entityConflicts: [] })
+        set({
+          files: [],
+          changeByNode: {},
+          ownChangeByNode: {},
+          folderDescendantChanged: new Set(),
+          changes: [],
+          entityConflicts: [],
+        })
         return
       }
       await get().refresh(workspaceId)
@@ -106,7 +117,13 @@ export const useGitStore = create<GitStore>((set, get) => ({
     try {
       const status = await unwrap(commands.gitStatus(id))
       if (seq !== refreshSeq) return
-      set({ files: status.files, changeByNode: mapFor(status.files) })
+      const maps = mapFor(status.files)
+      set({
+        files: status.files,
+        changeByNode: maps.byNode,
+        ownChangeByNode: maps.ownByNode,
+        folderDescendantChanged: maps.folderDescendantChanged,
+      })
     } catch {
       // Not a repo / transient — keep prior state.
     }
@@ -192,7 +209,9 @@ export const useGitStore = create<GitStore>((set, get) => ({
   rollback: async (path) => {
     const id = get().loadedWorkspaceId
     if (!id) return
-    await unwrap(commands.gitDiscard(id, [path]))
+    const paths = Array.isArray(path) ? path : [path]
+    if (paths.length === 0) return
+    await unwrap(commands.gitDiscard(id, paths))
     await useRequestStore.getState().reload()
     void emit("git:entities-reload", {}).catch(() => {})
     await get().refresh(id)
@@ -218,6 +237,8 @@ export const useGitStore = create<GitStore>((set, get) => ({
       repo: null,
       files: [],
       changeByNode: {},
+      ownChangeByNode: {},
+      folderDescendantChanged: new Set(),
       changes: [],
       entityConflicts: [],
       log: [],

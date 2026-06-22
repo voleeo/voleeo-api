@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "src-tauri",
+    "codegen",
     "crates/voleeo-core",
     "crates/voleeo-cookies",
     "crates/voleeo-crypto",
@@ -13,6 +14,7 @@ members = [
     "crates/voleeo-grpc",
     "crates/voleeo-git",
     "crates/voleeo-mcp",
+    "crates/voleeo-import",
     "crates-tauri/voleeo-mac-window",
 ]
 
@@ -35,7 +37,7 @@ chrono = { version = "0.4", features = ["serde"] }
 rand = "0.10"
 aes-gcm = "0.10"
 reqwest = { version = "0.13", default-features = false, features = ["json", "gzip", "brotli", "deflate", "cookies", "rustls", "http2", "stream", "multipart", "form"] }
-tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
+tokio-tungstenite = { version = "0.29", features = ["native-tls"] }
 futures-util = "0.3"
 tokio-stream = "0.1"
 tonic = { version = "0.14", default-features = false, features = ["channel", "codegen", "tls-ring", "tls-native-roots"] }
@@ -50,4 +52,4 @@ specta-typescript = "0.0.12"
 tauri-plugin-dialog = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
-git2 = { version = "0.20", default-features = false, features = ["vendored-libgit2", "vendored-openssl", "ssh", "https"] }
+git2 = { version = "0.21", default-features = false, features = ["vendored-libgit2", "vendored-openssl", "ssh", "https"] }

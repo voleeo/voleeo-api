@@ -1,5 +1,3 @@
-import { emit } from "@tauri-apps/api/event"
-import { WebviewWindow } from "@tauri-apps/api/webviewWindow"
 import { useState } from "react"
 import { Glyph } from "@/components/Glyph"
 import {
@@ -12,38 +10,20 @@ import {
 import { formatKeyCombo, SHORTCUTS } from "@/config/shortcuts"
 import { useKeydown } from "@/hooks/useKeydown"
 import { useUiStore } from "@/store/workspace"
+import { ImportRequestsModal } from "./ImportRequestsModal"
 import { McpModal } from "./McpBridge/McpModal"
 import { McpStatusItem } from "./McpBridge/McpStatusItem"
-
-async function openSettingsSection(section: "keyboard") {
-  const existing = await WebviewWindow.getByLabel("settings").catch(() => null)
-  if (existing) {
-    await existing.show().catch(() => {})
-    await existing.setFocus().catch(() => {})
-    await emit("settings:goto-section", { section }).catch(() => {})
-    return
-  }
-  // Fresh window — pass the section via URL so the panel renders correctly
-  // before any event has a chance to fire.
-  new WebviewWindow("settings", {
-    url: `/?section=${section}`,
-    title: "Settings",
-    width: 900,
-    height: 600,
-    minWidth: 600,
-    minHeight: 400,
-    resizable: true,
-  })
-}
+import { openSettingsWindow } from "./settingsWindow"
 
 export function PreferencesButton() {
   const [showMcp, setShowMcp] = useState(false)
+  const [showImport, setShowImport] = useState(false)
   const activeTool = useUiStore((s) => s.activeTool)
   const panelLayout = useUiStore((s) => s.panelLayout)
   const togglePanelLayout = useUiStore((s) => s.togglePanelLayout)
 
   useKeydown(SHORTCUTS.SHOW_SHORTCUTS, () => {
-    void openSettingsSection("keyboard")
+    void openSettingsWindow("keyboard")
   })
 
   return (
@@ -56,6 +36,14 @@ export function PreferencesButton() {
           <Glyph kind="settings" size={14} color="var(--base04)" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-[210px]">
+          <DropdownMenuItem
+            className="font-sans text-[0.857rem] flex items-center gap-2 focus:bg-subtle focus:text-fg cursor-pointer"
+            onClick={() => setShowImport(true)}
+          >
+            <Glyph kind="import" size={13} color="var(--base04)" />
+            Import
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
           {activeTool === "api" && (
             <DropdownMenuItem
               className="font-sans text-[0.857rem] flex items-center gap-2 focus:bg-subtle focus:text-fg cursor-pointer"
@@ -75,7 +63,7 @@ export function PreferencesButton() {
           <DropdownMenuItem
             className="font-sans text-[0.857rem] flex items-center gap-2 focus:bg-subtle focus:text-fg cursor-pointer"
             onClick={() => {
-              void openSettingsSection("keyboard")
+              void openSettingsWindow("keyboard")
             }}
           >
             <Glyph kind="keyboard" size={13} color="var(--base04)" />
@@ -90,6 +78,9 @@ export function PreferencesButton() {
       </DropdownMenu>
 
       {showMcp && <McpModal onClose={() => setShowMcp(false)} />}
+      {showImport && (
+        <ImportRequestsModal onClose={() => setShowImport(false)} />
+      )}
     </>
   )
 }

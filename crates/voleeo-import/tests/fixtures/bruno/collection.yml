@@ -1,0 +1,99 @@
+opencollection: "1.0.0"
+info:
+  name: Sample API
+
+config:
+  environments:
+    - name: dev
+      variables:
+        - name: base_url
+          value: https://api.example.com
+        - name: token
+          secret: true
+    - name: prod
+      variables:
+        - name: base_url
+          value: https://api.prod.example.com
+
+request:
+  auth:
+    type: bearer
+    token: "{{ token }}"
+  variables:
+    - name: coll_num
+      value:
+        type: number
+        data: "100"
+
+items:
+  - info:
+      type: folder
+      name: Users
+      seq: 1
+    items:
+      - info:
+          type: http
+          name: Get user
+          seq: 1
+        http:
+          method: GET
+          url: "{{base_url}}/users/:id"
+          params:
+            - name: id
+              value: "1"
+              type: path
+            - name: expand
+              value: profile
+              type: query
+            - name: fields
+              value: name
+              type: query
+              disabled: true
+          headers:
+            - name: Accept
+              value: application/json
+            - name: X-Debug
+              value: "1"
+              disabled: true
+        runtime:
+          scripts:
+            - type: after-response
+              code: |
+                bru.setVar('x', 1);
+      - info:
+          type: http
+          name: Create user
+          seq: 2
+        http:
+          method: POST
+          url: "{{base_url}}/users"
+          body:
+            type: json
+            data: '{"name":"Ada"}'
+  - info:
+      type: http
+      name: Upload avatar
+      seq: 2
+    http:
+      method: POST
+      url: "{{base_url}}/avatar"
+      body:
+        type: multipart-form
+        data:
+          - name: caption
+            type: text
+            value: me
+          - name: file
+            type: file
+            value: /tmp/a.png
+      auth:
+        type: oauth2
+        flow: authorization_code
+        authorizationUrl: https://auth.example.com/authorize
+        accessTokenUrl: https://auth.example.com/token
+        scope: read write
+        credentials:
+          clientId: my-client
+          clientSecret: my-secret
+
+bundled: true

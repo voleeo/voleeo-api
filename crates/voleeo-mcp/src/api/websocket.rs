@@ -9,14 +9,22 @@ use serde_json::{json, Value};
 use voleeo_core::{new_id, now_iso, WsDirection, WsMessage, WsMessageKind};
 use voleeo_ws::{WsEvent, WsEventSink};
 
-use super::ApiBackend;
+use super::{redact, ApiBackend};
 use crate::{protocol::ToolResult, resolve};
 
 impl ApiBackend {
     pub(super) fn ws_list(&self, args: &Value) -> ToolResult {
         let ws_id = require!(args, "workspaceId");
+        let reveal = redact::reveal(args);
         match self.ws.list(&ws_id) {
-            Ok(conns) => ToolResult::json(&conns),
+            Ok(mut conns) => {
+                if !reveal {
+                    for c in conns.iter_mut() {
+                        redact::mask_auth(&mut c.auth);
+                    }
+                }
+                ToolResult::json(&conns)
+            }
             Err(e) => ToolResult::error(e.to_string()),
         }
     }

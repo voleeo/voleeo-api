@@ -11,7 +11,26 @@ pub fn commit(
     author: Option<(String, String)>,
 ) -> Result<GitCommit, VoleeoError> {
     let repo = open_repo(path)?;
+    stage_gitignore(&repo)?;
     write_commit(&repo, message, author, false)
+}
+
+/// Ride the app-managed `.gitignore` into every commit. It's created at init but
+/// the entity-level review can't surface it (it's not a workspace entity), so
+/// without this it would stay untracked forever — never pushed, and leaving the
+/// branch perpetually "dirty" against an empty changes list. A no-op once it's
+/// tracked and unchanged.
+fn stage_gitignore(repo: &Repository) -> Result<(), VoleeoError> {
+    let Some(workdir) = repo.workdir() else {
+        return Ok(());
+    };
+    if !workdir.join(".gitignore").exists() {
+        return Ok(());
+    }
+    let mut index = repo.index().map_err(git_err)?;
+    index.add_path(Path::new(".gitignore")).map_err(git_err)?;
+    index.write().map_err(git_err)?;
+    Ok(())
 }
 
 /// Build a commit from the current index. When `merge` is true, MERGE_HEAD is

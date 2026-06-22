@@ -92,7 +92,6 @@ export function WsPane() {
   const sendShortcutRef = useRef<() => void>(() => {})
   const fireSend = useCallback(() => sendShortcutRef.current(), [])
   useKeydown(SHORTCUTS.SEND_REQUEST, fireSend)
-  useKeydown(SHORTCUTS.SEND_REQUEST_CTRL, fireSend)
 
   const connectionId = connection?.id
   useEffect(() => {

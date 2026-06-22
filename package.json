@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "tauri dev --config src-tauri/tauri.dev.conf.json",
     "build": "tauri build",
-    "codegen": "cd src-tauri && TAURI_CONFIG='{\"bundle\":{\"externalBin\":[]}}' cargo run --bin codegen",
+    "codegen": "TAURI_CONFIG='{\"bundle\":{\"externalBin\":[]}}' cargo run -p codegen",
     "mcp-bridge:build": "cargo build --bin voleeo-mcp-bridge",
     "typecheck": "cd src-web && bun run typecheck",
     "test": "cd src-web && bun run test",
@@ -17,7 +17,7 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0",
-    "@types/node": "^25.6.0",
+    "@types/node": "^26.0.0",
     "shadcn": "^4.3.1"
   }
 }

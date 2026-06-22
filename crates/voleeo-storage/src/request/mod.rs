@@ -95,6 +95,34 @@ impl RequestStore {
         Ok(next.map_or(after + 1.0, |n| (after + n) / 2.0))
     }
 
+    /// Write pre-built folders + requests verbatim — ids, `order`, and
+    /// `folder_id` are already set by the caller (`voleeo_import::build_plan`).
+    /// Skips the change-detection + sibling-ordering the CRUD paths do; used by
+    /// collection import to land a whole tree in one pass.
+    pub fn write_bulk(
+        &self,
+        folders: &[ApiFolder],
+        requests: &[HttpRequest],
+    ) -> Result<(), VoleeoError> {
+        for f in folders {
+            let dir = self.workspace_dir(&f.workspace_id)?;
+            crate::validate_id(&f.id)?;
+            let content =
+                serde_yaml::to_string(f).map_err(|e| VoleeoError::Storage(e.to_string()))?;
+            std::fs::write(dir.join(format!("folder_{}.yaml", f.id)), content)
+                .map_err(|e| VoleeoError::Storage(e.to_string()))?;
+        }
+        for r in requests {
+            let dir = self.workspace_dir(&r.workspace_id)?;
+            crate::validate_id(&r.id)?;
+            let content =
+                serde_yaml::to_string(r).map_err(|e| VoleeoError::Storage(e.to_string()))?;
+            std::fs::write(dir.join(format!("req_{}.yaml", r.id)), content)
+                .map_err(|e| VoleeoError::Storage(e.to_string()))?;
+        }
+        Ok(())
+    }
+
     pub fn move_items(
         &self,
         workspace_id: &str,
@@ -121,7 +149,58 @@ impl RequestStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use voleeo_core::AuthConfig;
+    use voleeo_core::{now_iso, AuthConfig};
+
+    #[test]
+    fn write_bulk_persists_tree_with_order_and_parent() {
+        let dir = tempfile::tempdir().unwrap();
+        let s = store(&dir);
+        let now = now_iso();
+        let folder = ApiFolder {
+            id: "fold1234".into(),
+            folder_type: "api".into(),
+            model: "folder".into(),
+            workspace_id: "ws1".into(),
+            folder_id: None,
+            name: "Imported".into(),
+            headers: vec![],
+            auth: AuthConfig::None,
+            variables: vec![],
+            color: None,
+            order: 5000.0,
+            created_at: now.clone(),
+            updated_at: now.clone(),
+        };
+        let req = HttpRequest {
+            id: "req12345".into(),
+            request_type: "api".into(),
+            model: "http_request".into(),
+            workspace_id: "ws1".into(),
+            folder_id: Some("fold1234".into()),
+            method: "GET".into(),
+            name: "Listed".into(),
+            url: "https://example.com/:id".into(),
+            parameters: vec![],
+            headers: vec![],
+            body: None,
+            auth: AuthConfig::None,
+            order: 5001.0,
+            created_at: now.clone(),
+            updated_at: now,
+        };
+        s.write_bulk(std::slice::from_ref(&folder), std::slice::from_ref(&req))
+            .unwrap();
+
+        let folders = s.list_folders("ws1").unwrap();
+        assert_eq!(folders.len(), 1);
+        assert_eq!(folders[0].name, "Imported");
+
+        let reqs = s.list_requests("ws1").unwrap();
+        assert_eq!(reqs.len(), 1);
+        assert_eq!(reqs[0].folder_id.as_deref(), Some("fold1234"));
+        assert_eq!(reqs[0].order, 5001.0);
+        assert_eq!(reqs[0].url, "https://example.com/:id");
+    }
 
     fn store(dir: &tempfile::TempDir) -> RequestStore {
         RequestStore::new(dir.path()).unwrap()

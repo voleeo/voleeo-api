@@ -1,10 +1,14 @@
 use crate::{git_err, open_repo, remote::remotes};
-use git2::{BranchType, Repository, RepositoryState};
+use git2::{BranchType, Repository, RepositoryInitOptions, RepositoryState};
 use std::path::Path;
 use voleeo_core::{GitIdentity, GitRepoInfo, VoleeoError};
 
 pub fn init(path: &Path) -> Result<(), VoleeoError> {
-    Repository::init(path).map_err(git_err)?;
+    // libgit2 hardcodes the unborn branch to `master` and ignores
+    // `init.defaultBranch`, so set the initial HEAD to `main` explicitly.
+    let mut opts = RepositoryInitOptions::new();
+    opts.initial_head("main");
+    Repository::init_opts(path, &opts).map_err(git_err)?;
     Ok(())
 }
 
@@ -43,7 +47,7 @@ pub fn repo_info(path: &Path) -> Result<GitRepoInfo, VoleeoError> {
     let branch = repo
         .head()
         .ok()
-        .and_then(|h| h.shorthand().map(String::from));
+        .and_then(|h| h.shorthand().ok().map(String::from));
     let remotes = remotes(path).unwrap_or_default();
     let (ahead, behind) = ahead_behind(&repo).unwrap_or((0, 0));
     let merging = repo.state() == RepositoryState::Merge;
@@ -94,7 +98,7 @@ pub(crate) fn ahead_behind(repo: &Repository) -> Option<(u32, u32)> {
     }
     let local_oid = head.target()?;
     let branch = repo
-        .find_branch(head.shorthand()?, BranchType::Local)
+        .find_branch(head.shorthand().ok()?, BranchType::Local)
         .ok()?;
 
     match branch.upstream() {
