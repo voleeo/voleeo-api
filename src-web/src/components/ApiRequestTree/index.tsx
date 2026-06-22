@@ -90,6 +90,16 @@ export function ApiRequestTree({
     }
   }, [pendingRenameId, tree, folderState])
 
+  const focusedNodeId = useTreeUiStore((s) => s.focusedNodeId)
+  useEffect(() => {
+    if (!focusedNodeId) return
+    containerRef.current
+      ?.querySelector<HTMLElement>(
+        `[data-node-id="${CSS.escape(focusedNodeId)}"]`,
+      )
+      ?.scrollIntoView({ block: "nearest" })
+  }, [focusedNodeId])
+
   usePruneSelection(tree)
 
   // Enter on a focused item starts inline rename.
@@ -143,6 +153,7 @@ export function ApiRequestTree({
         renamingId,
         commitRename,
         cancelRename,
+        refocusTree: () => containerRef.current?.focus({ preventScroll: true }),
         lastStatuses,
         gitChangeByNode,
         wsStatuses,

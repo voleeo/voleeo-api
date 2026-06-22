@@ -31,6 +31,7 @@ export interface TreeCtx {
     name: string,
   ) => void
   cancelRename: () => void
+  refocusTree: () => void
   lastStatuses: Record<string, number>
   gitChangeByNode: Record<string, GitChange>
   wsStatuses: Record<string, WsConnStatus>

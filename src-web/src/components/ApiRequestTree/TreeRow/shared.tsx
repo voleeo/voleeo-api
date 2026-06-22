@@ -21,10 +21,13 @@ export function RenameInput({
   kind: RowKind
   defaultValue: string
 }) {
-  const { commitRename, cancelRename } = useContext(Ctx)
+  const { commitRename, cancelRename, refocusTree } = useContext(Ctx)
   const ref = useRef<HTMLInputElement>(null)
+  const settled = useRef(false)
 
   function commit() {
+    if (settled.current) return
+    settled.current = true
     commitRename(id, kind, ref.current?.value ?? defaultValue)
   }
 
@@ -33,10 +36,13 @@ export function RenameInput({
     if (e.key === "Enter") {
       e.preventDefault()
       commit()
+      refocusTree()
     }
     if (e.key === "Escape") {
       e.preventDefault()
+      settled.current = true
       cancelRename()
+      refocusTree()
     }
   }
 
