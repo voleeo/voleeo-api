@@ -12,10 +12,11 @@ impl ApiBackend {
         .await
     }
 
-    pub(super) fn workspace_create(&self, args: &Value) -> ToolResult {
+    pub(super) async fn workspace_create(&self, args: &Value) -> ToolResult {
         let name = require!(args, "name");
         let encrypted = args["encrypted"].as_bool().unwrap_or(false);
-        match self.workspaces.create(name, encrypted) {
+        let workspaces = self.workspaces.clone();
+        match super::blocking(move || workspaces.create(name, encrypted)).await {
             Ok(ws) => ToolResult::json(&ws),
             Err(e) => ToolResult::error(e.to_string()),
         }

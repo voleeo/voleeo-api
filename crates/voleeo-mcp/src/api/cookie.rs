@@ -2,9 +2,10 @@
 //! Cookies modal: list jars, inspect cookies in a jar, switch the active jar,
 //! upsert a cookie, and clear a jar wholesale.
 //!
-//! Encryption parity with the Tauri command layer is enforced via the shared
-//! `ApiBackend::{decrypt_cookies, encrypt_cookies}` helpers — both sides
-//! traverse the same `voleeo_cookies::crypto` loop.
+//! Encryption parity with the Tauri command layer is enforced via the free
+//! `decrypt_jar` / `encrypt_jar` helpers — both sides traverse the same
+//! `voleeo_cookies::crypto` loop. They're free fns (not `&self` methods) so the
+//! mutating handlers can call them inside `spawn_blocking` (`'static` captures).
 
 use super::{redact, ApiBackend};
 use crate::protocol::ToolResult;
@@ -65,31 +66,40 @@ impl ApiBackend {
         .await
     }
 
-    pub(super) fn cookie_set_active_jar(&self, args: &Value) -> ToolResult {
+    pub(super) async fn cookie_set_active_jar(&self, args: &Value) -> ToolResult {
         let ws_id = require!(args, "workspaceId");
         // `jarId` is required for this tool (unlike the Tauri equivalent which
         // accepts None to unset) — clearing the active jar isn't a useful AI
         // operation: there's always a default jar to fall back to.
         let jar_id = require!(args, "jarId");
 
-        // Validate the jar exists before assigning.
-        if let Err(e) = self.cookies.get(&ws_id, &jar_id) {
-            return ToolResult::error(e.to_string());
+        let cookies = self.cookies.clone();
+        let selections = self.selections.clone();
+        let ws = ws_id.clone();
+        let jar = jar_id.clone();
+        let result = super::blocking(move || -> Result<(), VoleeoError> {
+            // Validate the jar exists before assigning. Machine-local selection
+            // (shared with the app, not synced via git), so the agent and UI
+            // agree on which jar is active.
+            cookies.get(&ws, &jar)?;
+            selections.set_active_jar(&ws, Some(&jar))?;
+            Ok(())
+        })
+        .await;
+        match result {
+            Ok(()) => {
+                // Notify so the TopBar chip + Cookies modal refresh.
+                self.notify_cookies(&ws_id);
+                ToolResult::json(&serde_json::json!({
+                    "workspaceId": ws_id,
+                    "activeJarId": jar_id,
+                }))
+            }
+            Err(e) => ToolResult::error(e.to_string()),
         }
-        // Machine-local selection (shared with the app, not synced via git), so
-        // the agent and the UI agree on which jar is active.
-        if let Err(e) = self.selections.set_active_jar(&ws_id, Some(&jar_id)) {
-            return ToolResult::error(e.to_string());
-        }
-        // Notify the cookies channel so the TopBar chip + Cookies modal refresh.
-        self.notify_cookies(&ws_id);
-        ToolResult::json(&serde_json::json!({
-            "workspaceId": ws_id,
-            "activeJarId": jar_id,
-        }))
     }
 
-    pub(super) fn cookie_set_cookie(&self, args: &Value) -> ToolResult {
+    pub(super) async fn cookie_set_cookie(&self, args: &Value) -> ToolResult {
         let ws_id = require!(args, "workspaceId");
         let jar_id = require!(args, "jarId");
         let domain = require!(args, "domain");
@@ -123,76 +133,79 @@ impl ApiBackend {
         }
         let expires = args["expires"].as_str().map(str::to_string);
 
-        // Build the candidate StoredCookie; the workspace's encryption flag
-        // decides whether the value lands as ciphertext on disk.
-        let ws = match self.workspaces.get(&ws_id) {
-            Ok(w) => w,
-            Err(e) => return ToolResult::error(e.to_string()),
-        };
-        let now = chrono::Utc::now()
-            .format("%Y-%m-%dT%H:%M:%S%.6f")
-            .to_string();
+        let cookies = self.cookies.clone();
+        let workspaces = self.workspaces.clone();
+        let app_data_dir = self.app_data_dir.clone();
+        let ws = ws_id.clone();
+        let result = super::blocking(move || -> Result<StoredCookie, VoleeoError> {
+            // The workspace's encryption flag decides whether the value lands as
+            // ciphertext on disk.
+            let ws_meta = workspaces.get(&ws)?;
+            let now = chrono::Utc::now()
+                .format("%Y-%m-%dT%H:%M:%S%.6f")
+                .to_string();
 
-        let mut jar = match self.cookies.get(&ws_id, &jar_id) {
-            Ok(j) => j,
-            Err(e) => return ToolResult::error(e.to_string()),
-        };
-        if let Err(e) = self.decrypt_cookies(&mut jar) {
-            return ToolResult::error(e.to_string());
-        }
+            let mut jar = cookies.get(&ws, &jar_id)?;
+            decrypt_jar(&workspaces, &app_data_dir, &mut jar)?;
 
-        // Upsert by RFC 6265 identity (domain, path, name).
-        let pos = jar
-            .cookies
-            .iter()
-            .position(|c| voleeo_cookies::matching::matches_identity(c, &domain, &path, &name));
+            // Upsert by RFC 6265 identity (domain, path, name).
+            let pos = jar
+                .cookies
+                .iter()
+                .position(|c| voleeo_cookies::matching::matches_identity(c, &domain, &path, &name));
 
-        let saved: StoredCookie = if let Some(idx) = pos {
-            let existing = &mut jar.cookies[idx];
-            existing.value = value;
-            existing.host_only = host_only;
-            existing.secure = secure;
-            existing.http_only = http_only;
-            existing.same_site = same_site;
-            existing.expires = expires;
-            existing.value_encrypted = ws.encrypted;
-            existing.updated_at = now.clone();
-            existing.clone()
-        } else {
-            let cookie = StoredCookie {
-                id: format!("ck_{}", voleeo_core::new_id()),
-                domain,
-                host_only,
-                path,
-                name,
-                value,
-                value_encrypted: ws.encrypted,
-                secure,
-                http_only,
-                same_site,
-                expires,
-                created_at: now.clone(),
-                updated_at: now.clone(),
+            let saved: StoredCookie = if let Some(idx) = pos {
+                let existing = &mut jar.cookies[idx];
+                existing.value = value;
+                existing.host_only = host_only;
+                existing.secure = secure;
+                existing.http_only = http_only;
+                existing.same_site = same_site;
+                existing.expires = expires;
+                existing.value_encrypted = ws_meta.encrypted;
+                existing.updated_at = now.clone();
+                existing.clone()
+            } else {
+                let cookie = StoredCookie {
+                    id: format!("ck_{}", voleeo_core::new_id()),
+                    domain,
+                    host_only,
+                    path,
+                    name,
+                    value,
+                    value_encrypted: ws_meta.encrypted,
+                    secure,
+                    http_only,
+                    same_site,
+                    expires,
+                    created_at: now.clone(),
+                    updated_at: now.clone(),
+                };
+                jar.cookies.push(cookie.clone());
+                cookie
             };
-            jar.cookies.push(cookie.clone());
-            cookie
-        };
 
-        jar.updated_at = now;
-        if let Err(e) = self.encrypt_cookies(&mut jar) {
-            return ToolResult::error(e.to_string());
+            jar.updated_at = now;
+            encrypt_jar(&workspaces, &app_data_dir, &mut jar)?;
+            cookies.save(&jar)?;
+            Ok(saved)
+        })
+        .await;
+        match result {
+            Ok(saved) => {
+                self.notify_cookies(&ws_id);
+                ToolResult::json(&saved)
+            }
+            Err(e) => ToolResult::error(e.to_string()),
         }
-        if let Err(e) = self.cookies.save(&jar) {
-            return ToolResult::error(e.to_string());
-        }
-        self.notify_cookies(&ws_id);
-        ToolResult::json(&saved)
     }
 
-    pub(super) fn cookie_clear_jar(&self, args: &Value) -> ToolResult {
+    pub(super) async fn cookie_clear_jar(&self, args: &Value) -> ToolResult {
         let ws_id = require!(args, "workspaceId");
         let jar_id = require!(args, "jarId");
-        match clear_jar_impl(&self.cookies, &ws_id, &jar_id) {
+        let cookies = self.cookies.clone();
+        let ws = ws_id.clone();
+        match super::blocking(move || clear_jar_impl(&cookies, &ws, &jar_id)).await {
             Ok(jar) => {
                 self.notify_cookies(&ws_id);
                 ToolResult::json(&jar)
@@ -220,6 +233,26 @@ fn decrypt_jar(
     }
     let key = voleeo_crypto::load_key(&jar.workspace_id, app_data_dir)?;
     voleeo_cookies::crypto::decrypt_values(&mut jar.cookies, &key)
+}
+
+/// Encrypt jar values in place when it carries `value_encrypted: true` cookies.
+/// Free-fn counterpart to `decrypt_jar`, usable inside `spawn_blocking`.
+fn encrypt_jar(
+    workspaces: &voleeo_storage::WorkspaceStore,
+    app_data_dir: &std::path::Path,
+    jar: &mut voleeo_core::CookieJar,
+) -> Result<(), VoleeoError> {
+    if !voleeo_cookies::crypto::jar_needs_key(&jar.cookies) {
+        return Ok(());
+    }
+    let ws = workspaces.get(&jar.workspace_id)?;
+    if !ws.encrypted {
+        return Err(VoleeoError::InvalidConfig(
+            "workspace_encryption_required".to_string(),
+        ));
+    }
+    let key = voleeo_crypto::load_key(&jar.workspace_id, app_data_dir)?;
+    voleeo_cookies::crypto::encrypt_values(&mut jar.cookies, &key)
 }
 
 fn parse_same_site(s: &str) -> Option<SameSite> {

@@ -103,15 +103,16 @@ impl ApiBackend {
         .await
     }
 
-    pub(super) fn request_create(&self, args: &Value) -> ToolResult {
+    pub(super) async fn request_create(&self, args: &Value) -> ToolResult {
         let ws_id = require!(args, "workspaceId");
         let name = require!(args, "name");
         let method = require!(args, "method");
         let url = require!(args, "url");
         let folder_id = args["folderId"].as_str().map(str::to_string);
-        match self
-            .requests
-            .create_request(ws_id.clone(), folder_id, name, method, url)
+        let requests = self.requests.clone();
+        let ws = ws_id.clone();
+        match super::blocking(move || requests.create_request(ws, folder_id, name, method, url))
+            .await
         {
             Ok(req) => {
                 self.notify_requests(&ws_id);
@@ -121,88 +122,94 @@ impl ApiBackend {
         }
     }
 
-    pub(super) fn request_update(&self, args: &Value) -> ToolResult {
+    pub(super) async fn request_update(&self, args: &Value) -> ToolResult {
         let ws_id = require!(args, "workspaceId");
         let req_id = require!(args, "requestId");
-        let mut req = match self.requests.get_request(&ws_id, &req_id) {
-            Ok(r) => r,
-            Err(e) => return ToolResult::error(e.to_string()),
-        };
-        // Rename is separate: the filename stays `req_{id}.yaml`.
-        if let Some(n) = args["name"].as_str() {
-            if let Err(e) = self.requests.rename_request(&ws_id, &req_id, n.to_string()) {
-                return ToolResult::error(e.to_string());
-            }
-            req.name = n.to_string();
-        }
-        if let Some(m) = args["method"].as_str() {
-            req.method = m.to_string();
-        }
-        if let Some(u) = args["url"].as_str() {
-            req.url = u.to_string();
-        }
-        if let Some(q) = args["graphqlQuery"].as_str() {
-            let variables = args["graphqlVariables"].as_str().map(str::to_string);
-            req.body = Some(voleeo_core::RequestBody {
-                kind: voleeo_core::BodyKind::Graphql,
-                text: q.to_string(),
-                graphql_variables: variables,
-                ..Default::default()
-            });
-            if req.method.eq_ignore_ascii_case("GET") {
-                req.method = "POST".to_string();
-            }
-        } else if let (Some(v), Some(body)) = (args["graphqlVariables"].as_str(), req.body.as_mut())
-        {
-            if matches!(body.kind, voleeo_core::BodyKind::Graphql) {
-                body.graphql_variables = Some(v.to_string());
-            }
-        }
-        if !args["auth"].is_null() {
-            let mut auth: AuthConfig = match serde_json::from_value(args["auth"].clone()) {
-                Ok(a) => a,
+
+        // Parse auth up front (cheap, sync) so a bad-JSON error is immediate and
+        // serde never runs on the blocking pool. `None` = leave auth untouched.
+        let new_auth: Option<AuthConfig> = if args["auth"].is_null() {
+            None
+        } else {
+            match serde_json::from_value(args["auth"].clone()) {
+                Ok(a) => Some(a),
                 Err(e) => return ToolResult::error(format!("invalid auth: {e}")),
-            };
+            }
+        };
 
-            // A masked read (request.get without reveal) echoed back here must not
-            // overwrite the stored secret with the placeholder.
-            redact::restore_masked(&mut auth, &mut req.auth);
+        let name = args["name"].as_str().map(str::to_string);
+        let method = args["method"].as_str().map(str::to_string);
+        let url = args["url"].as_str().map(str::to_string);
+        let graphql_query = args["graphqlQuery"].as_str().map(str::to_string);
+        let graphql_vars = args["graphqlVariables"].as_str().map(str::to_string);
 
-            let ws_encrypted = self
-                .workspaces
-                .get(&ws_id)
-                .map(|w| w.encrypted)
-                .unwrap_or(false);
-            if ws_encrypted {
-                auth.mark_secrets_encrypted();
-                if auth.secret_fields_mut().iter().any(|(_, enc)| *enc) {
-                    let key = match voleeo_crypto::load_key(&ws_id, &self.app_data_dir) {
-                        Ok(k) => k,
-                        Err(e) => return ToolResult::error(e.to_string()),
-                    };
-                    for (secret, enc) in auth.secret_fields_mut() {
-                        if enc && !voleeo_crypto::is_encrypted(secret) {
-                            match voleeo_crypto::encrypt(secret, &key) {
-                                Ok(ct) => *secret = ct,
-                                Err(e) => return ToolResult::error(e.to_string()),
+        let requests = self.requests.clone();
+        let workspaces = self.workspaces.clone();
+        let app_data_dir = self.app_data_dir.clone();
+        let ws = ws_id.clone();
+        let result = super::blocking(move || -> Result<voleeo_core::HttpRequest, VoleeoError> {
+            let mut req = requests.get_request(&ws, &req_id)?;
+            // Rename is separate: the filename stays `req_{id}.yaml`.
+            if let Some(n) = name {
+                requests.rename_request(&ws, &req_id, n.clone())?;
+                req.name = n;
+            }
+            if let Some(m) = method {
+                req.method = m;
+            }
+            if let Some(u) = url {
+                req.url = u;
+            }
+            if let Some(q) = graphql_query {
+                req.body = Some(voleeo_core::RequestBody {
+                    kind: voleeo_core::BodyKind::Graphql,
+                    text: q,
+                    graphql_variables: graphql_vars,
+                    ..Default::default()
+                });
+                if req.method.eq_ignore_ascii_case("GET") {
+                    req.method = "POST".to_string();
+                }
+            } else if let (Some(v), Some(body)) = (graphql_vars, req.body.as_mut()) {
+                if matches!(body.kind, voleeo_core::BodyKind::Graphql) {
+                    body.graphql_variables = Some(v);
+                }
+            }
+            if let Some(mut auth) = new_auth {
+                // A masked read (request.get without reveal) echoed back here must
+                // not overwrite the stored secret with the placeholder.
+                redact::restore_masked(&mut auth, &mut req.auth);
+
+                let ws_encrypted = workspaces.get(&ws).map(|w| w.encrypted).unwrap_or(false);
+                if ws_encrypted {
+                    auth.mark_secrets_encrypted();
+                    if auth.secret_fields_mut().iter().any(|(_, enc)| *enc) {
+                        let key = voleeo_crypto::load_key(&ws, &app_data_dir)?;
+                        for (secret, enc) in auth.secret_fields_mut() {
+                            if enc && !voleeo_crypto::is_encrypted(secret) {
+                                *secret = voleeo_crypto::encrypt(secret, &key)?;
                             }
                         }
                     }
                 }
+                req.auth = auth;
             }
-            req.auth = auth;
-        }
-        match self.requests.update_request(
-            &ws_id,
-            &req_id,
-            req.method.clone(),
-            req.url.clone(),
-            req.parameters.clone(),
-            req.headers.clone(),
-            req.body.clone(),
-            req.auth.clone(),
-        ) {
-            Ok(()) => {
+            requests.update_request(
+                &ws,
+                &req_id,
+                req.method.clone(),
+                req.url.clone(),
+                req.parameters.clone(),
+                req.headers.clone(),
+                req.body.clone(),
+                req.auth.clone(),
+            )?;
+            Ok(req)
+        })
+        .await;
+
+        match result {
+            Ok(req) => {
                 self.notify_requests(&ws_id);
                 ToolResult::json(&req)
             }
@@ -210,10 +217,12 @@ impl ApiBackend {
         }
     }
 
-    pub(super) fn request_duplicate(&self, args: &Value) -> ToolResult {
+    pub(super) async fn request_duplicate(&self, args: &Value) -> ToolResult {
         let ws_id = require!(args, "workspaceId");
         let req_id = require!(args, "requestId");
-        match self.requests.duplicate_request(&ws_id, &req_id) {
+        let requests = self.requests.clone();
+        let ws = ws_id.clone();
+        match super::blocking(move || requests.duplicate_request(&ws, &req_id)).await {
             Ok(req) => {
                 self.notify_requests(&ws_id);
                 ToolResult::json(&req)

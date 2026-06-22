@@ -1,7 +1,7 @@
 use super::{redact, ApiBackend};
 use crate::protocol::ToolResult;
 use serde_json::Value;
-use voleeo_core::EnvironmentVariable;
+use voleeo_core::{Environment, EnvironmentVariable, VoleeoError};
 
 impl ApiBackend {
     pub(super) async fn env_list(&self, args: &Value) -> ToolResult {
@@ -40,15 +40,14 @@ impl ApiBackend {
         .await
     }
 
-    pub(super) fn env_create(&self, args: &Value) -> ToolResult {
+    pub(super) async fn env_create(&self, args: &Value) -> ToolResult {
         let ws_id = require!(args, "workspaceId");
         let name = require!(args, "name");
         let color = args["color"].as_str().unwrap_or("").to_string();
         let shared = args["shared"].as_bool().unwrap_or(false);
-        match self
-            .environments
-            .create_personal(ws_id.clone(), name, color, shared)
-        {
+        let environments = self.environments.clone();
+        let ws = ws_id.clone();
+        match super::blocking(move || environments.create_personal(ws, name, color, shared)).await {
             Ok(env) => {
                 self.notify_envs(&ws_id);
                 ToolResult::json(&env)
@@ -57,12 +56,13 @@ impl ApiBackend {
         }
     }
 
-    pub(super) fn env_set_variable(&self, args: &Value) -> ToolResult {
+    pub(super) async fn env_set_variable(&self, args: &Value) -> ToolResult {
         let ws_id = require!(args, "workspaceId");
         let env_id = require!(args, "envId");
         let key = require!(args, "key");
         let value = require!(args, "value");
         let enabled = args["enabled"].as_bool().unwrap_or(true);
+        let encrypted_arg = args["encrypted"].as_bool();
 
         if redact::is_mask(&value) {
             return ToolResult::error(
@@ -71,56 +71,53 @@ impl ApiBackend {
             );
         }
 
-        let mut env = match self.environments.get(&ws_id, &env_id) {
-            Ok(Some(e)) => e,
-            Ok(None) => return ToolResult::error("Environment not found"),
-            Err(e) => return ToolResult::error(e.to_string()),
-        };
+        let environments = self.environments.clone();
+        let workspaces = self.workspaces.clone();
+        let app_data_dir = self.app_data_dir.clone();
+        let ws = ws_id.clone();
+        let result = super::blocking(move || -> Result<Environment, VoleeoError> {
+            let mut env = environments
+                .get(&ws, &env_id)?
+                .ok_or_else(|| VoleeoError::NotFound("environment".into()))?;
 
-        if let Some(var) = env.variables.iter_mut().find(|v| v.key == key) {
-            var.value = value;
-            var.enabled = enabled;
-            // `encrypted` arg overrides; otherwise keep the variable's flag so an
-            // edit never downgrades a sensitive var to plaintext.
-            if let Some(enc) = args["encrypted"].as_bool() {
-                var.encrypted = enc;
+            if let Some(var) = env.variables.iter_mut().find(|v| v.key == key) {
+                var.value = value;
+                var.enabled = enabled;
+                // `encrypted` arg overrides; otherwise keep the variable's flag so
+                // an edit never downgrades a sensitive var to plaintext.
+                if let Some(enc) = encrypted_arg {
+                    var.encrypted = enc;
+                }
+            } else {
+                env.variables.push(EnvironmentVariable {
+                    key,
+                    value,
+                    encrypted: encrypted_arg.unwrap_or(false),
+                    enabled,
+                });
             }
-        } else {
-            env.variables.push(EnvironmentVariable {
-                key,
-                value,
-                encrypted: args["encrypted"].as_bool().unwrap_or(false),
-                enabled,
-            });
-        }
-        env.updated_at = chrono::Utc::now()
-            .format("%Y-%m-%dT%H:%M:%S%.6f")
-            .to_string();
+            env.updated_at = chrono::Utc::now()
+                .format("%Y-%m-%dT%H:%M:%S%.6f")
+                .to_string();
 
-        // Encrypt flagged secrets at rest on encrypted workspaces — mirrors the
-        // Tauri `transform_secrets(Encrypt)` path.
-        let ws_encrypted = self
-            .workspaces
-            .get(&ws_id)
-            .map(|w| w.encrypted)
-            .unwrap_or(false);
-        if ws_encrypted && env.variables.iter().any(|v| v.encrypted) {
-            let key = match voleeo_crypto::load_key_from_file(&ws_id, &self.app_data_dir) {
-                Ok(k) => k,
-                Err(e) => return ToolResult::error(e.to_string()),
-            };
-            for var in env.variables.iter_mut() {
-                if var.encrypted && !voleeo_crypto::is_encrypted(&var.value) {
-                    match voleeo_crypto::encrypt(&var.value, &key) {
-                        Ok(ct) => var.value = ct,
-                        Err(e) => return ToolResult::error(e.to_string()),
+            // Encrypt flagged secrets at rest on encrypted workspaces — mirrors
+            // the Tauri `transform_secrets(Encrypt)` path.
+            let ws_encrypted = workspaces.get(&ws).map(|w| w.encrypted).unwrap_or(false);
+            if ws_encrypted && env.variables.iter().any(|v| v.encrypted) {
+                let key = voleeo_crypto::load_key_from_file(&ws, &app_data_dir)?;
+                for var in env.variables.iter_mut() {
+                    if var.encrypted && !voleeo_crypto::is_encrypted(&var.value) {
+                        var.value = voleeo_crypto::encrypt(&var.value, &key)?;
                     }
                 }
             }
-        }
+            environments.save(&env)?;
+            Ok(env)
+        })
+        .await;
 
-        match self.environments.save(&env) {
-            Ok(()) => {
+        match result {
+            Ok(mut env) => {
                 self.notify_envs(&ws_id);
                 // Mask before returning so other vars' values aren't echoed back.
                 redact::mask_env(&mut env);

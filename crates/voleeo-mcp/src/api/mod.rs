@@ -2,7 +2,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use serde_json::Value;
-use voleeo_cookies::crypto as cookie_crypto;
 use voleeo_core::VoleeoError;
 use voleeo_grpc::{DescriptorCache, GrpcExecutor, GrpcManager};
 use voleeo_http::HttpExecutor;
@@ -51,6 +50,21 @@ async fn run_blocking(f: impl FnOnce() -> ToolResult + Send + 'static) -> ToolRe
     }
 }
 
+/// Run mutating store / crypto work off the async runtime, returning its
+/// `Result` so the caller can `notify` + serialize back on the runtime. Keeps
+/// `std::fs` and keychain I/O off the runtime worker threads (CLAUDE.md
+/// #17/#19) — the write-side counterpart to `run_blocking`.
+async fn blocking<T, F>(f: F) -> Result<T, VoleeoError>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, VoleeoError> + Send + 'static,
+{
+    match tokio::task::spawn_blocking(f).await {
+        Ok(r) => r,
+        Err(e) => Err(VoleeoError::Storage(format!("internal task error: {e}"))),
+    }
+}
+
 pub struct ApiBackend {
     pub workspaces: WorkspaceStore,
     pub requests: RequestStore,
@@ -85,39 +99,39 @@ impl ApiBackend {
     pub async fn call_tool(&self, name: &str, args: Value) -> ToolResult {
         match name {
             "workspace.list" => self.workspace_list().await,
-            "workspace.create" => self.workspace_create(&args),
+            "workspace.create" => self.workspace_create(&args).await,
             "request.list" => self.request_list(&args).await,
             "request.get" => self.request_get(&args).await,
-            "request.create" => self.request_create(&args),
-            "request.update" => self.request_update(&args),
-            "request.duplicate" => self.request_duplicate(&args),
+            "request.create" => self.request_create(&args).await,
+            "request.update" => self.request_update(&args).await,
+            "request.duplicate" => self.request_duplicate(&args).await,
             "request.send" => self.request_send(&args).await,
-            "folder.create" => self.folder_create(&args),
-            "folder.rename" => self.folder_rename(&args),
+            "folder.create" => self.folder_create(&args).await,
+            "folder.rename" => self.folder_rename(&args).await,
             "response.list" => self.response_list(&args).await,
             "response.get" => self.response_get(&args).await,
             "env.list" => self.env_list(&args).await,
             "env.get" => self.env_get(&args).await,
-            "env.create" => self.env_create(&args),
-            "env.set_variable" => self.env_set_variable(&args),
+            "env.create" => self.env_create(&args).await,
+            "env.set_variable" => self.env_set_variable(&args).await,
             "cookie.list_jars" => self.cookie_list_jars(&args).await,
             "cookie.get_jar" => self.cookie_get_jar(&args).await,
-            "cookie.set_active_jar" => self.cookie_set_active_jar(&args),
-            "cookie.set_cookie" => self.cookie_set_cookie(&args),
-            "cookie.clear_jar" => self.cookie_clear_jar(&args),
-            "websocket.list" => self.ws_list(&args),
-            "websocket.create" => self.ws_create(&args),
+            "cookie.set_active_jar" => self.cookie_set_active_jar(&args).await,
+            "cookie.set_cookie" => self.cookie_set_cookie(&args).await,
+            "cookie.clear_jar" => self.cookie_clear_jar(&args).await,
+            "websocket.list" => self.ws_list(&args).await,
+            "websocket.create" => self.ws_create(&args).await,
             "websocket.connect" => self.ws_connect_tool(&args).await,
-            "websocket.send" => self.ws_send(&args),
-            "websocket.read_messages" => self.ws_read_messages(&args),
+            "websocket.send" => self.ws_send(&args).await,
+            "websocket.read_messages" => self.ws_read_messages(&args).await,
             "websocket.disconnect" => self.ws_disconnect(&args),
-            "grpc.list" => self.grpc_list(&args),
-            "grpc.create" => self.grpc_create(&args),
+            "grpc.list" => self.grpc_list(&args).await,
+            "grpc.create" => self.grpc_create(&args).await,
             "grpc.describe" => self.grpc_describe(&args).await,
             "grpc.call" => self.grpc_call_tool(&args).await,
             "grpc.stream_start" => self.grpc_stream_start_tool(&args).await,
-            "grpc.stream_send" => self.grpc_stream_send_tool(&args),
-            "grpc.stream_read" => self.grpc_stream_read(&args),
+            "grpc.stream_send" => self.grpc_stream_send_tool(&args).await,
+            "grpc.stream_read" => self.grpc_stream_read(&args).await,
             "grpc.stream_close" => self.grpc_stream_close(&args),
             _ => ToolResult::error(format!("Unknown tool: {name}")),
         }
@@ -156,43 +170,6 @@ impl ApiBackend {
             "mcp:cookies:changed",
             serde_json::json!({ "workspaceId": workspace_id }),
         );
-    }
-
-    /// Decrypt in-place if the jar carries any `value_encrypted: true` cookies.
-    /// Cheap no-op for plaintext-only jars (no keychain round-trip).
-    pub(crate) fn decrypt_cookies(
-        &self,
-        jar: &mut voleeo_core::CookieJar,
-    ) -> Result<(), VoleeoError> {
-        if !cookie_crypto::jar_needs_key(&jar.cookies) {
-            return Ok(());
-        }
-        let ws = self.workspaces.get(&jar.workspace_id)?;
-        if !ws.encrypted {
-            return Err(VoleeoError::InvalidConfig(
-                "workspace_encryption_required".to_string(),
-            ));
-        }
-        let key = voleeo_crypto::load_key(&jar.workspace_id, &self.app_data_dir)?;
-        cookie_crypto::decrypt_values(&mut jar.cookies, &key)
-    }
-
-    /// Encrypt in-place when the jar carries `value_encrypted: true` cookies.
-    pub(crate) fn encrypt_cookies(
-        &self,
-        jar: &mut voleeo_core::CookieJar,
-    ) -> Result<(), VoleeoError> {
-        if !cookie_crypto::jar_needs_key(&jar.cookies) {
-            return Ok(());
-        }
-        let ws = self.workspaces.get(&jar.workspace_id)?;
-        if !ws.encrypted {
-            return Err(VoleeoError::InvalidConfig(
-                "workspace_encryption_required".to_string(),
-            ));
-        }
-        let key = voleeo_crypto::load_key(&jar.workspace_id, &self.app_data_dir)?;
-        cookie_crypto::encrypt_values(&mut jar.cookies, &key)
     }
 }
 

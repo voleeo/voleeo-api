@@ -35,10 +35,11 @@ fn touches_selection(args: &Value) -> bool {
 }
 
 impl ApiBackend {
-    pub(super) fn grpc_list(&self, args: &Value) -> ToolResult {
+    pub(super) async fn grpc_list(&self, args: &Value) -> ToolResult {
         let ws_id = require!(args, "workspaceId");
         let reveal = redact::reveal(args);
-        match self.grpc.list(&ws_id) {
+        let grpc = self.grpc.clone();
+        match super::blocking(move || grpc.list(&ws_id)).await {
             Ok(mut items) => {
                 if !reveal {
                     for it in items.iter_mut() {
@@ -51,12 +52,14 @@ impl ApiBackend {
         }
     }
 
-    pub(super) fn grpc_create(&self, args: &Value) -> ToolResult {
+    pub(super) async fn grpc_create(&self, args: &Value) -> ToolResult {
         let ws_id = require!(args, "workspaceId");
         let name = require!(args, "name");
         let target = require!(args, "target");
         let folder_id = args["folderId"].as_str().map(str::to_string);
-        match self.grpc.create(ws_id.clone(), folder_id, name, target) {
+        let grpc = self.grpc.clone();
+        let ws = ws_id.clone();
+        match super::blocking(move || grpc.create(ws, folder_id, name, target)).await {
             Ok(req) => {
                 self.notify_grpc(&ws_id);
                 ToolResult::json(&req)
@@ -318,10 +321,11 @@ impl ApiBackend {
         }
     }
 
-    pub(super) fn grpc_stream_send_tool(&self, args: &Value) -> ToolResult {
+    pub(super) async fn grpc_stream_send_tool(&self, args: &Value) -> ToolResult {
         let ws_id = require!(args, "workspaceId");
         let id = require!(args, "id");
         let message = require!(args, "message");
+        // send_message is in-memory (manager); fine on the runtime.
         if let Err(e) = self.grpc_manager.send_message(&id, &message) {
             return ToolResult::error(e.to_string());
         }
@@ -333,16 +337,21 @@ impl ApiBackend {
             at: now_iso(),
         };
         (self.notify)("grpc:message", json!({ "requestId": id, "message": &msg }));
-        let _ = self
-            .grpc_transcripts
-            .append_message(&ws_id, &id, msg.clone());
+        // The transcript append is fs — offload it.
+        let transcripts = self.grpc_transcripts.clone();
+        let (ws, rid, persist) = (ws_id, id, msg.clone());
+        let _ = super::blocking(move || transcripts.append_message(&ws, &rid, persist)).await;
         ToolResult::json(&msg)
     }
 
-    pub(super) fn grpc_stream_read(&self, args: &Value) -> ToolResult {
+    pub(super) async fn grpc_stream_read(&self, args: &Value) -> ToolResult {
         let ws_id = require!(args, "workspaceId");
         let id = require!(args, "id");
-        ToolResult::json(&self.grpc_transcripts.latest(&ws_id, &id))
+        let transcripts = self.grpc_transcripts.clone();
+        match super::blocking(move || Ok::<_, VoleeoError>(transcripts.latest(&ws_id, &id))).await {
+            Ok(session) => ToolResult::json(&session),
+            Err(e) => ToolResult::error(e.to_string()),
+        }
     }
 
     pub(super) fn grpc_stream_close(&self, args: &Value) -> ToolResult {
