@@ -59,9 +59,13 @@ impl ResponseStore {
 
     fn body_file(&self, workspace_id: &str, response_id: &str) -> Result<PathBuf, VoleeoError> {
         crate::validate_id(workspace_id)?;
-        // `response_id` is also used with `.filter` suffixes for filter side
-        // files; the `.` is rejected by validate_id, so validate the bare id.
-        crate::validate_id(response_id.split('.').next().unwrap_or(response_id))?;
+        // `response_id` may carry a `.filter`/`.body` suffix for side files, so
+        // validate EVERY dot-separated segment — a bare-id check on the prefix
+        // alone would let traversal chars after the first `.` (e.g.
+        // `id.x/../../etc`) slip into the joined path.
+        for segment in response_id.split('.') {
+            crate::validate_id(segment)?;
+        }
         Ok(self
             .responses_local_dir
             .join(workspace_id)

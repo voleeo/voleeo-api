@@ -56,7 +56,7 @@ pub(crate) fn to_commit(c: &Commit) -> GitCommit {
     GitCommit {
         short_id: id.chars().take(7).collect(),
         id,
-        summary: c.summary().unwrap_or_default().to_string(),
+        summary: c.summary().ok().flatten().unwrap_or_default().to_string(),
         author: author.name().unwrap_or_default().to_string(),
         email: author.email().unwrap_or_default().to_string(),
         timestamp: c.time().seconds() as f64,

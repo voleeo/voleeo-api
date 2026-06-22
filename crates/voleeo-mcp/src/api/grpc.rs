@@ -12,7 +12,7 @@ use voleeo_core::{
 use voleeo_grpc::{GrpcEvent, GrpcEventSink, ResolvedDescriptors, StreamSpec};
 use voleeo_storage::GrpcUpdate;
 
-use super::ApiBackend;
+use super::{redact, ApiBackend};
 use crate::{protocol::ToolResult, resolve};
 
 /// Read the `message` arg as a protobuf-JSON string (string passed through;
@@ -37,8 +37,16 @@ fn touches_selection(args: &Value) -> bool {
 impl ApiBackend {
     pub(super) fn grpc_list(&self, args: &Value) -> ToolResult {
         let ws_id = require!(args, "workspaceId");
+        let reveal = redact::reveal(args);
         match self.grpc.list(&ws_id) {
-            Ok(items) => ToolResult::json(&items),
+            Ok(mut items) => {
+                if !reveal {
+                    for it in items.iter_mut() {
+                        redact::mask_auth(&mut it.auth);
+                    }
+                }
+                ToolResult::json(&items)
+            }
             Err(e) => ToolResult::error(e.to_string()),
         }
     }

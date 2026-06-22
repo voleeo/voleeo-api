@@ -385,7 +385,7 @@ fn build_delegate_class<R: Runtime>(name: &str) -> &'static AnyClass {
 
 pub fn setup_traffic_light_positioner<R: Runtime>(window: &Window<R>) {
     use rand::distr::Alphanumeric;
-    use rand::Rng;
+    use rand::RngExt;
 
     let ns_win_ptr = window.ns_window().expect("Failed to get ns_window");
     setup_overlay_titlebar(ns_win_ptr as Id);
