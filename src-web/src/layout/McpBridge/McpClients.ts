@@ -33,11 +33,11 @@ export const MCP_CLIENTS: McpClient[] = [
     tagline: "Connect via claude_desktop_config.json",
     instructions: [
       "Ensure Claude Desktop is installed and up to date.",
-      "Add the snippet below to your claude_desktop_config.json.",
+      "Open Settings → Developer → Edit Config and add the snippet below.",
       "Restart Claude Desktop to apply the changes.",
     ],
     snippetFile:
-      "~/Library/Application Support/Claude/claude_desktop_config.json",
+      "claude_desktop_config.json (Settings → Developer → Edit Config)",
     getSnippet: jsonConfig,
   },
   {

@@ -95,6 +95,10 @@ export function McpClientPanel({
         >
           {regenerating ? "Regenerating…" : "Regenerate token"}
         </button>
+        <p className="mt-1 text-[0.714rem] text-muted leading-snug">
+          Invalidates the current token — every connected client must update its
+          config with the new token and restart.
+        </p>
       </div>
 
       {/* Instructions */}
@@ -124,7 +128,10 @@ export function McpClientPanel({
           <span className="text-[0.786rem] font-mono text-muted truncate max-w-[260px]">
             {client.snippetFile}
           </span>
-          <CopyBtn text={client.getSnippet(bridgePath, token)} />
+          {/* Copy what's shown: with the token hidden this copies the
+              <YOUR_TOKEN> placeholder, so the live secret is never copied by
+              surprise. Click Show first to copy a ready-to-paste config. */}
+          <CopyBtn text={snippet} />
         </div>
         {isJson ? (
           <pre
