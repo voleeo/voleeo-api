@@ -12,6 +12,7 @@ import { useShallow } from "zustand/react/shallow"
 import { Glyph } from "@/components/Glyph"
 import { Autocomplete } from "@/components/TemplateInput/Autocomplete"
 import { SHORTCUTS } from "@/config/shortcuts"
+import { matchesCombo } from "@/hooks/useKeydown"
 import { useTemplateFunctions } from "@/plugins/hooks"
 import { useEnvironmentStore } from "@/store/environment"
 import type { WsConnection } from "@/store/requests"
@@ -110,15 +111,7 @@ export function Composer({
     () =>
       EditorView.domEventHandlers({
         keydown(e) {
-          const mac =
-            e.metaKey &&
-            SHORTCUTS.SEND_REQUEST.meta &&
-            e.key === SHORTCUTS.SEND_REQUEST.key
-          const other =
-            e.ctrlKey &&
-            SHORTCUTS.SEND_REQUEST_CTRL.ctrl &&
-            e.key === SHORTCUTS.SEND_REQUEST_CTRL.key
-          if (mac || other) {
+          if (matchesCombo(e, SHORTCUTS.SEND_REQUEST)) {
             e.preventDefault()
             sendRef.current()
           }

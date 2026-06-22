@@ -5,6 +5,7 @@ pub mod git;
 pub mod graphql;
 pub mod grpc;
 pub mod http;
+pub mod import;
 pub mod info;
 pub mod oauth2;
 pub mod plugin_store;

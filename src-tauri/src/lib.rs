@@ -4,10 +4,63 @@ mod secret_store;
 mod state;
 
 use state::AppState;
-use tauri::{
-    menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder},
-    Emitter, Manager,
-};
+use tauri::{Emitter, Manager};
+
+/// The Voleeo + Edit menu. macOS shows it in the global bar; Windows attaches it
+/// to the window but hides it by default (revealed with Alt — the OS default).
+/// Linux gets no menu. macOS-only predefined items are included only there.
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn build_app_menu(app: &tauri::App) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
+    use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
+
+    let settings_item = MenuItemBuilder::with_id("settings", "Settings")
+        .accelerator("CmdOrCtrl+,")
+        .build(app)?;
+    let close_workspace_item =
+        MenuItemBuilder::with_id("close_workspace", "Close Workspace").build(app)?;
+
+    let mut app_menu = SubmenuBuilder::new(app, "Voleeo")
+        .item(&PredefinedMenuItem::about(app, None, None)?)
+        .separator()
+        .item(&settings_item)
+        .item(&close_workspace_item);
+
+    #[cfg(target_os = "macos")]
+    {
+        app_menu = app_menu
+            .separator()
+            .item(&PredefinedMenuItem::services(app, None)?)
+            .separator()
+            .item(&PredefinedMenuItem::hide(app, None)?)
+            .item(&PredefinedMenuItem::hide_others(app, None)?)
+            .item(&PredefinedMenuItem::show_all(app, None)?);
+    }
+
+    let app_menu = app_menu
+        .separator()
+        .item(&PredefinedMenuItem::quit(app, None)?)
+        .build()?;
+
+    let menu = MenuBuilder::new(app).item(&app_menu);
+
+    // Edit menu only on macOS: it owns the standard clipboard shortcuts there.
+    // On Windows the webview already handles copy/paste/undo natively, so a
+    // second set of menu accelerators would just conflict.
+    #[cfg(target_os = "macos")]
+    let menu = menu.item(
+        &SubmenuBuilder::new(app, "Edit")
+            .item(&PredefinedMenuItem::undo(app, None)?)
+            .item(&PredefinedMenuItem::redo(app, None)?)
+            .separator()
+            .item(&PredefinedMenuItem::cut(app, None)?)
+            .item(&PredefinedMenuItem::copy(app, None)?)
+            .item(&PredefinedMenuItem::paste(app, None)?)
+            .item(&PredefinedMenuItem::select_all(app, None)?)
+            .build()?,
+    );
+
+    menu.build()
+}
 
 pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
     tauri_specta::Builder::<tauri::Wry>::new().commands(tauri_specta::collect_commands![
@@ -45,6 +98,10 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::request::delete_request,
         commands::request::delete_folder,
         commands::request::move_items,
+        commands::import::import_preview,
+        commands::import::import_read_file,
+        commands::import::import_fetch_url,
+        commands::import::import_commit,
         commands::http::send_request,
         commands::http::cancel_request,
         commands::http::sign_auth_headers,
@@ -108,12 +165,15 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::settings::settings_regenerate_mcp_token,
         commands::settings::settings_get_custom_title_bar,
         commands::settings::settings_set_custom_title_bar,
+        commands::settings::settings_get_auto_update,
+        commands::settings::settings_set_auto_update,
         commands::settings::reposition_window_controls,
         commands::theme::theme_get_active,
         commands::theme::theme_activate,
         commands::theme::theme_get_color_mode,
         commands::theme::theme_set_color_mode,
         commands::info::get_app_info,
+        commands::info::toggle_main_menu,
         commands::debug::debug_entity_info,
         commands::plugin_store::plugin_store_get,
         commands::plugin_store::plugin_store_set,
@@ -192,43 +252,16 @@ pub fn run() {
 
     builder
         .setup(|app| {
-            let settings_item = MenuItemBuilder::with_id("settings", "Settings")
-                .accelerator("CmdOrCtrl+,")
-                .build(app)?;
+            #[cfg(target_os = "macos")]
+            app.set_menu(build_app_menu(app)?)?;
 
-            let close_workspace_item =
-                MenuItemBuilder::with_id("close_workspace", "Close Workspace").build(app)?;
-
-            let app_menu = SubmenuBuilder::new(app, "Voleeo")
-                .item(&PredefinedMenuItem::about(app, None, None)?)
-                .separator()
-                .item(&settings_item)
-                .item(&close_workspace_item)
-                .separator()
-                .item(&PredefinedMenuItem::services(app, None)?)
-                .separator()
-                .item(&PredefinedMenuItem::hide(app, None)?)
-                .item(&PredefinedMenuItem::hide_others(app, None)?)
-                .item(&PredefinedMenuItem::show_all(app, None)?)
-                .separator()
-                .item(&PredefinedMenuItem::quit(app, None)?)
-                .build()?;
-
-            let edit_menu = SubmenuBuilder::new(app, "Edit")
-                .item(&PredefinedMenuItem::undo(app, None)?)
-                .item(&PredefinedMenuItem::redo(app, None)?)
-                .separator()
-                .item(&PredefinedMenuItem::cut(app, None)?)
-                .item(&PredefinedMenuItem::copy(app, None)?)
-                .item(&PredefinedMenuItem::paste(app, None)?)
-                .item(&PredefinedMenuItem::select_all(app, None)?)
-                .build()?;
-
-            let menu = MenuBuilder::new(app)
-                .item(&app_menu)
-                .item(&edit_menu)
-                .build()?;
-            app.set_menu(menu)?;
+            // Windows: attach the menu but hide it; Alt reveals it (handled in
+            // the webview). Linux keeps no menu.
+            #[cfg(target_os = "windows")]
+            if let Some(win) = app.get_webview_window("main") {
+                win.set_menu(build_app_menu(app)?)?;
+                let _ = win.hide_menu();
+            }
 
             let app_dir = app
                 .path()
@@ -276,11 +309,12 @@ pub fn run() {
             }
         })
         .on_window_event(|window, event| {
-            // Closing the main window closes the whole app — secondary windows
-            // (settings, Git Sync, …) shouldn't linger without their parent.
-            if matches!(event, tauri::WindowEvent::CloseRequested { .. })
-                && window.label() == "main"
-            {
+            // The frontend intercepts the main window's close: with a workspace
+            // open it prevents the close and steps back to Welcome; on Welcome it
+            // lets the close through. When the window is actually destroyed, quit
+            // the whole app (and any secondary windows). No prevent_close here, so
+            // the window can never get stuck open.
+            if matches!(event, tauri::WindowEvent::Destroyed) && window.label() == "main" {
                 window.app_handle().exit(0);
             }
         })
@@ -319,6 +353,10 @@ pub fn run() {
             commands::request::delete_request,
             commands::request::delete_folder,
             commands::request::move_items,
+            commands::import::import_preview,
+            commands::import::import_read_file,
+            commands::import::import_fetch_url,
+            commands::import::import_commit,
             commands::http::send_request,
             commands::http::cancel_request,
             commands::http::sign_auth_headers,
@@ -382,12 +420,15 @@ pub fn run() {
             commands::settings::settings_regenerate_mcp_token,
             commands::settings::settings_get_custom_title_bar,
             commands::settings::settings_set_custom_title_bar,
+            commands::settings::settings_get_auto_update,
+            commands::settings::settings_set_auto_update,
             commands::settings::reposition_window_controls,
             commands::theme::theme_get_active,
             commands::theme::theme_activate,
             commands::theme::theme_get_color_mode,
             commands::theme::theme_set_color_mode,
             commands::info::get_app_info,
+            commands::info::toggle_main_menu,
             commands::debug::debug_entity_info,
             commands::plugin_store::plugin_store_get,
             commands::plugin_store::plugin_store_set,

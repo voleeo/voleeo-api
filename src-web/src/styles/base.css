@@ -61,13 +61,13 @@
   --base04: #8a8f98;
   --base05: #d7d8db;
   --base06: #e5e6e8;
-  --base07: #f7f8f8;
+  --base07: #111111;
   --base08: #eb5757;
   --base09: #f2994a;
   --base0A: #f2c94c;
   --base0B: #4cb782;
   --base0C: #56ccf2;
-  --base0D: #5e6ad2;
+  --base0D: #7c8cff;
   --base0E: #bb8aee;
   --base0F: #be5046;
   --interface-font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -79,6 +79,8 @@
   font-size: var(--interface-font-size);
   color: var(--base05);
   background-color: var(--base00);
+  scrollbar-width: thin;
+  scrollbar-color: var(--base03) transparent;
 }
 
 *,

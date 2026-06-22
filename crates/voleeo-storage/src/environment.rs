@@ -8,7 +8,7 @@ use voleeo_core::{new_id, Environment, EnvironmentKind, EnvironmentVariable, Vol
 /// Files live in two locations:
 /// - **Shared** (`shared = true`): `{app_data_dir}/workspaces/{workspace_id}/env_{id}.yaml`
 ///   — co-located with the workspace, so they get synced if `workspaces/{id}` is symlinked
-///     to a sync folder (Git/Dropbox/etc).
+///   to a sync folder (Git/Dropbox/etc).
 /// - **Local** (`shared = false`): `{app_data_dir}/envs-local/{workspace_id}/env_{id}.yaml`
 ///   — completely outside the `workspaces/` tree, so they can never end up in a sync folder.
 ///

@@ -39,12 +39,12 @@ pub fn normalize_domain(domain: &str) -> String {
         d = &d[..slash];
     }
     // Strip a trailing `:port` (skip the IPv6 bracket form `[::1]`).
-    if !d.starts_with('[') {
-        if let Some(colon) = d.rfind(':') {
-            let port = &d[colon + 1..];
-            if !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit()) {
-                d = &d[..colon];
-            }
+    if !d.starts_with('[')
+        && let Some(colon) = d.rfind(':')
+    {
+        let port = &d[colon + 1..];
+        if !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit()) {
+            d = &d[..colon];
         }
     }
     d.to_ascii_lowercase()
