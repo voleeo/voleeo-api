@@ -164,6 +164,8 @@ impl RequestStore {
         save_request_if_changed(&path, &req, next)
     }
 
+    // ponytail: 8 fields are the request itself; a struct just adds an indirection
+    #[allow(clippy::too_many_arguments)]
     pub fn update_request(
         &self,
         workspace_id: &str,

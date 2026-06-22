@@ -19,9 +19,16 @@ pub fn status(path: &Path) -> Result<GitStatus, VoleeoError> {
     let mut conflicted = false;
     for entry in statuses.iter() {
         let st = entry.status();
-        let Some(p) = entry.path().map(String::from) else {
+        let Ok(p) = entry.path().map(String::from) else {
             continue;
         };
+        // `.gitignore` is app-managed infrastructure, committed automatically with
+        // every commit — never a user-facing change. Hiding it keeps the dirty
+        // indicator honest: the entity review can't show it, so counting it would
+        // leave the branch "dirty" against an empty changes list.
+        if p == ".gitignore" {
+            continue;
+        }
         // Hide files whose only change vs HEAD is volatile metadata (timestamps).
         if !st.contains(Status::CONFLICTED) && only_volatile_change(&repo, &p) {
             continue;
@@ -77,7 +84,7 @@ pub fn discard_volatile_changes(path: &Path) -> Result<(), VoleeoError> {
         if entry.status().contains(Status::CONFLICTED) {
             continue;
         }
-        let Some(rel) = entry.path() else { continue };
+        let Ok(rel) = entry.path() else { continue };
         if !only_volatile_change(&repo, rel) {
             continue;
         }

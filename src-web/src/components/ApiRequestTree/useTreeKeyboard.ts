@@ -1,22 +1,12 @@
 import type React from "react"
 import { SHORTCUTS } from "@/config/shortcuts"
-import type { KeyCombo } from "@/hooks/useKeydown"
+import { matchesCombo } from "@/hooks/useKeydown"
 import { useRequestActions } from "@/plugins/hooks"
 import { useRequestStore } from "@/store/requests"
 import { pasteFromClipboard } from "./pasteRequest"
 import type { useKeyNav } from "./useKeyNav"
 
 type KeyNav = ReturnType<typeof useKeyNav>
-
-function matchCombo(e: React.KeyboardEvent, combo: KeyCombo): boolean {
-  return (
-    e.key.toLowerCase() === combo.key &&
-    e.metaKey === !!combo.meta &&
-    e.ctrlKey === !!combo.ctrl &&
-    !e.shiftKey &&
-    !e.altKey
-  )
-}
 
 /** The tree's keydown pipeline: copy-as-cURL, paste-as-request, delete, then
  * arrow/Enter navigation. Returns a single handler for the container; each
@@ -38,7 +28,7 @@ export function useTreeKeyboard({
   // Cmd/Ctrl+C on a focused request copies it as cURL — but only with no text
   // selection, so highlighted text still copies natively.
   function handleCopyAsCurl(e: React.KeyboardEvent): boolean {
-    if (!matchCombo(e, SHORTCUTS.COPY_AS_CURL)) return false
+    if (!matchesCombo(e, SHORTCUTS.COPY_AS_CURL)) return false
     const sel = window.getSelection()
     if (sel && !sel.isCollapsed) return false
     if (!keyNav.focusedId) return false
@@ -70,7 +60,7 @@ export function useTreeKeyboard({
   // focused folder, the focused request's folder, or root. Same selection guard
   // as copy so native paste still runs in text fields.
   function handlePasteRequest(e: React.KeyboardEvent): boolean {
-    if (!matchCombo(e, SHORTCUTS.PASTE_REQUEST)) return false
+    if (!matchesCombo(e, SHORTCUTS.PASTE_REQUEST)) return false
     const sel = window.getSelection()
     if (sel && !sel.isCollapsed) return false
     e.preventDefault()

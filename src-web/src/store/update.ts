@@ -2,8 +2,18 @@ import { relaunch } from "@tauri-apps/plugin-process"
 import { check, type Update } from "@tauri-apps/plugin-updater"
 import { create } from "zustand"
 import { useToastStore } from "@/store/toast"
+import { commands } from "../../../packages/types/bindings"
 
 export const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000
+
+export async function getAutoUpdate(): Promise<boolean> {
+  const res = await commands.settingsGetAutoUpdate()
+  return res.status === "ok" ? res.data : true
+}
+
+export async function setAutoUpdate(enabled: boolean): Promise<void> {
+  await commands.settingsSetAutoUpdate(enabled)
+}
 
 export type UpdateStatus =
   | "idle"

@@ -248,6 +248,7 @@ pub async fn rename_request(
 
 #[tauri::command]
 #[specta::specta]
+#[allow(clippy::too_many_arguments)]
 pub async fn update_request(
     state: State<'_, AppState>,
     workspace_id: String,

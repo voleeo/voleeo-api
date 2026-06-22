@@ -15,12 +15,11 @@ import type {
 } from "../../../../packages/types/bindings"
 import { commands } from "../../../../packages/types/bindings"
 import {
+  applyWelcomeWindowSize,
   applyWindowSize,
   attachResizeListener,
   DEFAULT_WORKSPACE_HEIGHT,
   DEFAULT_WORKSPACE_WIDTH,
-  WELCOME_HEIGHT,
-  WELCOME_WIDTH,
 } from "./windowSize"
 
 export { initWorkspaceListeners } from "./listeners"
@@ -110,7 +109,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setActiveTool: (tool) => {
     set({ activeTool: tool })
     if (tool === "welcome") {
-      applyWindowSize(WELCOME_WIDTH, WELCOME_HEIGHT, false)
+      applyWelcomeWindowSize()
     }
   },
   requestWorkspaceSettings: (section, focusKey) =>

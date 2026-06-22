@@ -28,7 +28,7 @@ pub use log::{log, log_for_path};
 pub use remote::{remotes, set_remote, set_upstream};
 pub use repo::{get_identity, init, repo_info, set_identity};
 pub use stage::{discard, stage, stage_all, unstage, unstage_all};
-pub use status::status;
+pub use status::{discard_volatile_changes, status};
 pub use sync::{clone, fetch, pull, push};
 
 use git2::Repository;

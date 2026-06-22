@@ -14,6 +14,14 @@ import {
 const INPUT =
   "w-full bg-bg border border-border rounded-md px-2.5 py-1.5 text-sm text-fg outline-none focus:border-accent"
 
+// These are identifiers, not prose — keep the OS/browser from rewriting them.
+const NO_AUTOCORRECT = {
+  autoComplete: "off",
+  autoCorrect: "off",
+  autoCapitalize: "off",
+  spellCheck: false,
+} as const
+
 interface Props {
   onClose: () => void
   message?: string | null
@@ -93,12 +101,14 @@ export function GitSettings({ onClose, message }: Props) {
               onChange={(e) => setName(e.target.value)}
               placeholder="Name"
               className={INPUT}
+              {...NO_AUTOCORRECT}
             />
             <input
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="email@example.com"
               className={INPUT}
+              {...NO_AUTOCORRECT}
             />
           </div>
           <p className="text-[0.72rem] text-muted">
@@ -112,6 +122,7 @@ export function GitSettings({ onClose, message }: Props) {
             onChange={(e) => setUsername(e.target.value)}
             placeholder="Username"
             className={INPUT}
+            {...NO_AUTOCORRECT}
           />
           <input
             value={token}
@@ -123,6 +134,7 @@ export function GitSettings({ onClose, message }: Props) {
                 : "Personal access token"
             }
             className={INPUT}
+            {...NO_AUTOCORRECT}
           />
           <p className="text-[0.72rem] text-muted">
             Used for push/pull over HTTPS, stored locally (secrets.json, mode

@@ -2,6 +2,7 @@ pub mod auth;
 pub mod cookies;
 pub mod error;
 pub mod git;
+pub mod net;
 pub mod traits;
 pub mod types;
 
@@ -12,4 +13,5 @@ pub use auth::{
 pub use cookies::{CookieJar, SameSite, StoredCookie};
 pub use error::{GrpcFailure, HttpFailure, VoleeoError};
 pub use git::*;
+pub use net::is_link_local_or_metadata;
 pub use types::*;

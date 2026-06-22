@@ -15,10 +15,6 @@ name = "voleeo"
 path = "src/main.rs"
 
 [[bin]]
-name = "codegen"
-path = "src/bin/codegen.rs"
-
-[[bin]]
 name = "voleeo-mcp-bridge"
 path = "src/bin/voleeo_mcp_bridge.rs"
 
@@ -31,6 +27,7 @@ voleeo-ws = { path = "../crates/voleeo-ws" }
 voleeo-grpc = { path = "../crates/voleeo-grpc" }
 voleeo-git = { path = "../crates/voleeo-git" }
 voleeo-mcp = { path = "../crates/voleeo-mcp" }
+voleeo-import = { path = "../crates/voleeo-import" }
 voleeo-storage = { path = "../crates/voleeo-storage" }
 voleeo-auth = { path = "../crates/voleeo-auth" }
 voleeo-oauth = { path = "../crates/voleeo-oauth" }
@@ -46,7 +43,6 @@ tokio = { workspace = true }
 tauri = { workspace = true }
 tauri-specta = { workspace = true }
 specta = { workspace = true }
-specta-typescript = { workspace = true }
 tauri-plugin-dialog = { workspace = true }
 tauri-plugin-updater = { workspace = true }
 tauri-plugin-process = { workspace = true }

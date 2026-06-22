@@ -1,4 +1,4 @@
-use super::ApiBackend;
+use super::{redact, ApiBackend};
 use crate::{protocol::ToolResult, resolve};
 use serde_json::Value;
 use std::path::Path;
@@ -66,12 +66,18 @@ fn ingest_captured_blocking(
 impl ApiBackend {
     pub(super) async fn request_list(&self, args: &Value) -> ToolResult {
         let ws_id = require!(args, "workspaceId");
+        let reveal = redact::reveal(args);
         let requests = self.requests.clone();
         super::run_blocking(move || {
             let reqs = requests.list_requests(&ws_id);
             let folders = requests.list_folders(&ws_id);
             match (reqs, folders) {
-                (Ok(reqs), Ok(folders)) => {
+                (Ok(mut reqs), Ok(folders)) => {
+                    if !reveal {
+                        for r in reqs.iter_mut() {
+                            redact::mask_auth(&mut r.auth);
+                        }
+                    }
                     ToolResult::json(&serde_json::json!({ "requests": reqs, "folders": folders }))
                 }
                 (Err(e), _) | (_, Err(e)) => ToolResult::error(e.to_string()),
@@ -83,9 +89,15 @@ impl ApiBackend {
     pub(super) async fn request_get(&self, args: &Value) -> ToolResult {
         let ws_id = require!(args, "workspaceId");
         let req_id = require!(args, "requestId");
+        let reveal = redact::reveal(args);
         let requests = self.requests.clone();
         super::run_blocking(move || match requests.get_request(&ws_id, &req_id) {
-            Ok(req) => ToolResult::json(&req),
+            Ok(mut req) => {
+                if !reveal {
+                    redact::mask_auth(&mut req.auth);
+                }
+                ToolResult::json(&req)
+            }
             Err(e) => ToolResult::error(e.to_string()),
         })
         .await
@@ -151,6 +163,10 @@ impl ApiBackend {
                 Ok(a) => a,
                 Err(e) => return ToolResult::error(format!("invalid auth: {e}")),
             };
+
+            // A masked read (request.get without reveal) echoed back here must not
+            // overwrite the stored secret with the placeholder.
+            redact::restore_masked(&mut auth, &mut req.auth);
 
             let ws_encrypted = self
                 .workspaces
@@ -368,7 +384,7 @@ impl ApiBackend {
             "[mcp] prepared in {:.0}ms — sending {} {} (jar={jar_id}, {} cookie(s))",
             t0.elapsed().as_secs_f64() * 1000.0,
             req.method,
-            req.url,
+            redact::redact_url(&req.url),
             attach_cookies.len(),
         );
 
@@ -378,9 +394,12 @@ impl ApiBackend {
             .get(&ws_id)
             .map(|w| w.dns_overrides)
             .unwrap_or_default();
+        // `send_guarded`: the AI picks the destination, so refuse link-local /
+        // cloud-metadata targets (re-checked on each redirect hop).
         let send_result = tokio::time::timeout(
             std::time::Duration::from_secs(30),
-            self.executor.send(&req, attach_cookies, dns_overrides),
+            self.executor
+                .send_guarded(&req, attach_cookies, dns_overrides),
         )
         .await;
 
@@ -390,7 +409,7 @@ impl ApiBackend {
                     "[mcp] timed out after {:.0}ms: {} {}",
                     t0.elapsed().as_secs_f64() * 1000.0,
                     req.method,
-                    req.url
+                    redact::redact_url(&req.url)
                 );
                 ToolResult::error(
                     "Request timed out after 30 seconds. \

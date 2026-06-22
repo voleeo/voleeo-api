@@ -179,7 +179,10 @@ function WorkspaceSettingsModalInner({
           <StoragePanel
             workspace={workspace}
             onWorkspaceChanged={handleWorkspaceChanged}
-            onEncryptionChanged={loadWorkspaces}
+            onEncryptionChanged={() => {
+              setWorkspace((w) => ({ ...w, encrypted: true }))
+              loadWorkspaces()
+            }}
           />
         )}
         {activeSection === "headers" && (

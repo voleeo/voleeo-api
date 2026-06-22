@@ -32,6 +32,14 @@ function EmptyWorkspace() {
   )
 }
 
+function NoSelection() {
+  return (
+    <div className="h-full flex items-center justify-center text-center px-8">
+      <p className="font-mono text-[0.857rem] text-muted">Select a request</p>
+    </div>
+  )
+}
+
 export function ApiWorkspace() {
   const activeWorkspaceId = useUiStore((s) => s.activeWorkspaceId)
   const panelLayout = useUiStore((s) => s.panelLayout)
@@ -40,11 +48,42 @@ export function ApiWorkspace() {
   useKeydown(SHORTCUTS.TOGGLE_LAYOUT, togglePanelLayout)
 
   const hasRequests = useRequestStore((s) => s.requests.length > 0)
+  const activeRequestId = useRequestStore((s) => s.activeRequestId)
   const activeFolderId = useRequestStore((s) => s.activeFolderId)
   const activeConnectionId = useRequestStore((s) => s.activeConnectionId)
   const activeGrpcId = useRequestStore((s) => s.activeGrpcId)
   const wsId = activeWorkspaceId ?? "default"
   const isColumns = panelLayout === "columns"
+
+  // The request/response chrome (URL bar, tabs, response pane) only renders when
+  // something is selected; otherwise the center shows a bare placeholder.
+  const hasSelection = Boolean(
+    activeFolderId || activeConnectionId || activeGrpcId || activeRequestId,
+  )
+
+  const center = activeFolderId ? (
+    <FolderPane />
+  ) : activeConnectionId ? (
+    <WsPane key={activeConnectionId} />
+  ) : activeGrpcId ? (
+    <GrpcPane key={activeGrpcId} />
+  ) : activeRequestId ? (
+    <RequestPane />
+  ) : hasRequests ? (
+    <NoSelection />
+  ) : (
+    <EmptyWorkspace />
+  )
+
+  const responsePane = activeFolderId ? (
+    <FolderRunPanel />
+  ) : activeConnectionId ? (
+    <WsTranscriptPane />
+  ) : activeGrpcId ? (
+    <GrpcResponsePane key={activeGrpcId} />
+  ) : (
+    <ResponsePane />
+  )
 
   // Container refs — each layout passes its own ref to the drag hook
   const colRef = useRef<HTMLDivElement>(null)
@@ -74,35 +113,20 @@ export function ApiWorkspace() {
       )}
 
       <div className="flex-1 min-w-0 h-full overflow-hidden flex flex-col">
-        {activeFolderId ? (
-          <FolderPane />
-        ) : activeConnectionId ? (
-          <WsPane key={activeConnectionId} />
-        ) : activeGrpcId ? (
-          <GrpcPane key={activeGrpcId} />
-        ) : hasRequests ? (
-          <RequestPane />
-        ) : (
-          <EmptyWorkspace />
-        )}
+        {center}
       </div>
 
-      <PaneSeparator dir="col" onMouseDown={onColSep2Down} />
-
-      <div
-        style={{ width: `${sizes.colPane3}%` }}
-        className="shrink-0 h-full overflow-hidden"
-      >
-        {activeFolderId ? (
-          <FolderRunPanel />
-        ) : activeConnectionId ? (
-          <WsTranscriptPane />
-        ) : activeGrpcId ? (
-          <GrpcResponsePane key={activeGrpcId} />
-        ) : (
-          <ResponsePane />
-        )}
-      </div>
+      {hasSelection && (
+        <>
+          <PaneSeparator dir="col" onMouseDown={onColSep2Down} />
+          <div
+            style={{ width: `${sizes.colPane3}%` }}
+            className="shrink-0 h-full overflow-hidden"
+          >
+            {responsePane}
+          </div>
+        </>
+      )}
     </div>
   ) : (
     <div ref={rowRef} className="h-full flex overflow-hidden bg-bg">
@@ -122,68 +146,23 @@ export function ApiWorkspace() {
         ref={innerRef}
         className="flex-1 min-w-0 h-full flex flex-col overflow-hidden"
       >
-        {activeFolderId ? (
+        {hasSelection ? (
           <>
             <div
               style={{ height: `${sizes.rowInner}%` }}
               className="shrink-0 w-full overflow-hidden flex flex-col"
             >
-              <FolderPane />
+              {center}
             </div>
 
             <PaneSeparator dir="row" onMouseDown={onRowInnerSepDown} />
 
             <div className="flex-1 min-h-0 w-full overflow-hidden">
-              <FolderRunPanel />
-            </div>
-          </>
-        ) : activeConnectionId ? (
-          <>
-            <div
-              style={{ height: `${sizes.rowInner}%` }}
-              className="shrink-0 w-full overflow-hidden flex flex-col"
-            >
-              <WsPane key={activeConnectionId} />
-            </div>
-
-            <PaneSeparator dir="row" onMouseDown={onRowInnerSepDown} />
-
-            <div className="flex-1 min-h-0 w-full overflow-hidden">
-              <WsTranscriptPane />
-            </div>
-          </>
-        ) : activeGrpcId ? (
-          <>
-            <div
-              style={{ height: `${sizes.rowInner}%` }}
-              className="shrink-0 w-full overflow-hidden flex flex-col"
-            >
-              <GrpcPane key={activeGrpcId} />
-            </div>
-
-            <PaneSeparator dir="row" onMouseDown={onRowInnerSepDown} />
-
-            <div className="flex-1 min-h-0 w-full overflow-hidden">
-              <GrpcResponsePane key={activeGrpcId} />
-            </div>
-          </>
-        ) : hasRequests ? (
-          <>
-            <div
-              style={{ height: `${sizes.rowInner}%` }}
-              className="shrink-0 w-full overflow-hidden flex flex-col"
-            >
-              <RequestPane />
-            </div>
-
-            <PaneSeparator dir="row" onMouseDown={onRowInnerSepDown} />
-
-            <div className="flex-1 min-h-0 w-full overflow-hidden">
-              <ResponsePane />
+              {responsePane}
             </div>
           </>
         ) : (
-          <EmptyWorkspace />
+          center
         )}
       </div>
     </div>

@@ -6,7 +6,7 @@
 //! `ApiBackend::{decrypt_cookies, encrypt_cookies}` helpers — both sides
 //! traverse the same `voleeo_cookies::crypto` loop.
 
-use super::ApiBackend;
+use super::{redact, ApiBackend};
 use crate::protocol::ToolResult;
 use serde_json::Value;
 use voleeo_core::{SameSite, StoredCookie, VoleeoError};
@@ -14,6 +14,7 @@ use voleeo_core::{SameSite, StoredCookie, VoleeoError};
 impl ApiBackend {
     pub(super) async fn cookie_list_jars(&self, args: &Value) -> ToolResult {
         let ws_id = require!(args, "workspaceId");
+        let reveal = redact::reveal(args);
         let cookies = self.cookies.clone();
         let workspaces = self.workspaces.clone();
         let app_data_dir = self.app_data_dir.clone();
@@ -22,12 +23,17 @@ impl ApiBackend {
                 Ok(j) => j,
                 Err(e) => return ToolResult::error(e.to_string()),
             };
-            // Decrypt values so the AI sees the same plaintext the UI sees.
-            // If the workspace is encrypted but the keychain is unavailable we'd
-            // rather show ciphertext than fail the whole list call.
+            // Default: mask values (and skip decryption, so no keychain touch).
+            // With reveal=true, decrypt so the AI sees the same plaintext the UI
+            // does; if the keychain is unavailable, show ciphertext rather than
+            // failing the whole list call.
             for jar in jars.iter_mut() {
-                if let Err(e) = decrypt_jar(&workspaces, &app_data_dir, jar) {
-                    eprintln!("[mcp] cookie.list_jars decrypt failed for {}: {e}", jar.id);
+                if reveal {
+                    if let Err(e) = decrypt_jar(&workspaces, &app_data_dir, jar) {
+                        eprintln!("[mcp] cookie.list_jars decrypt failed for {}: {e}", jar.id);
+                    }
+                } else {
+                    redact::mask_cookies(jar);
                 }
             }
             ToolResult::json(&jars)
@@ -38,6 +44,7 @@ impl ApiBackend {
     pub(super) async fn cookie_get_jar(&self, args: &Value) -> ToolResult {
         let ws_id = require!(args, "workspaceId");
         let jar_id = require!(args, "jarId");
+        let reveal = redact::reveal(args);
         let cookies = self.cookies.clone();
         let workspaces = self.workspaces.clone();
         let app_data_dir = self.app_data_dir.clone();
@@ -46,8 +53,12 @@ impl ApiBackend {
                 Ok(j) => j,
                 Err(e) => return ToolResult::error(e.to_string()),
             };
-            if let Err(e) = decrypt_jar(&workspaces, &app_data_dir, &mut jar) {
-                return ToolResult::error(e.to_string());
+            if reveal {
+                if let Err(e) = decrypt_jar(&workspaces, &app_data_dir, &mut jar) {
+                    return ToolResult::error(e.to_string());
+                }
+            } else {
+                redact::mask_cookies(&mut jar);
             }
             ToolResult::json(&jar)
         })
@@ -84,6 +95,15 @@ impl ApiBackend {
         let domain = require!(args, "domain");
         let name = require!(args, "name");
         let value = require!(args, "value");
+
+        // Refuse the read-mask placeholder so a masked cookie read echoed back
+        // here can't overwrite a real cookie value with the marker.
+        if redact::is_mask(&value) {
+            return ToolResult::error(
+                "value is the masked placeholder; pass the real cookie value \
+                 (read the jar with reveal=true to see it)",
+            );
+        }
 
         let path = args["path"].as_str().unwrap_or("/").to_string();
         let host_only = args["hostOnly"].as_bool().unwrap_or(true);
