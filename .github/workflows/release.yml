@@ -23,7 +23,7 @@ jobs:
       skip: ${{ steps.bump.outputs.skip }}
       version: ${{ steps.bump.outputs.version }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -54,7 +54,7 @@ jobs:
     outputs:
       release_id: ${{ steps.create.outputs.release_id }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -107,7 +107,7 @@ jobs:
     runs-on: ${{ matrix.platform }}
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install Tauri system dependencies (Linux)
         if: startsWith(matrix.platform, 'ubuntu')

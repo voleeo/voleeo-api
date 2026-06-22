@@ -1,6 +1,6 @@
 import type { Workspace } from "@/store/workspace"
 import { EncryptionSection } from "./EncryptionSection"
-import { LocalSyncSection } from "./LocalSyncSection"
+import { LocationSection } from "./LocationSection"
 import { PanelHeading } from "./PanelHeading"
 
 interface StoragePanelProps {
@@ -21,7 +21,7 @@ export function StoragePanel({
         description="Where workspace data lives on this machine and how it's secured."
       />
 
-      <LocalSyncSection
+      <LocationSection
         workspaceId={workspace.id}
         syncDir={workspace.syncDir ?? null}
         onChanged={onWorkspaceChanged}
