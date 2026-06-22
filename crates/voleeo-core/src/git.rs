@@ -39,6 +39,11 @@ pub struct GitFileChange {
     pub node_kind: GitNodeKind,
     pub change: GitChange,
     pub staged: bool,
+    /// Parent folder id for a DELETED entity, recovered from its HEAD YAML (the
+    /// working file is gone, so the frontend can't resolve it from live state).
+    /// `None` for non-deletions, root-level items, and non-foldered kinds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_id: Option<String>,
 }
 
 #[derive(Type, Serialize, Deserialize, Debug, Clone)]

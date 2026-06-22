@@ -70,7 +70,7 @@ export const useRequestStore = create<RequestStore>((set, get) => ({
   activeConnectionId: null,
   activeGrpcId: null,
   loadedWorkspaceId: null,
-  recentRequestIds: [],
+  recentNodeIds: [],
   pendingFolderFocus: null,
   ...createActions(set, get),
 }))

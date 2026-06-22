@@ -8,7 +8,7 @@ import {
   getFolderPath,
 } from "@/components/ApiRequestTree/treeUtils"
 import { Glyph } from "@/components/Glyph"
-import { methodColor } from "@/components/tokens"
+import { C_GQL, C_GRPC, C_WS, methodColor } from "@/components/tokens"
 import { SHORTCUTS } from "@/config/shortcuts"
 import { useKeydown } from "@/hooks/useKeydown"
 import { useWorkspaceSwitcher } from "@/hooks/useWorkspaceSwitcher"
@@ -38,19 +38,31 @@ export function CommandPalette() {
     createRequest,
     createFolder,
     requests,
+    connections,
+    grpcRequests,
     folders,
     activeRequestId,
-    recentRequestIds,
+    activeConnectionId,
+    activeGrpcId,
+    recentNodeIds,
     setActiveRequest,
+    setActiveConnection,
+    setActiveGrpc,
   } = useRequestStore(
     useShallow((s) => ({
       createRequest: s.createRequest,
       createFolder: s.createFolder,
       requests: s.requests,
+      connections: s.connections,
+      grpcRequests: s.grpcRequests,
       folders: s.folders,
       activeRequestId: s.activeRequestId,
-      recentRequestIds: s.recentRequestIds,
+      activeConnectionId: s.activeConnectionId,
+      activeGrpcId: s.activeGrpcId,
+      recentNodeIds: s.recentNodeIds,
       setActiveRequest: s.setActiveRequest,
+      setActiveConnection: s.setActiveConnection,
+      setActiveGrpc: s.setActiveGrpc,
     })),
   )
   const {
@@ -91,11 +103,53 @@ export function CommandPalette() {
     await handleSwitch(w)
   }
 
-  function handleSelectRequest(requestId: string, folderId: string | null) {
+  function handleSelectNode(
+    kind: "request" | "websocket" | "grpc",
+    id: string,
+    folderId: string | null,
+  ) {
     const ancestorIds = getAncestorFolderIds(folders, folderId)
     useTreeUiStore.getState().ensureFoldersOpen(ancestorIds)
-    setActiveRequest(requestId)
+    if (kind === "request") setActiveRequest(id)
+    else if (kind === "websocket") setActiveConnection(id)
+    else setActiveGrpc(id)
     close()
+  }
+
+  function resolveRecent(id: string) {
+    const r = requests.find((x) => x.id === id)
+    if (r) {
+      const gql = r.body?.kind === "graphql"
+      return {
+        kind: "request" as const,
+        name: r.name,
+        badge: gql ? "GQL" : abbrev(r.method),
+        color: gql ? C_GQL : methodColor(r.method),
+        folderId: r.folderId ?? null,
+        active: r.id === activeRequestId,
+      }
+    }
+    const c = connections.find((x) => x.id === id)
+    if (c)
+      return {
+        kind: "websocket" as const,
+        name: c.name,
+        badge: "WS",
+        color: C_WS,
+        folderId: c.folderId ?? null,
+        active: c.id === activeConnectionId,
+      }
+    const g = grpcRequests.find((x) => x.id === id)
+    if (g)
+      return {
+        kind: "grpc" as const,
+        name: g.name,
+        badge: "gRPC",
+        color: C_GRPC,
+        folderId: g.folderId ?? null,
+        active: g.id === activeGrpcId,
+      }
+    return null
   }
 
   if (!workspaceOpen) return null
@@ -160,25 +214,23 @@ export function CommandPalette() {
                   </Group>
                 )}
 
-                {/* Recent requests — only in API workspace */}
-                {activeTool === "api" && recentRequestIds.length > 0 && (
-                  <Group heading="Requests">
-                    {recentRequestIds.map((id) => {
-                      const r = requests.find((req) => req.id === id)
-                      if (!r) return null
-                      const folderPath = getFolderPath(
-                        folders,
-                        r.folderId ?? null,
-                      )
+                {/* Recently-used items of any type (HTTP / WS / gRPC) */}
+                {activeTool === "api" && recentNodeIds.length > 0 && (
+                  <Group heading="Recent">
+                    {recentNodeIds.map((id) => {
+                      const e = resolveRecent(id)
+                      if (!e) return null
+                      const folderPath = getFolderPath(folders, e.folderId)
                       return (
                         <RequestPaletteItem
-                          key={r.id}
-                          method={r.method}
-                          name={r.name}
+                          key={id}
+                          badge={e.badge}
+                          badgeColor={e.color}
+                          name={e.name}
                           folderPath={folderPath}
-                          active={r.id === activeRequestId}
+                          active={e.active}
                           onSelect={() =>
-                            handleSelectRequest(r.id, r.folderId ?? null)
+                            handleSelectNode(e.kind, id, e.folderId)
                           }
                         />
                       )
@@ -268,7 +320,8 @@ function PaletteItem({ icon, label, active, onSelect }: PaletteItemProps) {
 }
 
 interface RequestPaletteItemProps {
-  method: string
+  badge: string
+  badgeColor: string
   name: string
   folderPath: string
   active: boolean
@@ -276,14 +329,15 @@ interface RequestPaletteItemProps {
 }
 
 function RequestPaletteItem({
-  method,
+  badge,
+  badgeColor,
   name,
   folderPath,
   active,
   onSelect,
 }: RequestPaletteItemProps) {
   // `value` is what cmdk uses for its built-in filtering
-  const searchValue = [method, folderPath, name].filter(Boolean).join(" ")
+  const searchValue = [badge, folderPath, name].filter(Boolean).join(" ")
 
   return (
     <Command.Item
@@ -292,10 +346,10 @@ function RequestPaletteItem({
       className="flex items-center gap-3 px-3 py-2 mx-1.5 rounded-[4px] cursor-pointer select-none outline-none aria-selected:bg-subtle"
     >
       <span
-        className="font-mono text-[0.714rem] font-semibold w-[34px] text-right shrink-0 tracking-wide"
-        style={{ color: methodColor(method) }}
+        className="font-mono text-[0.714rem] font-semibold w-[40px] text-right shrink-0 tracking-wide"
+        style={{ color: badgeColor }}
       >
-        {abbrev(method)}
+        {badge}
       </span>
       <span className="flex-1 min-w-0 flex items-center gap-1.5 font-sans text-[0.929rem] text-fg">
         {folderPath && (

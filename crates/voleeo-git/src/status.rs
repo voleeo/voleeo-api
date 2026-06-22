@@ -1,7 +1,7 @@
 use crate::{classify_path, git_err, open_repo};
 use git2::{Repository, Status, StatusOptions};
 use std::path::Path;
-use voleeo_core::{GitChange, GitFileChange, GitStatus, VoleeoError};
+use voleeo_core::{GitChange, GitFileChange, GitNodeKind, GitStatus, VoleeoError};
 
 /// YAML keys whose churn shouldn't count as a git change. Editing then reverting
 /// a request still bumps `updatedAt`, leaving a spurious timestamp-only diff.
@@ -43,9 +43,26 @@ pub fn status(path: &Path) -> Result<GitStatus, VoleeoError> {
                 node_kind,
                 change: GitChange::Conflicted,
                 staged: false,
+                parent_id: None,
             });
             continue;
         }
+
+        // For a deletion the working file is gone, so recover its parent folder
+        // from HEAD — the frontend needs it to attribute the change to a folder.
+        let parent_id = if st.intersects(Status::WT_DELETED | Status::INDEX_DELETED)
+            && matches!(
+                node_kind,
+                GitNodeKind::Request
+                    | GitNodeKind::WebSocket
+                    | GitNodeKind::Grpc
+                    | GitNodeKind::Folder
+            ) {
+            head_parent_id(&repo, &p)
+        } else {
+            None
+        };
+
         if let Some(change) = index_change(st) {
             files.push(GitFileChange {
                 path: p.clone(),
@@ -53,6 +70,7 @@ pub fn status(path: &Path) -> Result<GitStatus, VoleeoError> {
                 node_kind,
                 change,
                 staged: true,
+                parent_id: parent_id.clone(),
             });
         }
         if let Some(change) = worktree_change(st) {
@@ -62,10 +80,37 @@ pub fn status(path: &Path) -> Result<GitStatus, VoleeoError> {
                 node_kind,
                 change,
                 staged: false,
+                parent_id,
             });
         }
     }
     Ok(GitStatus { files, conflicted })
+}
+
+/// Parent folder id of a deleted entity, read from its HEAD blob (the working
+/// file no longer exists). `folderId` is plaintext structural data — never
+/// encrypted — so this works without the crypto layer.
+fn head_parent_id(repo: &Repository, rel: &str) -> Option<String> {
+    let blob = repo
+        .head()
+        .ok()
+        .and_then(|h| h.peel_to_tree().ok())
+        .and_then(|t| t.get_path(Path::new(rel)).ok())
+        .and_then(|e| repo.find_blob(e.id()).ok())?;
+    let text = std::str::from_utf8(blob.content()).ok()?;
+    parse_folder_id(text)
+}
+
+/// Extract the top-level `folderId` from a flat entity YAML (serde_yaml emits
+/// top-level keys at column 0). Avoids a YAML dependency for one plaintext field.
+fn parse_folder_id(yaml: &str) -> Option<String> {
+    let rest = yaml.lines().find_map(|l| l.strip_prefix("folderId:"))?;
+    let v = rest.trim().trim_matches(['"', '\'']);
+    if v.is_empty() || v == "null" || v == "~" {
+        None
+    } else {
+        Some(v.to_string())
+    }
 }
 
 /// Reset every working file whose only change vs HEAD is volatile metadata

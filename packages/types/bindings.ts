@@ -437,7 +437,7 @@ state?: string; username?: string; password?: string; password_encrypted?: boole
 	listSystemFonts: () => typedError<string[], VoleeoError>(__TAURI_INVOKE("list_system_fonts")),
 	gitRepoInfo: (workspaceId: string) => typedError<GitRepoInfo, VoleeoError>(__TAURI_INVOKE("git_repo_info", { workspaceId })),
 	gitInit: (workspaceId: string) => typedError<GitRepoInfo, VoleeoError>(__TAURI_INVOKE("git_init", { workspaceId })),
-	gitStatus: (workspaceId: string) => typedError<GitStatus, VoleeoError>(__TAURI_INVOKE("git_status", { workspaceId })),
+	gitStatus: (workspaceId: string) => typedError<GitStatus_Serialize, VoleeoError>(__TAURI_INVOKE("git_status", { workspaceId })),
 	/**
 	 *  All pending changes as decrypted entity snapshots (HEAD `old` vs working
 	 *  `new`). The frontend turns these into the friendly field-level review.
@@ -932,12 +932,36 @@ export type GitEntity_Serialize = {
 };
 
 /**  One changed file, already mapped back to its tree node when possible. */
-export type GitFileChange = {
+export type GitFileChange = GitFileChange_Serialize | GitFileChange_Deserialize;
+
+/**  One changed file, already mapped back to its tree node when possible. */
+export type GitFileChange_Deserialize = {
 	path: string,
 	nodeId: string | null,
 	nodeKind: GitNodeKind,
 	change: GitChange,
 	staged: boolean,
+	/**
+	 *  Parent folder id for a DELETED entity, recovered from its HEAD YAML (the
+	 *  working file is gone, so the frontend can't resolve it from live state).
+	 *  `None` for non-deletions, root-level items, and non-foldered kinds.
+	 */
+	parentId?: string | null,
+};
+
+/**  One changed file, already mapped back to its tree node when possible. */
+export type GitFileChange_Serialize = {
+	path: string,
+	nodeId: string | null,
+	nodeKind: GitNodeKind,
+	change: GitChange,
+	staged: boolean,
+	/**
+	 *  Parent folder id for a DELETED entity, recovered from its HEAD YAML (the
+	 *  working file is gone, so the frontend can't resolve it from live state).
+	 *  `None` for non-deletions, root-level items, and non-foldered kinds.
+	 */
+	parentId?: string | null,
 };
 
 export type GitIdentity = {
@@ -978,8 +1002,15 @@ export type GitRepoInfo = {
 	unencryptedSecrets: boolean,
 };
 
-export type GitStatus = {
-	files: GitFileChange[],
+export type GitStatus = GitStatus_Serialize | GitStatus_Deserialize;
+
+export type GitStatus_Deserialize = {
+	files: GitFileChange_Deserialize[],
+	conflicted: boolean,
+};
+
+export type GitStatus_Serialize = {
+	files: GitFileChange_Serialize[],
 	conflicted: boolean,
 };
 

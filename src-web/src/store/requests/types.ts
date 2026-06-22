@@ -27,7 +27,8 @@ export interface RequestStore {
   /** Mutually exclusive with the other `active*Id` fields. */
   activeGrpcId: string | null
   loadedWorkspaceId: string | null
-  recentRequestIds: string[]
+  /** Recently-activated nodes of any type (HTTP / WS / gRPC), most-recent-first. */
+  recentNodeIds: string[]
   pendingFolderFocus: {
     folderId: string
     tab: "headers" | "variables"

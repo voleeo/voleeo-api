@@ -8,6 +8,14 @@ import {
 } from "../persistence"
 import { fetchEntities, type GetState, type SetState } from "./shared"
 
+function pushRecentNode(get: GetState, id: string | null): string[] {
+  const { loadedWorkspaceId, recentNodeIds } = get()
+  if (!id) return recentNodeIds
+  const next = pushRecent(recentNodeIds, id)
+  if (loadedWorkspaceId) saveRecentRequestIds(loadedWorkspaceId, next)
+  return next
+}
+
 /** Load/reload and active-item selection — the navigation surface of the store. */
 export function loadSelectActions(set: SetState, get: GetState) {
   return {
@@ -20,9 +28,14 @@ export function loadSelectActions(set: SetState, get: GetState) {
         remembered != null && requests.some((r) => r.id === remembered)
           ? remembered
           : null
-      const requestIds = new Set(requests.map((r) => r.id))
-      const recentRequestIds = loadRecentRequestIds(workspaceId).filter((id) =>
-        requestIds.has(id),
+      // Recents span every entity type (HTTP / WS / gRPC), not just requests.
+      const nodeIds = new Set<string>([
+        ...requests.map((r) => r.id),
+        ...connections.map((c) => c.id),
+        ...grpcRequests.map((g) => g.id),
+      ])
+      const recentNodeIds = loadRecentRequestIds(workspaceId).filter((id) =>
+        nodeIds.has(id),
       )
       set({
         folders,
@@ -32,7 +45,7 @@ export function loadSelectActions(set: SetState, get: GetState) {
         tree: buildTree(folders, requests, connections, grpcRequests),
         loadedWorkspaceId: workspaceId,
         activeRequestId,
-        recentRequestIds,
+        recentNodeIds,
       })
     },
 
@@ -51,16 +64,14 @@ export function loadSelectActions(set: SetState, get: GetState) {
     },
 
     setActiveRequest: (id: string | null) => {
-      const { loadedWorkspaceId, recentRequestIds } = get()
+      const { loadedWorkspaceId } = get()
       if (loadedWorkspaceId) saveLastRequestId(loadedWorkspaceId, id)
-      const next = id ? pushRecent(recentRequestIds, id) : recentRequestIds
-      if (loadedWorkspaceId && id) saveRecentRequestIds(loadedWorkspaceId, next)
       set({
         activeRequestId: id,
         activeFolderId: null,
         activeConnectionId: null,
         activeGrpcId: null,
-        recentRequestIds: next,
+        recentNodeIds: pushRecentNode(get, id),
       })
     },
 
@@ -82,6 +93,7 @@ export function loadSelectActions(set: SetState, get: GetState) {
           activeRequestId: null,
           activeFolderId: null,
           activeGrpcId: null,
+          recentNodeIds: pushRecentNode(get, id),
         })
       else set({ activeConnectionId: null })
     },
@@ -93,6 +105,7 @@ export function loadSelectActions(set: SetState, get: GetState) {
           activeRequestId: null,
           activeFolderId: null,
           activeConnectionId: null,
+          recentNodeIds: pushRecentNode(get, id),
         })
       else set({ activeGrpcId: null })
     },

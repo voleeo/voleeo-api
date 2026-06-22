@@ -35,6 +35,14 @@ function parentMap(
   return parentOf
 }
 
+/** Parent of a DELETED node, from the backend's HEAD lookup — deleted entities
+ *  are gone from the live lists, so `parentMap` can't know their folder. */
+function deletedParentMap(files: GitFileChange[]): Record<string, string> {
+  const m: Record<string, string> = {}
+  for (const f of files) if (f.nodeId && f.parentId) m[f.nodeId] = f.parentId
+  return m
+}
+
 export interface ChangeMaps {
   byNode: Record<string, GitChange>
   ownByNode: Record<string, GitChange>
@@ -56,17 +64,21 @@ export function buildChangeMap(
   }
 
   const parentOf = parentMap(requests, folders, connections, grpcRequests)
+  const deletedParentOf = deletedParentMap(files)
+  // Live parent first; fall back to the HEAD-resolved parent for deleted nodes.
+  const resolveParent = (id: string): string | null =>
+    parentOf[id] ?? deletedParentOf[id] ?? null
   const folderIds = new Set(folders.map((f) => f.id))
 
   const byNode: Record<string, GitChange> = { ...own }
   const folderDescendantChanged = new Set<string>()
   for (const [nodeId, change] of Object.entries(own)) {
     const isRequestLike = !folderIds.has(nodeId)
-    let p = parentOf[nodeId] ?? null
+    let p = resolveParent(nodeId)
     while (p) {
       byNode[p] = byNode[p] ? worse(byNode[p], change) : change
       if (isRequestLike) folderDescendantChanged.add(p)
-      p = parentOf[p] ?? null
+      p = resolveParent(p)
     }
   }
   return { byNode, ownByNode: own, folderDescendantChanged }
@@ -81,12 +93,15 @@ export function changedPathsUnderFolder(
   grpcRequests: GrpcRequest[] = [],
 ): string[] {
   const parentOf = parentMap(requests, folders, connections, grpcRequests)
+  const deletedParentOf = deletedParentMap(files)
+  const resolveParent = (id: string): string | null =>
+    parentOf[id] ?? deletedParentOf[id] ?? null
   const folderIds = new Set(folders.map((f) => f.id))
   const isUnder = (id: string) => {
-    let p = parentOf[id] ?? null
+    let p = resolveParent(id)
     while (p) {
       if (p === folderId) return true
-      p = parentOf[p] ?? null
+      p = resolveParent(p)
     }
     return false
   }
