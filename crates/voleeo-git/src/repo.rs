@@ -47,7 +47,7 @@ pub fn repo_info(path: &Path) -> Result<GitRepoInfo, VoleeoError> {
     let branch = repo
         .head()
         .ok()
-        .and_then(|h| h.shorthand().map(String::from));
+        .and_then(|h| h.shorthand().ok().map(String::from));
     let remotes = remotes(path).unwrap_or_default();
     let (ahead, behind) = ahead_behind(&repo).unwrap_or((0, 0));
     let merging = repo.state() == RepositoryState::Merge;
@@ -98,7 +98,7 @@ pub(crate) fn ahead_behind(repo: &Repository) -> Option<(u32, u32)> {
     }
     let local_oid = head.target()?;
     let branch = repo
-        .find_branch(head.shorthand()?, BranchType::Local)
+        .find_branch(head.shorthand().ok()?, BranchType::Local)
         .ok()?;
 
     match branch.upstream() {

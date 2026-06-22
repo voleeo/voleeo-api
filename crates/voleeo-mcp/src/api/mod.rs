@@ -30,6 +30,7 @@ mod cookie;
 mod env;
 mod folder;
 mod grpc;
+mod redact;
 mod request;
 mod response;
 mod tools;
@@ -648,7 +649,8 @@ mod tests {
         let vars = updated["variables"].as_array().unwrap();
         assert_eq!(vars.len(), 1);
         assert_eq!(vars[0]["key"], "TOKEN");
-        assert_eq!(vars[0]["value"], "abc");
+        // Values are masked by default, even in a write tool's echo-back.
+        assert_eq!(vars[0]["value"], super::redact::MASK);
 
         let r2 = b
             .call_tool(
@@ -669,7 +671,23 @@ mod tests {
             1,
             "should update in place, not add a second entry"
         );
-        assert_eq!(vars2[0]["value"], "xyz");
+
+        // reveal=true exposes the real persisted value.
+        let revealed: Value = serde_json::from_str(
+            &b.call_tool(
+                "env.get",
+                args(&[
+                    ("workspaceId", Value::String(ws_id.into())),
+                    ("envId", Value::String(env_id.into())),
+                    ("reveal", Value::Bool(true)),
+                ]),
+            )
+            .await
+            .content[0]
+                .text,
+        )
+        .unwrap();
+        assert_eq!(revealed["variables"][0]["value"], "xyz");
     }
 
     #[tokio::test]
@@ -772,6 +790,7 @@ mod tests {
                 args(&[
                     ("workspaceId", Value::String(ws_id)),
                     ("jarId", Value::String("default".into())),
+                    ("reveal", Value::Bool(true)),
                 ]),
             )
             .await;
@@ -810,6 +829,7 @@ mod tests {
                 args(&[
                     ("workspaceId", Value::String(ws_id)),
                     ("jarId", Value::String("default".into())),
+                    ("reveal", Value::Bool(true)),
                 ]),
             )
             .await;
@@ -1138,6 +1158,7 @@ mod tests {
                 args(&[
                     ("workspaceId", Value::String(ws_id)),
                     ("requestId", Value::String(req_id)),
+                    ("reveal", Value::Bool(true)),
                 ]),
             )
             .await
@@ -1147,6 +1168,89 @@ mod tests {
         .unwrap();
         assert_eq!(got["auth"]["kind"], "bearer");
         assert_eq!(got["auth"]["token"], "s3cr3t");
+    }
+
+    #[tokio::test]
+    async fn request_get_masks_auth_and_survives_masked_roundtrip() {
+        let dir = tempfile::tempdir().unwrap();
+        let b = make_backend(&dir);
+        let ws_id = ws(&b).await;
+        let created: Value = serde_json::from_str(
+            &b.call_tool(
+                "request.create",
+                args(&[
+                    ("workspaceId", Value::String(ws_id.clone())),
+                    ("name", Value::String("R".into())),
+                    ("method", Value::String("GET".into())),
+                    ("url", Value::String("https://example.com".into())),
+                ]),
+            )
+            .await
+            .content[0]
+                .text,
+        )
+        .unwrap();
+        let req_id = created["id"].as_str().unwrap().to_string();
+        b.call_tool(
+            "request.update",
+            args(&[
+                ("workspaceId", Value::String(ws_id.clone())),
+                ("requestId", Value::String(req_id.clone())),
+                (
+                    "auth",
+                    serde_json::json!({ "kind": "bearer", "token": "s3cr3t" }),
+                ),
+            ]),
+        )
+        .await;
+
+        // Default read masks the secret.
+        let masked: Value = serde_json::from_str(
+            &b.call_tool(
+                "request.get",
+                args(&[
+                    ("workspaceId", Value::String(ws_id.clone())),
+                    ("requestId", Value::String(req_id.clone())),
+                ]),
+            )
+            .await
+            .content[0]
+                .text,
+        )
+        .unwrap();
+        assert_eq!(masked["auth"]["token"], super::redact::MASK);
+
+        // Echoing the masked value back on update must NOT wipe the real secret.
+        b.call_tool(
+            "request.update",
+            args(&[
+                ("workspaceId", Value::String(ws_id.clone())),
+                ("requestId", Value::String(req_id.clone())),
+                (
+                    "auth",
+                    serde_json::json!({ "kind": "bearer", "token": super::redact::MASK }),
+                ),
+            ]),
+        )
+        .await;
+        let revealed: Value = serde_json::from_str(
+            &b.call_tool(
+                "request.get",
+                args(&[
+                    ("workspaceId", Value::String(ws_id)),
+                    ("requestId", Value::String(req_id)),
+                    ("reveal", Value::Bool(true)),
+                ]),
+            )
+            .await
+            .content[0]
+                .text,
+        )
+        .unwrap();
+        assert_eq!(
+            revealed["auth"]["token"], "s3cr3t",
+            "masked round-trip must preserve the stored secret"
+        );
     }
 
     #[tokio::test]

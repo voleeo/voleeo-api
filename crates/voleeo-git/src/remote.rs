@@ -7,7 +7,7 @@ pub fn remotes(path: &Path) -> Result<Vec<GitRemoteInfo>, VoleeoError> {
     let repo = open_repo(path)?;
     let names = repo.remotes().map_err(git_err)?;
     let mut out = Vec::new();
-    for name in names.iter().flatten() {
+    for name in names.iter().flatten().flatten() {
         if let Ok(r) = repo.find_remote(name) {
             out.push(GitRemoteInfo {
                 name: name.to_string(),
