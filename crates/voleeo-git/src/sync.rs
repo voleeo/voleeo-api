@@ -103,7 +103,7 @@ pub fn push(path: &Path, creds: Option<(String, String)>) -> Result<(), VoleeoEr
     let branch = repo
         .head()
         .ok()
-        .and_then(|h| h.shorthand().map(String::from))
+        .and_then(|h| h.shorthand().ok().map(String::from))
         .ok_or_else(|| VoleeoError::Git("Detached HEAD — checkout a branch to push".into()))?;
     let refspec = format!("refs/heads/{branch}:refs/heads/{branch}");
     {
@@ -149,6 +149,7 @@ fn do_fetch(repo: &Repository, creds: Option<(String, String)>) -> Result<(), Vo
         .map_err(git_err)?
         .iter()
         .flatten()
+        .flatten()
         .map(String::from)
         .collect();
     let mut opts = FetchOptions::new();
@@ -164,6 +165,7 @@ fn fast_forward(repo: &Repository, target: git2::Oid) -> Result<(), VoleeoError>
         Ok(head) => {
             let name = head
                 .name()
+                .ok()
                 .map(String::from)
                 .ok_or_else(|| VoleeoError::Git("unnamed HEAD reference".into()))?;
             let mut r = repo.find_reference(&name).map_err(git_err)?;

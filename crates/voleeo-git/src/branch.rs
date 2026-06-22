@@ -9,7 +9,7 @@ pub fn branches(path: &Path) -> Result<Vec<GitBranch>, VoleeoError> {
     let current = repo
         .head()
         .ok()
-        .and_then(|h| h.shorthand().map(String::from));
+        .and_then(|h| h.shorthand().ok().map(String::from));
     let mut out = Vec::new();
     for b in repo.branches(Some(BranchType::Local)).map_err(git_err)? {
         let (branch, _) = b.map_err(git_err)?;
