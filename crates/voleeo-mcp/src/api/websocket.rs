@@ -184,13 +184,42 @@ impl ApiBackend {
         }
     }
 
-    pub(super) fn ws_disconnect(&self, args: &Value) -> ToolResult {
+    pub(super) async fn ws_disconnect(&self, args: &Value) -> ToolResult {
+        let ws_id = require!(args, "workspaceId");
         let conn_id = require!(args, "connectionId");
+        // Verify the connection belongs to this workspace before acting.
+        let ws_store = self.ws.clone();
+        let (ws, conn) = (ws_id, conn_id.clone());
+        if let Err(e) = super::blocking(move || ws_store.get(&ws, &conn).map(|_| ())).await {
+            return ToolResult::error(e.to_string());
+        }
         self.ws_manager.disconnect(&conn_id);
         (self.notify)(
             "ws:status",
             json!({ "connectionId": conn_id, "status": "closed" }),
         );
         ToolResult::json(&json!({ "connectionId": conn_id, "status": "closed" }))
+    }
+
+    pub(super) async fn ws_delete(&self, args: &Value) -> ToolResult {
+        let ws_id = require!(args, "workspaceId");
+        let conn_id = require!(args, "connectionId");
+        // Close any live socket, then clear the transcript + delete the saved def.
+        self.ws_manager.disconnect(&conn_id);
+        let ws_store = self.ws.clone();
+        let transcripts = self.ws_transcripts.clone();
+        let (ws, conn) = (ws_id.clone(), conn_id.clone());
+        let result = super::blocking(move || -> Result<(), VoleeoError> {
+            let _ = transcripts.clear(&ws, &conn);
+            ws_store.delete(&ws, &conn)
+        })
+        .await;
+        match result {
+            Ok(()) => {
+                self.notify_connections(&ws_id);
+                ToolResult::json(&json!({ "deleted": conn_id }))
+            }
+            Err(e) => ToolResult::error(e.to_string()),
+        }
     }
 }

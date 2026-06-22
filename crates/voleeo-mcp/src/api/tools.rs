@@ -10,6 +10,16 @@ fn reveal_arg() -> (&'static str, &'static str, Value) {
     )
 }
 
+/// Schema for a `{ "name": "value" }` string map (headers / query params).
+fn map_schema() -> Value {
+    serde_json::json!({ "type": "object", "additionalProperties": { "type": "string" } })
+}
+
+/// Schema for a free-form request `body` object.
+fn body_schema() -> Value {
+    serde_json::json!({ "type": "object" })
+}
+
 pub(super) fn definitions() -> Vec<ToolDef> {
     vec![
         ToolDef {
@@ -46,7 +56,7 @@ pub(super) fn definitions() -> Vec<ToolDef> {
         },
         ToolDef {
             name: "request.create".into(),
-            description: "Create a new HTTP request in a workspace.".into(),
+            description: "Create a new HTTP request in a workspace. headers, query params, and a body can be set here in one call.".into(),
             input_schema: obj_schema(
                 &[
                     ("workspaceId", "Workspace ID", str_schema()),
@@ -54,12 +64,17 @@ pub(super) fn definitions() -> Vec<ToolDef> {
                     ("method", "HTTP method (GET, POST, …)", str_schema()),
                     ("url", "Request URL", str_schema()),
                 ],
-                &[("folderId", "Parent folder ID", str_schema())],
+                &[
+                    ("folderId", "Parent folder ID", str_schema()),
+                    ("headers", "Request headers as an object map {\"Header-Name\":\"value\"} (or an array of {name,value,enabled?} for duplicate/disabled rows).", map_schema()),
+                    ("queryParams", "Query params as an object map {\"key\":\"value\"} (or an array of {name,value,enabled?}).", map_schema()),
+                    ("body", "Request body: {\"kind\":\"json|xml|text|html|none\",\"text\":\"…\"} for raw bodies, or {\"kind\":\"form_url_encoded\",\"fields\":{\"k\":\"v\"}} for forms. Use graphqlQuery (on request.update) for GraphQL; multipart/binary uploads aren't supported.", body_schema()),
+                ],
             ),
         },
         ToolDef {
             name: "request.update".into(),
-            description: "Update an existing request's method, URL, name, or auth. Setting `graphqlQuery` turns it into a GraphQL request — a plain HTTP POST with a `{ query, variables }` JSON body; send it with request.send.".into(),
+            description: "Update an existing request's method, URL, name, headers, query params, body, or auth (any subset; omitted fields are left unchanged). Setting `graphqlQuery` turns it into a GraphQL request — a plain HTTP POST with a `{ query, variables }` JSON body; send it with request.send.".into(),
             input_schema: obj_schema(
                 &[
                     ("workspaceId", "Workspace ID", str_schema()),
@@ -69,9 +84,12 @@ pub(super) fn definitions() -> Vec<ToolDef> {
                     ("method", "New HTTP method", str_schema()),
                     ("url", "New URL", str_schema()),
                     ("name", "New name", str_schema()),
+                    ("headers", "Replace headers. Object map {\"Header-Name\":\"value\"} (or array of {name,value,enabled?}). Omit to leave unchanged.", map_schema()),
+                    ("queryParams", "Replace query params. Object map {\"key\":\"value\"} (or array of {name,value,enabled?}). Omit to leave unchanged.", map_schema()),
+                    ("body", "Replace the body: {\"kind\":\"json|xml|text|html|none\",\"text\":\"…\"} or {\"kind\":\"form_url_encoded\",\"fields\":{\"k\":\"v\"}}. Omit to leave unchanged.", body_schema()),
                     ("graphqlQuery", "GraphQL query/mutation document; sets a GraphQL body (auto-switches a GET to POST)", str_schema()),
                     ("graphqlVariables", "GraphQL variables as a JSON object string; updates the variables of an existing GraphQL body", str_schema()),
-                    ("auth", "Auth config object keyed by `kind`. kinds: none, inherit, bearer {token}, basic {username,password}, api_key {key,value,location}, aws_sig_v4, o_auth1, o_auth2, digest {username,password}, ntlm. Send plaintext secrets — they're encrypted at rest on encrypted workspaces. Example: {\"kind\":\"bearer\",\"token\":\"abc\"}.", obj_schema(&[("kind", "Auth kind", str_schema())], &[])),
+                    ("auth", "Auth config object keyed by `kind`. kinds: none, inherit, bearer {token}, basic {username,password}, api_key {key,value,location}, aws_sig_v4, o_auth1, o_auth2, digest {username,password}, ntlm. Send plaintext secrets — they're encrypted at rest on encrypted workspaces. Example: {\"kind\":\"bearer\",\"token\":\"abc\"}.", serde_json::json!({ "type": "object", "properties": { "kind": { "type": "string", "description": "Auth kind" } }, "required": ["kind"], "additionalProperties": true })),
                 ],
             ),
         },
@@ -82,6 +100,17 @@ pub(super) fn definitions() -> Vec<ToolDef> {
                 &[
                     ("workspaceId", "Workspace ID", str_schema()),
                     ("requestId", "Request ID to duplicate", str_schema()),
+                ],
+                &[],
+            ),
+        },
+        ToolDef {
+            name: "request.delete".into(),
+            description: "Delete a request permanently.".into(),
+            input_schema: obj_schema(
+                &[
+                    ("workspaceId", "Workspace ID", str_schema()),
+                    ("requestId", "Request ID to delete", str_schema()),
                 ],
                 &[],
             ),
@@ -113,12 +142,23 @@ pub(super) fn definitions() -> Vec<ToolDef> {
         },
         ToolDef {
             name: "folder.rename".into(),
-            description: "Rename a folder.".into(),
+            description: "Rename a folder. Returns the updated folder.".into(),
             input_schema: obj_schema(
                 &[
                     ("workspaceId", "Workspace ID", str_schema()),
                     ("folderId", "Folder ID to rename", str_schema()),
                     ("name", "New name", str_schema()),
+                ],
+                &[],
+            ),
+        },
+        ToolDef {
+            name: "folder.delete".into(),
+            description: "Delete a folder and EVERYTHING inside it (nested folders and requests) — cascading, permanent.".into(),
+            input_schema: obj_schema(
+                &[
+                    ("workspaceId", "Workspace ID", str_schema()),
+                    ("folderId", "Folder ID to delete", str_schema()),
                 ],
                 &[],
             ),
@@ -155,17 +195,6 @@ pub(super) fn definitions() -> Vec<ToolDef> {
             ),
         },
         ToolDef {
-            name: "env.get".into(),
-            description: "Get a single environment by ID.".into(),
-            input_schema: obj_schema(
-                &[
-                    ("workspaceId", "Workspace ID", str_schema()),
-                    ("envId", "Environment ID", str_schema()),
-                ],
-                &[reveal_arg()],
-            ),
-        },
-        ToolDef {
             name: "env.create".into(),
             description: "Create a new environment.".into(),
             input_schema: obj_schema(
@@ -181,18 +210,30 @@ pub(super) fn definitions() -> Vec<ToolDef> {
         },
         ToolDef {
             name: "env.set_variable".into(),
-            description: "Set or update a variable in an environment. Creates the variable if it doesn't exist.".into(),
+            description: "Set, update, or delete a variable in an environment. Creates the variable if it doesn't exist; pass delete=true to remove it.".into(),
             input_schema: obj_schema(
                 &[
                     ("workspaceId", "Workspace ID", str_schema()),
                     ("envId", "Environment ID", str_schema()),
                     ("key", "Variable key", str_schema()),
-                    ("value", "Variable value (plaintext; encrypted at rest when `encrypted` is true on an encrypted workspace)", str_schema()),
                 ],
                 &[
+                    ("value", "Variable value (plaintext; encrypted at rest when `encrypted` is true on an encrypted workspace). Required unless delete=true.", str_schema()),
+                    ("delete", "Remove the variable named by `key` (no `value` needed). Default false.", bool_schema()),
                     ("enabled", "Whether the variable is active (default true)", bool_schema()),
                     ("encrypted", "Store this value encrypted at rest (encrypted workspaces only). Defaults to the variable's current setting, or false for a new variable.", bool_schema()),
                 ],
+            ),
+        },
+        ToolDef {
+            name: "env.delete".into(),
+            description: "Delete an environment. The Global Environment cannot be deleted.".into(),
+            input_schema: obj_schema(
+                &[
+                    ("workspaceId", "Workspace ID", str_schema()),
+                    ("envId", "Environment ID to delete", str_schema()),
+                ],
+                &[],
             ),
         },
         ToolDef {
@@ -200,17 +241,6 @@ pub(super) fn definitions() -> Vec<ToolDef> {
             description: "List all cookie jars in a workspace, including each jar's cookies (values masked unless reveal=true). Use this to discover which jar is currently active before sending a request.".into(),
             input_schema: obj_schema(
                 &[("workspaceId", "Workspace ID", str_schema())],
-                &[reveal_arg()],
-            ),
-        },
-        ToolDef {
-            name: "cookie.get_jar".into(),
-            description: "Get a single cookie jar by ID (cookie values masked unless reveal=true). Useful for inspecting cookie state after a request.send to debug auth flows.".into(),
-            input_schema: obj_schema(
-                &[
-                    ("workspaceId", "Workspace ID", str_schema()),
-                    ("jarId", "Cookie jar ID. Use 'default' for the auto-created default jar.", str_schema()),
-                ],
                 &[reveal_arg()],
             ),
         },
@@ -315,7 +345,21 @@ pub(super) fn definitions() -> Vec<ToolDef> {
             name: "websocket.disconnect".into(),
             description: "Close an open WebSocket connection.".into(),
             input_schema: obj_schema(
-                &[("connectionId", "Connection ID to close", str_schema())],
+                &[
+                    ("workspaceId", "Workspace ID", str_schema()),
+                    ("connectionId", "Connection ID to close", str_schema()),
+                ],
+                &[],
+            ),
+        },
+        ToolDef {
+            name: "websocket.delete".into(),
+            description: "Delete a saved WebSocket connection (closes it first if open). Permanent.".into(),
+            input_schema: obj_schema(
+                &[
+                    ("workspaceId", "Workspace ID", str_schema()),
+                    ("connectionId", "Connection ID to delete", str_schema()),
+                ],
                 &[],
             ),
         },
@@ -411,7 +455,24 @@ pub(super) fn definitions() -> Vec<ToolDef> {
         ToolDef {
             name: "grpc.stream_close".into(),
             description: "Cancel/close an open streaming gRPC call.".into(),
-            input_schema: obj_schema(&[("id", "gRPC request ID", str_schema())], &[]),
+            input_schema: obj_schema(
+                &[
+                    ("workspaceId", "Workspace ID", str_schema()),
+                    ("id", "gRPC request ID", str_schema()),
+                ],
+                &[],
+            ),
+        },
+        ToolDef {
+            name: "grpc.delete".into(),
+            description: "Delete a saved gRPC request (cancels any in-flight call first). Permanent.".into(),
+            input_schema: obj_schema(
+                &[
+                    ("workspaceId", "Workspace ID", str_schema()),
+                    ("id", "gRPC request ID to delete", str_schema()),
+                ],
+                &[],
+            ),
         },
     ]
 }

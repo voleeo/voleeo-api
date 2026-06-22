@@ -2,8 +2,94 @@ use super::{redact, ApiBackend};
 use crate::{protocol::ToolResult, resolve};
 use serde_json::Value;
 use std::path::Path;
-use voleeo_core::{AuthConfig, EnvironmentKind, StoredCookie, VoleeoError};
+use voleeo_core::{
+    AuthConfig, BodyField, BodyKind, EnvironmentKind, RequestBody, RequestParameter, StoredCookie,
+    VoleeoError,
+};
 use voleeo_storage::{CookieJarStore, WorkspaceStore};
+
+/// Parse a `headers`/`queryParams` arg into `RequestParameter`s. Accepts an
+/// object map `{ "Name": "value" }` (the common case) or an array of
+/// `{ name, value, enabled? }` (for duplicate names or disabled rows).
+fn parse_params(v: &Value) -> Vec<RequestParameter> {
+    let mk = |name: String, value: String, enabled: bool| RequestParameter {
+        id: format!("p_{}", voleeo_core::new_id()),
+        name,
+        value,
+        enabled,
+    };
+    match v {
+        Value::Object(map) => map
+            .iter()
+            .filter_map(|(k, val)| val.as_str().map(|s| mk(k.clone(), s.to_string(), true)))
+            .collect(),
+        Value::Array(arr) => arr
+            .iter()
+            .filter_map(|item| {
+                let name = item["name"].as_str()?;
+                Some(mk(
+                    name.to_string(),
+                    item["value"].as_str().unwrap_or("").to_string(),
+                    item["enabled"].as_bool().unwrap_or(true),
+                ))
+            })
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// Parse a `body` arg into a `RequestBody`. `Ok(None)` = no body arg given.
+/// Supports raw kinds (json/xml/text/html via `text`) and form-urlencoded (via
+/// a `fields` object map). Multipart / binary file uploads are intentionally
+/// unsupported over MCP (they'd read arbitrary local files); GraphQL bodies go
+/// through `graphqlQuery`.
+fn parse_body(v: &Value) -> Result<Option<RequestBody>, String> {
+    if v.is_null() {
+        return Ok(None);
+    }
+    let kind_str = v["kind"]
+        .as_str()
+        .ok_or("body.kind is required (json, xml, text, html, form_url_encoded, none)")?;
+    let kind = match kind_str.to_ascii_lowercase().as_str() {
+        "json" => BodyKind::Json,
+        "xml" => BodyKind::Xml,
+        "text" => BodyKind::Text,
+        "html" => BodyKind::Html,
+        "form_url_encoded" | "form" => BodyKind::FormUrlEncoded,
+        "none" => BodyKind::None,
+        other => {
+            return Err(format!(
+                "unsupported body kind {other:?} — use json, xml, text, html, form_url_encoded, \
+                 or none (for GraphQL use graphqlQuery; multipart/binary uploads aren't supported)"
+            ))
+        }
+    };
+    let fields = if matches!(kind, BodyKind::FormUrlEncoded) {
+        v["fields"].as_object().map(|m| {
+            m.iter()
+                .filter_map(|(k, val)| {
+                    val.as_str().map(|s| BodyField {
+                        id: format!("f_{}", voleeo_core::new_id()),
+                        name: k.clone(),
+                        value: s.to_string(),
+                        enabled: true,
+                        is_file: false,
+                        content_type: None,
+                    })
+                })
+                .collect()
+        })
+    } else {
+        None
+    };
+    Ok(Some(RequestBody {
+        kind,
+        text: v["text"].as_str().unwrap_or("").to_string(),
+        fields,
+        content_type: v["contentType"].as_str().map(str::to_string),
+        ..Default::default()
+    }))
+}
 
 /// Decrypt → upsert captured cookies by RFC 6265 identity → re-encrypt → save.
 /// Mirrors the Tauri `ingest_captured_cookies` so MCP and IPC captures match.
@@ -109,11 +195,43 @@ impl ApiBackend {
         let method = require!(args, "method");
         let url = require!(args, "url");
         let folder_id = args["folderId"].as_str().map(str::to_string);
+        let headers = parse_params(&args["headers"]);
+        let query_params = parse_params(&args["queryParams"]);
+        let body = match parse_body(&args["body"]) {
+            Ok(b) => b,
+            Err(e) => return ToolResult::error(e),
+        };
         let requests = self.requests.clone();
         let ws = ws_id.clone();
-        match super::blocking(move || requests.create_request(ws, folder_id, name, method, url))
-            .await
-        {
+        let result = super::blocking(move || -> Result<voleeo_core::HttpRequest, VoleeoError> {
+            let mut req = requests.create_request(ws.clone(), folder_id, name, method, url)?;
+            // create_request only sets name/method/url; persist any extras in a
+            // follow-up update so an AI can author a full request in one call.
+            if !headers.is_empty() || !query_params.is_empty() || body.is_some() {
+                if !headers.is_empty() {
+                    req.headers = headers;
+                }
+                if !query_params.is_empty() {
+                    req.parameters = query_params;
+                }
+                if body.is_some() {
+                    req.body = body;
+                }
+                requests.update_request(
+                    &ws,
+                    &req.id,
+                    req.method.clone(),
+                    req.url.clone(),
+                    req.parameters.clone(),
+                    req.headers.clone(),
+                    req.body.clone(),
+                    req.auth.clone(),
+                )?;
+            }
+            Ok(req)
+        })
+        .await;
+        match result {
             Ok(req) => {
                 self.notify_requests(&ws_id);
                 ToolResult::json(&req)
@@ -142,6 +260,14 @@ impl ApiBackend {
         let url = args["url"].as_str().map(str::to_string);
         let graphql_query = args["graphqlQuery"].as_str().map(str::to_string);
         let graphql_vars = args["graphqlVariables"].as_str().map(str::to_string);
+        // None = arg absent (preserve existing); Some(..) replaces wholesale.
+        let headers = (!args["headers"].is_null()).then(|| parse_params(&args["headers"]));
+        let query_params =
+            (!args["queryParams"].is_null()).then(|| parse_params(&args["queryParams"]));
+        let body = match parse_body(&args["body"]) {
+            Ok(b) => b,
+            Err(e) => return ToolResult::error(e),
+        };
 
         let requests = self.requests.clone();
         let workspaces = self.workspaces.clone();
@@ -174,6 +300,15 @@ impl ApiBackend {
                 if matches!(body.kind, voleeo_core::BodyKind::Graphql) {
                     body.graphql_variables = Some(v);
                 }
+            }
+            if let Some(h) = headers {
+                req.headers = h;
+            }
+            if let Some(p) = query_params {
+                req.parameters = p;
+            }
+            if let Some(b) = body {
+                req.body = Some(b);
             }
             if let Some(mut auth) = new_auth {
                 // A masked read (request.get without reveal) echoed back here must
@@ -226,6 +361,21 @@ impl ApiBackend {
             Ok(req) => {
                 self.notify_requests(&ws_id);
                 ToolResult::json(&req)
+            }
+            Err(e) => ToolResult::error(e.to_string()),
+        }
+    }
+
+    pub(super) async fn request_delete(&self, args: &Value) -> ToolResult {
+        let ws_id = require!(args, "workspaceId");
+        let req_id = require!(args, "requestId");
+        let requests = self.requests.clone();
+        let ws = ws_id.clone();
+        let rid = req_id.clone();
+        match super::blocking(move || requests.delete_request(&ws, &rid)).await {
+            Ok(()) => {
+                self.notify_requests(&ws_id);
+                ToolResult::json(&serde_json::json!({ "deleted": req_id }))
             }
             Err(e) => ToolResult::error(e.to_string()),
         }

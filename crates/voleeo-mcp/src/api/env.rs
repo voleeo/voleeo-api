@@ -1,7 +1,8 @@
 use super::{redact, ApiBackend};
 use crate::protocol::ToolResult;
 use serde_json::Value;
-use voleeo_core::{Environment, EnvironmentVariable, VoleeoError};
+use voleeo_core::{Environment, EnvironmentKind, EnvironmentVariable, VoleeoError};
+use voleeo_storage::GLOBAL_ENV_ID;
 
 impl ApiBackend {
     pub(super) async fn env_list(&self, args: &Value) -> ToolResult {
@@ -17,24 +18,6 @@ impl ApiBackend {
                 }
                 ToolResult::json(&envs)
             }
-            Err(e) => ToolResult::error(e.to_string()),
-        })
-        .await
-    }
-
-    pub(super) async fn env_get(&self, args: &Value) -> ToolResult {
-        let ws_id = require!(args, "workspaceId");
-        let env_id = require!(args, "envId");
-        let reveal = redact::reveal(args);
-        let environments = self.environments.clone();
-        super::run_blocking(move || match environments.get(&ws_id, &env_id) {
-            Ok(Some(mut env)) => {
-                if !reveal {
-                    redact::mask_env(&mut env);
-                }
-                ToolResult::json(&env)
-            }
-            Ok(None) => ToolResult::error("Environment not found"),
             Err(e) => ToolResult::error(e.to_string()),
         })
         .await
@@ -60,16 +43,23 @@ impl ApiBackend {
         let ws_id = require!(args, "workspaceId");
         let env_id = require!(args, "envId");
         let key = require!(args, "key");
-        let value = require!(args, "value");
+        let delete = args["delete"].as_bool().unwrap_or(false);
         let enabled = args["enabled"].as_bool().unwrap_or(true);
         let encrypted_arg = args["encrypted"].as_bool();
 
-        if redact::is_mask(&value) {
-            return ToolResult::error(
-                "value is the masked placeholder; pass the real value \
-                 (read the env with reveal=true to see the current one)",
-            );
-        }
+        // `value` is required unless deleting the variable.
+        let value = if delete {
+            String::new()
+        } else {
+            let v = require!(args, "value");
+            if redact::is_mask(&v) {
+                return ToolResult::error(
+                    "value is the masked placeholder; pass the real value \
+                     (read the env with reveal=true to see the current one)",
+                );
+            }
+            v
+        };
 
         let environments = self.environments.clone();
         let workspaces = self.workspaces.clone();
@@ -80,7 +70,9 @@ impl ApiBackend {
                 .get(&ws, &env_id)?
                 .ok_or_else(|| VoleeoError::NotFound("environment".into()))?;
 
-            if let Some(var) = env.variables.iter_mut().find(|v| v.key == key) {
+            if delete {
+                env.variables.retain(|v| v.key != key);
+            } else if let Some(var) = env.variables.iter_mut().find(|v| v.key == key) {
                 var.value = value;
                 var.enabled = enabled;
                 // `encrypted` arg overrides; otherwise keep the variable's flag so
@@ -122,6 +114,36 @@ impl ApiBackend {
                 // Mask before returning so other vars' values aren't echoed back.
                 redact::mask_env(&mut env);
                 ToolResult::json(&env)
+            }
+            Err(e) => ToolResult::error(e.to_string()),
+        }
+    }
+
+    pub(super) async fn env_delete(&self, args: &Value) -> ToolResult {
+        let ws_id = require!(args, "workspaceId");
+        let env_id = require!(args, "envId");
+        if env_id == GLOBAL_ENV_ID {
+            return ToolResult::error("the Global Environment cannot be deleted");
+        }
+        let environments = self.environments.clone();
+        let ws = ws_id.clone();
+        let eid = env_id.clone();
+        let result = super::blocking(move || -> Result<(), VoleeoError> {
+            // Guard the global env by kind too, not just id (idempotent otherwise).
+            if let Some(env) = environments.get(&ws, &eid)? {
+                if matches!(env.kind, EnvironmentKind::Global) {
+                    return Err(VoleeoError::InvalidConfig(
+                        "the Global Environment cannot be deleted".into(),
+                    ));
+                }
+            }
+            environments.delete(&ws, &eid)
+        })
+        .await;
+        match result {
+            Ok(()) => {
+                self.notify_envs(&ws_id);
+                ToolResult::json(&serde_json::json!({ "deleted": env_id }))
             }
             Err(e) => ToolResult::error(e.to_string()),
         }

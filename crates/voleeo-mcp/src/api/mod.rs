@@ -105,17 +105,18 @@ impl ApiBackend {
             "request.create" => self.request_create(&args).await,
             "request.update" => self.request_update(&args).await,
             "request.duplicate" => self.request_duplicate(&args).await,
+            "request.delete" => self.request_delete(&args).await,
             "request.send" => self.request_send(&args).await,
             "folder.create" => self.folder_create(&args).await,
             "folder.rename" => self.folder_rename(&args).await,
+            "folder.delete" => self.folder_delete(&args).await,
             "response.list" => self.response_list(&args).await,
             "response.get" => self.response_get(&args).await,
             "env.list" => self.env_list(&args).await,
-            "env.get" => self.env_get(&args).await,
             "env.create" => self.env_create(&args).await,
             "env.set_variable" => self.env_set_variable(&args).await,
+            "env.delete" => self.env_delete(&args).await,
             "cookie.list_jars" => self.cookie_list_jars(&args).await,
-            "cookie.get_jar" => self.cookie_get_jar(&args).await,
             "cookie.set_active_jar" => self.cookie_set_active_jar(&args).await,
             "cookie.set_cookie" => self.cookie_set_cookie(&args).await,
             "cookie.clear_jar" => self.cookie_clear_jar(&args).await,
@@ -124,7 +125,8 @@ impl ApiBackend {
             "websocket.connect" => self.ws_connect_tool(&args).await,
             "websocket.send" => self.ws_send(&args).await,
             "websocket.read_messages" => self.ws_read_messages(&args).await,
-            "websocket.disconnect" => self.ws_disconnect(&args),
+            "websocket.disconnect" => self.ws_disconnect(&args).await,
+            "websocket.delete" => self.ws_delete(&args).await,
             "grpc.list" => self.grpc_list(&args).await,
             "grpc.create" => self.grpc_create(&args).await,
             "grpc.describe" => self.grpc_describe(&args).await,
@@ -132,7 +134,8 @@ impl ApiBackend {
             "grpc.stream_start" => self.grpc_stream_start_tool(&args).await,
             "grpc.stream_send" => self.grpc_stream_send_tool(&args).await,
             "grpc.stream_read" => self.grpc_stream_read(&args).await,
-            "grpc.stream_close" => self.grpc_stream_close(&args),
+            "grpc.stream_close" => self.grpc_stream_close(&args).await,
+            "grpc.delete" => self.grpc_delete(&args).await,
             _ => ToolResult::error(format!("Unknown tool: {name}")),
         }
     }
@@ -649,13 +652,12 @@ mod tests {
             "should update in place, not add a second entry"
         );
 
-        // reveal=true exposes the real persisted value.
-        let revealed: Value = serde_json::from_str(
+        // reveal=true exposes the real persisted value (via env.list).
+        let envs: Value = serde_json::from_str(
             &b.call_tool(
-                "env.get",
+                "env.list",
                 args(&[
                     ("workspaceId", Value::String(ws_id.into())),
-                    ("envId", Value::String(env_id.into())),
                     ("reveal", Value::Bool(true)),
                 ]),
             )
@@ -664,7 +666,13 @@ mod tests {
                 .text,
         )
         .unwrap();
-        assert_eq!(revealed["variables"][0]["value"], "xyz");
+        let env = envs
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|e| e["id"] == env_id)
+            .unwrap();
+        assert_eq!(env["variables"][0]["value"], "xyz");
     }
 
     #[tokio::test]
@@ -763,15 +771,20 @@ mod tests {
 
         let got = b
             .call_tool(
-                "cookie.get_jar",
+                "cookie.list_jars",
                 args(&[
                     ("workspaceId", Value::String(ws_id)),
-                    ("jarId", Value::String("default".into())),
                     ("reveal", Value::Bool(true)),
                 ]),
             )
             .await;
-        let jar: Value = serde_json::from_str(&got.content[0].text).unwrap();
+        let jars: Value = serde_json::from_str(&got.content[0].text).unwrap();
+        let jar = jars
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|j| j["id"] == "default")
+            .unwrap();
         let cookies = jar["cookies"].as_array().unwrap();
         assert_eq!(cookies.len(), 1);
         assert_eq!(cookies[0]["value"], "abc123");
@@ -802,15 +815,20 @@ mod tests {
         }
         let got = b
             .call_tool(
-                "cookie.get_jar",
+                "cookie.list_jars",
                 args(&[
                     ("workspaceId", Value::String(ws_id)),
-                    ("jarId", Value::String("default".into())),
                     ("reveal", Value::Bool(true)),
                 ]),
             )
             .await;
-        let jar: Value = serde_json::from_str(&got.content[0].text).unwrap();
+        let jars: Value = serde_json::from_str(&got.content[0].text).unwrap();
+        let jar = jars
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|j| j["id"] == "default")
+            .unwrap();
         let cookies = jar["cookies"].as_array().unwrap();
         assert_eq!(cookies.len(), 1, "upsert must collapse to a single entry");
         assert_eq!(cookies[0]["value"], "v3");
@@ -1286,5 +1304,176 @@ mod tests {
             2,
             "set + clear each fire once"
         );
+    }
+
+    async fn create_req(b: &ApiBackend, ws_id: &str) -> String {
+        let created: Value = serde_json::from_str(
+            &b.call_tool(
+                "request.create",
+                args(&[
+                    ("workspaceId", Value::String(ws_id.into())),
+                    ("name", Value::String("R".into())),
+                    ("method", Value::String("GET".into())),
+                    ("url", Value::String("https://example.com".into())),
+                ]),
+            )
+            .await
+            .content[0]
+                .text,
+        )
+        .unwrap();
+        created["id"].as_str().unwrap().to_string()
+    }
+
+    #[tokio::test]
+    async fn request_create_with_headers_query_and_body() {
+        let dir = tempfile::tempdir().unwrap();
+        let b = make_backend(&dir);
+        let ws_id = ws(&b).await;
+        let created: Value = serde_json::from_str(
+            &b.call_tool(
+                "request.create",
+                args(&[
+                    ("workspaceId", Value::String(ws_id)),
+                    ("name", Value::String("R".into())),
+                    ("method", Value::String("POST".into())),
+                    ("url", Value::String("https://example.com".into())),
+                    (
+                        "headers",
+                        serde_json::json!({ "X-Test": "1", "Accept": "application/json" }),
+                    ),
+                    ("queryParams", serde_json::json!({ "q": "hello" })),
+                    (
+                        "body",
+                        serde_json::json!({ "kind": "json", "text": "{\"a\":1}" }),
+                    ),
+                ]),
+            )
+            .await
+            .content[0]
+                .text,
+        )
+        .unwrap();
+        let headers = created["headers"].as_array().unwrap();
+        assert_eq!(headers.len(), 2);
+        assert!(headers
+            .iter()
+            .any(|h| h["name"] == "X-Test" && h["value"] == "1"));
+        assert_eq!(created["parameters"].as_array().unwrap().len(), 1);
+        assert_eq!(created["body"]["kind"], "json");
+        assert_eq!(created["body"]["text"], "{\"a\":1}");
+    }
+
+    #[tokio::test]
+    async fn request_create_rejects_unknown_body_kind() {
+        let dir = tempfile::tempdir().unwrap();
+        let b = make_backend(&dir);
+        let ws_id = ws(&b).await;
+        let r = b
+            .call_tool(
+                "request.create",
+                args(&[
+                    ("workspaceId", Value::String(ws_id)),
+                    ("name", Value::String("R".into())),
+                    ("method", Value::String("POST".into())),
+                    ("url", Value::String("https://example.com".into())),
+                    ("body", serde_json::json!({ "kind": "multipart" })),
+                ]),
+            )
+            .await;
+        assert_eq!(r.is_error, Some(true));
+    }
+
+    #[tokio::test]
+    async fn request_delete_removes_request() {
+        let dir = tempfile::tempdir().unwrap();
+        let b = make_backend(&dir);
+        let ws_id = ws(&b).await;
+        let req_id = create_req(&b, &ws_id).await;
+        let del = b
+            .call_tool(
+                "request.delete",
+                args(&[
+                    ("workspaceId", Value::String(ws_id.clone())),
+                    ("requestId", Value::String(req_id)),
+                ]),
+            )
+            .await;
+        assert!(del.is_error.is_none(), "{}", del.content[0].text);
+        let list: Value = serde_json::from_str(
+            &b.call_tool(
+                "request.list",
+                args(&[("workspaceId", Value::String(ws_id))]),
+            )
+            .await
+            .content[0]
+                .text,
+        )
+        .unwrap();
+        assert_eq!(list["requests"].as_array().unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn env_set_variable_delete_removes_var() {
+        let dir = tempfile::tempdir().unwrap();
+        let b = make_backend(&dir);
+        let ws_id = ws(&b).await;
+        let env: Value = serde_json::from_str(
+            &b.call_tool(
+                "env.create",
+                args(&[
+                    ("workspaceId", Value::String(ws_id.clone())),
+                    ("name", Value::String("Dev".into())),
+                ]),
+            )
+            .await
+            .content[0]
+                .text,
+        )
+        .unwrap();
+        let env_id = env["id"].as_str().unwrap().to_string();
+        b.call_tool(
+            "env.set_variable",
+            args(&[
+                ("workspaceId", Value::String(ws_id.clone())),
+                ("envId", Value::String(env_id.clone())),
+                ("key", Value::String("TOKEN".into())),
+                ("value", Value::String("abc".into())),
+            ]),
+        )
+        .await;
+        let after: Value = serde_json::from_str(
+            &b.call_tool(
+                "env.set_variable",
+                args(&[
+                    ("workspaceId", Value::String(ws_id)),
+                    ("envId", Value::String(env_id)),
+                    ("key", Value::String("TOKEN".into())),
+                    ("delete", Value::Bool(true)),
+                ]),
+            )
+            .await
+            .content[0]
+                .text,
+        )
+        .unwrap();
+        assert_eq!(after["variables"].as_array().unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn env_delete_rejects_global() {
+        let dir = tempfile::tempdir().unwrap();
+        let b = make_backend(&dir);
+        let ws_id = ws(&b).await;
+        let r = b
+            .call_tool(
+                "env.delete",
+                args(&[
+                    ("workspaceId", Value::String(ws_id)),
+                    ("envId", Value::String("global".into())),
+                ]),
+            )
+            .await;
+        assert_eq!(r.is_error, Some(true));
     }
 }

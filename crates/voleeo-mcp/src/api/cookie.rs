@@ -42,30 +42,6 @@ impl ApiBackend {
         .await
     }
 
-    pub(super) async fn cookie_get_jar(&self, args: &Value) -> ToolResult {
-        let ws_id = require!(args, "workspaceId");
-        let jar_id = require!(args, "jarId");
-        let reveal = redact::reveal(args);
-        let cookies = self.cookies.clone();
-        let workspaces = self.workspaces.clone();
-        let app_data_dir = self.app_data_dir.clone();
-        super::run_blocking(move || {
-            let mut jar = match cookies.get(&ws_id, &jar_id) {
-                Ok(j) => j,
-                Err(e) => return ToolResult::error(e.to_string()),
-            };
-            if reveal {
-                if let Err(e) = decrypt_jar(&workspaces, &app_data_dir, &mut jar) {
-                    return ToolResult::error(e.to_string());
-                }
-            } else {
-                redact::mask_cookies(&mut jar);
-            }
-            ToolResult::json(&jar)
-        })
-        .await
-    }
-
     pub(super) async fn cookie_set_active_jar(&self, args: &Value) -> ToolResult {
         let ws_id = require!(args, "workspaceId");
         // `jarId` is required for this tool (unlike the Tauri equivalent which

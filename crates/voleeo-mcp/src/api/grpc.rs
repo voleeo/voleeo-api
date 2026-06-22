@@ -354,11 +354,45 @@ impl ApiBackend {
         }
     }
 
-    pub(super) fn grpc_stream_close(&self, args: &Value) -> ToolResult {
+    pub(super) async fn grpc_stream_close(&self, args: &Value) -> ToolResult {
+        let ws_id = require!(args, "workspaceId");
         let id = require!(args, "id");
+        // Verify the request belongs to this workspace before acting.
+        let grpc = self.grpc.clone();
+        let (ws, gid) = (ws_id, id.clone());
+        if let Err(e) = super::blocking(move || grpc.get(&ws, &gid).map(|_| ())).await {
+            return ToolResult::error(e.to_string());
+        }
         self.grpc_manager.cancel(&id);
         (self.notify)("grpc:status", json!({ "requestId": id, "status": "done" }));
         ToolResult::json(&json!({ "id": id, "status": "done" }))
+    }
+
+    pub(super) async fn grpc_delete(&self, args: &Value) -> ToolResult {
+        let ws_id = require!(args, "workspaceId");
+        let id = require!(args, "id");
+        // Cancel any in-flight stream + unary call, drop cached descriptors,
+        // then clear history and delete the saved request (mirrors the desktop).
+        self.grpc_manager.cancel(&id);
+        self.grpc_executor.cancel(&id);
+        self.grpc_descriptors.evict(&id);
+        let grpc = self.grpc.clone();
+        let responses = self.grpc_responses.clone();
+        let transcripts = self.grpc_transcripts.clone();
+        let (ws, gid) = (ws_id.clone(), id.clone());
+        let result = super::blocking(move || -> Result<(), VoleeoError> {
+            let _ = responses.clear(&ws, &gid);
+            let _ = transcripts.clear(&ws, &gid);
+            grpc.delete(&ws, &gid)
+        })
+        .await;
+        match result {
+            Ok(()) => {
+                self.notify_grpc(&ws_id);
+                ToolResult::json(&json!({ "deleted": id }))
+            }
+            Err(e) => ToolResult::error(e.to_string()),
+        }
     }
 }
 
