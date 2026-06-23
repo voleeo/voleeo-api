@@ -41,7 +41,7 @@ fn heal_unfinished_merges(app_data_dir: &Path, parsed: &[Workspace]) -> bool {
 fn derive_sync_dir(app_data_dir: &Path, workspace_id: &str) -> Option<String> {
     let internal = app_data_dir.join("workspaces").join(workspace_id);
     if internal.is_symlink() {
-        std::fs::read_link(&internal)
+        crate::platform::read_link_target(&internal)
             .ok()
             .map(|p| p.to_string_lossy().into_owned())
     } else {
@@ -54,7 +54,7 @@ fn derive_sync_dir(app_data_dir: &Path, workspace_id: &str) -> Option<String> {
 pub(crate) fn resolve_workspace_path(app_data_dir: &Path, workspace_id: &str) -> PathBuf {
     let internal = app_data_dir.join("workspaces").join(workspace_id);
     if internal.is_symlink() {
-        std::fs::read_link(&internal).unwrap_or(internal)
+        crate::platform::read_link_target(&internal).unwrap_or(internal)
     } else {
         internal
     }
@@ -305,12 +305,12 @@ pub async fn delete_workspace(
         // in the sync dir. Delete the real folder, then drop the symlink.
         let internal_dir = app_data_dir.join("workspaces").join(&workspace_id);
         if internal_dir.is_symlink() {
-            if let Ok(target) = std::fs::read_link(&internal_dir) {
+            if let Ok(target) = crate::platform::read_link_target(&internal_dir) {
                 if let Err(e) = std::fs::remove_dir_all(&target) {
                     eprintln!("[workspace] failed to delete sync folder {target:?}: {e}");
                 }
             }
-            std::fs::remove_file(&internal_dir)
+            crate::platform::remove_link(&internal_dir)
                 .map_err(|e| VoleeoError::Storage(format!("remove symlink: {e}")))?;
         } else {
             workspaces.delete(&workspace_id)?;
@@ -381,7 +381,7 @@ pub async fn workspace_set_sync_dir(
 
                 // Copy from the current target if already symlinked, else internal_dir.
                 let copy_src = if internal_dir.is_symlink() {
-                    std::fs::read_link(&internal_dir)
+                    crate::platform::read_link_target(&internal_dir)
                         .map_err(|e| VoleeoError::Storage(format!("read symlink: {e}")))?
                 } else {
                     internal_dir.clone()
@@ -409,30 +409,24 @@ pub async fn workspace_set_sync_dir(
 
                 // Remove the old internal_dir entry (real dir or previous symlink).
                 if internal_dir.is_symlink() {
-                    std::fs::remove_file(&internal_dir)
+                    crate::platform::remove_link(&internal_dir)
                         .map_err(|e| VoleeoError::Storage(format!("remove symlink: {e}")))?;
                 } else {
                     std::fs::remove_dir_all(&internal_dir)
                         .map_err(|e| VoleeoError::Storage(format!("remove dir: {e}")))?;
                 }
 
-                // Symlink internal_dir → new_dir; all stores read/write through it.
-                #[cfg(unix)]
-                std::os::unix::fs::symlink(&new_dir, &internal_dir)
-                    .map_err(|e| VoleeoError::Storage(format!("create symlink: {e}")))?;
-
-                #[cfg(not(unix))]
-                return Err(VoleeoError::InvalidConfig(
-                    "Directory sync requires a Unix system (macOS / Linux)".to_string(),
-                ));
+                // Link internal_dir → new_dir; all stores read/write through it.
+                crate::platform::link_dir(&new_dir, &internal_dir)
+                    .map_err(|e| VoleeoError::Storage(format!("create link: {e}")))?;
             }
             None => {
                 // Undo only if a symlink exists: restore a real dir, copy files back.
                 if internal_dir.is_symlink() {
-                    let target = std::fs::read_link(&internal_dir)
+                    let target = crate::platform::read_link_target(&internal_dir)
                         .map_err(|e| VoleeoError::Storage(format!("read symlink: {e}")))?;
 
-                    std::fs::remove_file(&internal_dir)
+                    crate::platform::remove_link(&internal_dir)
                         .map_err(|e| VoleeoError::Storage(format!("remove symlink: {e}")))?;
                     std::fs::create_dir_all(&internal_dir)
                         .map_err(|e| VoleeoError::Storage(format!("create dir: {e}")))?;
@@ -495,26 +489,20 @@ pub(crate) fn register_workspace_folder(
     let internal_dir = app_data_dir.join("workspaces").join(&ws.id);
 
     if internal_dir.is_symlink() {
-        let current_target = std::fs::read_link(&internal_dir)
+        let current_target = crate::platform::read_link_target(&internal_dir)
             .map_err(|e| VoleeoError::Storage(format!("read symlink: {e}")))?;
         if current_target == folder {
             return Ok(ws);
         }
-        std::fs::remove_file(&internal_dir)
+        crate::platform::remove_link(&internal_dir)
             .map_err(|e| VoleeoError::Storage(format!("remove symlink: {e}")))?;
     } else if internal_dir.exists() {
         std::fs::remove_dir_all(&internal_dir)
             .map_err(|e| VoleeoError::Storage(format!("remove dir: {e}")))?;
     }
 
-    #[cfg(unix)]
-    std::os::unix::fs::symlink(folder, &internal_dir)
-        .map_err(|e| VoleeoError::Storage(format!("create symlink: {e}")))?;
-
-    #[cfg(not(unix))]
-    return Err(VoleeoError::InvalidConfig(
-        "Open Folder requires a Unix system (macOS / Linux)".to_string(),
-    ));
+    crate::platform::link_dir(folder, &internal_dir)
+        .map_err(|e| VoleeoError::Storage(format!("create link: {e}")))?;
 
     Ok(ws)
 }

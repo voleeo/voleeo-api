@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { formatKeyCombo, SHORTCUTS } from "@/config/shortcuts"
 import { useKeydown } from "@/hooks/useKeydown"
+import { useUpdateStore } from "@/store/update"
 import { useUiStore } from "@/store/workspace"
 import { ImportRequestsModal } from "./ImportRequestsModal"
 import { McpModal } from "./McpBridge/McpModal"
@@ -73,6 +74,13 @@ export function PreferencesButton() {
             </span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
+          <DropdownMenuItem
+            className="font-sans text-[0.857rem] flex items-center gap-2 focus:bg-subtle focus:text-fg cursor-pointer"
+            onClick={() => void useUpdateStore.getState().check()}
+          >
+            <Glyph kind="refresh" size={13} color="var(--base04)" />
+            Check for Updates
+          </DropdownMenuItem>
           <McpStatusItem onOpen={() => setShowMcp(true)} />
         </DropdownMenuContent>
       </DropdownMenu>

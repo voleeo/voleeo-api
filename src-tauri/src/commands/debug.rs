@@ -112,7 +112,7 @@ fn compute(
         exists: meta.is_some(),
         size_bytes: meta.as_ref().map(|m| m.len() as f64).unwrap_or(0.0),
         modified,
-        sync_link_target: std::fs::read_link(&ws_dir)
+        sync_link_target: crate::platform::read_link_target(&ws_dir)
             .ok()
             .map(|p| p.display().to_string()),
         response_file,
