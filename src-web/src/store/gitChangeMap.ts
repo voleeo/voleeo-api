@@ -68,16 +68,13 @@ export function buildChangeMap(
   // Live parent first; fall back to the HEAD-resolved parent for deleted nodes.
   const resolveParent = (id: string): string | null =>
     parentOf[id] ?? deletedParentOf[id] ?? null
-  const folderIds = new Set(folders.map((f) => f.id))
-
   const byNode: Record<string, GitChange> = { ...own }
   const folderDescendantChanged = new Set<string>()
   for (const [nodeId, change] of Object.entries(own)) {
-    const isRequestLike = !folderIds.has(nodeId)
     let p = resolveParent(nodeId)
     while (p) {
       byNode[p] = byNode[p] ? worse(byNode[p], change) : change
-      if (isRequestLike) folderDescendantChanged.add(p)
+      folderDescendantChanged.add(p)
       p = resolveParent(p)
     }
   }
@@ -96,7 +93,6 @@ export function changedPathsUnderFolder(
   const deletedParentOf = deletedParentMap(files)
   const resolveParent = (id: string): string | null =>
     parentOf[id] ?? deletedParentOf[id] ?? null
-  const folderIds = new Set(folders.map((f) => f.id))
   const isUnder = (id: string) => {
     let p = resolveParent(id)
     while (p) {
@@ -105,13 +101,8 @@ export function changedPathsUnderFolder(
     }
     return false
   }
+
   return files
-    .filter(
-      (f) =>
-        f.nodeId &&
-        f.nodeId !== folderId &&
-        !folderIds.has(f.nodeId) &&
-        isUnder(f.nodeId),
-    )
+    .filter((f) => f.nodeId && f.nodeId !== folderId && isUnder(f.nodeId))
     .map((f) => f.path)
 }

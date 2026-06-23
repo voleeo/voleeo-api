@@ -37,6 +37,25 @@ describe("buildChangeMap — deleted node parent fallback", () => {
     expect(paths).toEqual(["req_r1.yaml"])
   })
 
+  test("a changed live child folder makes the parent rollback-able", () => {
+    const files: GitFileChange[] = [
+      {
+        path: "folder_c.yaml",
+        nodeId: "c",
+        nodeKind: "folder",
+        change: "modified",
+        staged: false,
+        parentId: null,
+      },
+    ]
+    const folders = [folder("p"), folder("c", "p")]
+    const maps = buildChangeMap(files, [], folders)
+    expect(maps.folderDescendantChanged.has("p")).toBe(true)
+    expect(changedPathsUnderFolder("p", files, [], folders)).toEqual([
+      "folder_c.yaml",
+    ])
+  })
+
   test("nested: deleted subfolder + its child bubble to the surviving ancestor", () => {
     // 'sub' is deleted (not in live folders); only 'top' survives.
     const files = [deleted("sub", "top", "folder"), deleted("r1", "sub")]

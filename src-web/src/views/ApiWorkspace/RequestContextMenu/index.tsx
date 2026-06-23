@@ -45,14 +45,14 @@ export function RequestContextMenu({
   const requestActions = useRequestActions()
   const changeByNode = useGitStore((s) => s.changeByNode)
   const ownChangeByNode = useGitStore((s) => s.ownChangeByNode)
-  const folderDescendantChanged = useGitStore((s) => s.folderDescendantChanged)
+  const descendantChangedFolders = useGitStore((s) => s.folderDescendantChanged)
   const isRepo = useGitStore((s) => s.repo?.isRepo ?? false)
   const changed = state.kind !== "workspace" && Boolean(changeByNode[state.id])
 
   const folderOwnChanged =
     state.kind === "folder" && Boolean(ownChangeByNode[state.id])
-  const folderReqChanged =
-    state.kind === "folder" && folderDescendantChanged.has(state.id)
+  const folderDescendantChanged =
+    state.kind === "folder" && descendantChangedFolders.has(state.id)
   const [copyAsSubOpen, setCopyAsSubOpen] = useState(false)
   const [rollbackSubOpen, setRollbackSubOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -213,7 +213,7 @@ export function RequestContextMenu({
             isRepo={isRepo}
             changed={changed}
             folderOwnChanged={folderOwnChanged}
-            folderReqChanged={folderReqChanged}
+            folderDescendantChanged={folderDescendantChanged}
             rollbackSubOpen={rollbackSubOpen}
             setRollbackSubOpen={setRollbackSubOpen}
             collapseSub={collapseSub}

@@ -6,4 +6,4 @@ export type CtxMenuState =
   | { kind: "grpc"; id: string; x: number; y: number }
 
 export type ItemKindUi = "request" | "folder" | "websocket" | "grpc"
-export type RollbackTarget = "request" | "folder" | "folder-requests"
+export type RollbackTarget = "request" | "folder" | "folder-children"

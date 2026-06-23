@@ -94,7 +94,7 @@ export function useTreeActions(
     if (!pendingRollback) return
     const { target, id } = pendingRollback
     const git = useGitStore.getState()
-    if (target === "folder-requests") {
+    if (target === "folder-children") {
       const { requests, folders, connections, grpcRequests } =
         useRequestStore.getState()
       void git.rollback(
