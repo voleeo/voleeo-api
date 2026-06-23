@@ -17,6 +17,7 @@ const HTTP_METHODS = [
   "PUT",
   "PATCH",
   "DELETE",
+  "QUERY",
   "HEAD",
   "OPTIONS",
   "TRACE",

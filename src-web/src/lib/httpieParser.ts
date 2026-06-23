@@ -12,6 +12,7 @@ const HTTP_METHODS = new Set([
   "PUT",
   "PATCH",
   "DELETE",
+  "QUERY",
   "HEAD",
   "OPTIONS",
   "TRACE",

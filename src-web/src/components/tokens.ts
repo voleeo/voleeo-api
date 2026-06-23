@@ -17,6 +17,7 @@ export const C_GQL = "var(--base0F)"
 export function methodColor(method: string): string {
   switch (method.toUpperCase()) {
     case "GET":
+    case "QUERY":
       return C_GET
     case "POST":
       return C_POST

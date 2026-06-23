@@ -83,6 +83,7 @@ export function abbrev(m: string) {
     OPTIONS: "OPT",
     CONNECT: "CON",
     PATCH: "PTCH",
+    QUERY: "QURY",
     TRACE: "TRCE",
   }
   // Short methods (GET/PUT/POST/HEAD) pass through; long customs clip to the
