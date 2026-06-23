@@ -114,11 +114,7 @@ export function DnsPanel({ workspace, commitRef }: Props) {
             workspace.
             <br />
             Useful for staging, local mocks, or testing failover without
-            touching{" "}
-            <code className="font-mono text-[0.786rem] px-1 py-[1px] rounded bg-subtle text-fg">
-              /etc/hosts
-            </code>
-            .
+            touching your hosts file.
           </>
         }
       />
