@@ -19,6 +19,9 @@ fn custom_title_bar_enabled<R: Runtime>(window: &tauri::Window<R>) -> bool {
     std::fs::read_to_string(dir.join("settings.json"))
         .ok()
         .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
-        .and_then(|v| v.get("custom_title_bar").and_then(serde_json::Value::as_bool))
+        .and_then(|v| {
+            v.get("custom_title_bar")
+                .and_then(serde_json::Value::as_bool)
+        })
         .unwrap_or(true)
 }

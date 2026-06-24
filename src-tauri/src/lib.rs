@@ -2,9 +2,9 @@ pub mod commands;
 mod mcp_server;
 pub(crate) mod platform;
 mod secret_store;
+mod state;
 #[cfg(target_os = "linux")]
 mod window_chrome;
-mod state;
 
 use state::AppState;
 use tauri::{Emitter, Manager};
