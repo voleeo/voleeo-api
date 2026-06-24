@@ -15,6 +15,16 @@ import { ImportRequestsFlow } from "./import/ImportRequestsFlow"
 const INPUT =
   "w-full bg-bg border border-border rounded-[6px] px-2.5 py-2 text-[0.857rem] text-fg font-mono outline-none focus:border-accent"
 
+type ErrorScope = "open" | "clone"
+
+function ErrorLine({ msg }: { msg: string }) {
+  return (
+    <div className="text-[0.786rem] text-error border border-error/50 rounded-[4px] px-2.5 py-2">
+      {msg}
+    </div>
+  )
+}
+
 interface ImportFlowProps {
   onCancel: () => void
 }
@@ -27,7 +37,9 @@ export function ImportFlow({ onCancel }: ImportFlowProps) {
     })),
   )
   const [folderLoading, setFolderLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<{ scope: ErrorScope; msg: string } | null>(
+    null,
+  )
   const [cloneUrl, setCloneUrl] = useState("")
   const [cloneParent, setCloneParent] = useState<string | null>(null)
   const [showCreds, setShowCreds] = useState(false)
@@ -45,6 +57,7 @@ export function ImportFlow({ onCancel }: ImportFlowProps) {
 
   // Returns the error message (and surfaces it) or null on success.
   async function adopt(
+    scope: ErrorScope,
     run: () => Promise<
       | { status: "ok"; data: { id: string } }
       | { status: "error"; error: unknown }
@@ -57,7 +70,7 @@ export function ImportFlow({ onCancel }: ImportFlowProps) {
       return null
     }
     const msg = errorMessage(res.error as never)
-    setError(msg)
+    setError({ scope, msg })
     return msg
   }
 
@@ -68,7 +81,7 @@ export function ImportFlow({ onCancel }: ImportFlowProps) {
     const folderPath = typeof selected === "string" ? selected : selected[0]
     setFolderLoading(true)
     try {
-      await adopt(() => commands.workspaceOpenFolder(folderPath))
+      await adopt("open", () => commands.workspaceOpenFolder(folderPath))
     } finally {
       setFolderLoading(false)
     }
@@ -91,7 +104,7 @@ export function ImportFlow({ onCancel }: ImportFlowProps) {
     }
     setCloneLoading(true)
     try {
-      const msg = await adopt(() =>
+      const msg = await adopt("clone", () =>
         commands.gitCloneWorkspace(
           url,
           parent,
@@ -100,6 +113,7 @@ export function ImportFlow({ onCancel }: ImportFlowProps) {
         ),
       )
       if (msg && /auth|credential|ssh/i.test(msg)) setShowCreds(true)
+      else if (msg) setCloneParent(null)
     } finally {
       setCloneLoading(false)
     }
@@ -118,25 +132,28 @@ export function ImportFlow({ onCancel }: ImportFlowProps) {
       }
     >
       <Section label="Open a folder">
-        <div className={cn(CARD, "flex items-center gap-4 mb-4")}>
-          <IconBox kind="folder" />
-          <div className="flex-1 min-w-0">
-            <div className="font-sans text-[0.95rem] font-semibold text-fg">
-              Open a folder
+        <div className={cn(CARD, "flex flex-col gap-3 mb-4")}>
+          <div className="flex items-center gap-4">
+            <IconBox kind="folder" />
+            <div className="flex-1 min-w-0">
+              <div className="font-sans text-[0.95rem] font-semibold text-fg">
+                Open a folder
+              </div>
+              <div className="text-[0.786rem] text-muted">
+                Your workspace already lives in a folder on this machine.
+              </div>
             </div>
-            <div className="text-[0.786rem] text-muted">
-              Your workspace already lives in a folder on this machine.
-            </div>
+            <FlowBtn onClick={handleOpenFolder} disabled={folderLoading}>
+              {folderLoading ? (
+                <>
+                  <Spinner className="size-3 shrink-0" /> Opening
+                </>
+              ) : (
+                "Choose folder…"
+              )}
+            </FlowBtn>
           </div>
-          <FlowBtn onClick={handleOpenFolder} disabled={folderLoading}>
-            {folderLoading ? (
-              <>
-                <Spinner className="size-3 shrink-0" /> Opening…
-              </>
-            ) : (
-              "Choose folder…"
-            )}
-          </FlowBtn>
+          {error?.scope === "open" && <ErrorLine msg={error.msg} />}
         </div>
       </Section>
 
@@ -202,7 +219,7 @@ export function ImportFlow({ onCancel }: ImportFlowProps) {
             <FlowBtn onClick={handleClone} disabled={cloneLoading || !urlValid}>
               {cloneLoading ? (
                 <>
-                  <Spinner className="size-3 shrink-0" /> Cloning…
+                  <Spinner className="size-3 shrink-0" /> Cloning
                 </>
               ) : (
                 <>
@@ -212,6 +229,8 @@ export function ImportFlow({ onCancel }: ImportFlowProps) {
               )}
             </FlowBtn>
           </div>
+
+          {error?.scope === "clone" && <ErrorLine msg={error.msg} />}
         </div>
       </Section>
 
@@ -236,12 +255,6 @@ export function ImportFlow({ onCancel }: ImportFlowProps) {
           <Glyph kind="arrow" size={16} color="var(--base04)" />
         </button>
       </Section>
-
-      {error && (
-        <div className="text-[0.786rem] text-error border border-error/50 rounded-[4px] px-2.5 py-2">
-          {error}
-        </div>
-      )}
     </FlowShell>
   )
 }
