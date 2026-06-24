@@ -9,7 +9,9 @@ import { EnvironmentSwitcher } from "@/layout/EnvironmentSwitcher"
 import { NewItemButton } from "@/layout/NewItemButton"
 import { PreferencesButton } from "@/layout/PreferencesButton"
 import { SourceControlMenu } from "@/layout/SourceControlMenu"
+import { WindowControls } from "@/layout/WindowControls"
 import { WorkspaceSwitcher } from "@/layout/WorkspaceSwitcher"
+import { isLinux, isMac } from "@/lib/platform"
 import { cn } from "@/lib/utils"
 import { useChromeStore } from "@/store/chrome"
 import { useEnvironmentStore } from "@/store/environment"
@@ -59,7 +61,11 @@ export function TopBar() {
     const env = s.environments.find((e) => e.id === s.activeEnvId)
     return env?.color ?? null
   })
-  const customTitleBar = useChromeStore((s) => s.customTitleBar)
+  const macTitleBar = useChromeStore((s) => s.customTitleBar) && isMac
+  // On Linux the native decorations are stripped (see window_chrome.rs), so the
+  // custom bar is always on, with our own window controls on the right. Windows
+  // keeps its native title bar.
+  const customBar = macTitleBar || isLinux
 
   const activeWorkspace =
     workspaces.find((w) => w.id === activeWorkspaceId) ?? null
@@ -79,21 +85,22 @@ export function TopBar() {
         : APP_NAME
 
   useEffect(() => {
-    if (customTitleBar) return
+    // Only the macOS-with-native-titlebar case still has an OS title to set.
+    if (customBar) return
     getCurrentWindow()
       .setTitle(centerLabel)
       .catch(() => {})
-  }, [customTitleBar, centerLabel])
+  }, [customBar, centerLabel])
 
   return (
     <header
       className="relative flex items-center bg-surface border-b border-border select-none"
       style={{
         height: "var(--topbar-height)",
-        paddingLeft: customTitleBar ? "var(--traffic-lights-width)" : 12,
-        paddingRight: 12,
+        paddingLeft: macTitleBar ? "var(--traffic-lights-width)" : 12,
+        paddingRight: isLinux ? "var(--window-controls-width)" : 12,
       }}
-      data-tauri-drag-region={customTitleBar ? "" : undefined}
+      data-tauri-drag-region={customBar ? "" : undefined}
     >
       {showSwitcher && activeEnvColor && (
         <div
@@ -117,7 +124,7 @@ export function TopBar() {
         )}
       </div>
 
-      {customTitleBar && (
+      {customBar && (
         <div className="absolute left-1/2 -translate-x-1/2 pointer-events-none">
           <span className="font-sans text-[0.929rem] text-muted truncate max-w-[320px] block text-center">
             {centerLabel}
@@ -137,6 +144,8 @@ export function TopBar() {
         {showSwitcher && activeWorkspaceId && <SourceControlMenu />}
         {activeTool !== "welcome" && <PreferencesButton />}
       </div>
+
+      {isLinux && <WindowControls />}
     </header>
   )
 }
