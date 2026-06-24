@@ -61,11 +61,10 @@ export function TopBar() {
     const env = s.environments.find((e) => e.id === s.activeEnvId)
     return env?.color ?? null
   })
-  const macTitleBar = useChromeStore((s) => s.customTitleBar) && isMac
-  // On Linux the native decorations are stripped (see window_chrome.rs), so the
-  // custom bar is always on, with our own window controls on the right. Windows
-  // keeps its native title bar.
-  const customBar = macTitleBar || isLinux
+  const customTitleBar = useChromeStore((s) => s.customTitleBar)
+  const macTitleBar = customTitleBar && isMac
+  const linuxControls = customTitleBar && isLinux
+  const customBar = macTitleBar || linuxControls
 
   const activeWorkspace =
     workspaces.find((w) => w.id === activeWorkspaceId) ?? null
@@ -98,7 +97,7 @@ export function TopBar() {
       style={{
         height: "var(--topbar-height)",
         paddingLeft: macTitleBar ? "var(--traffic-lights-width)" : 12,
-        paddingRight: isLinux ? "var(--window-controls-width)" : 12,
+        paddingRight: linuxControls ? "var(--window-controls-width)" : 12,
       }}
       data-tauri-drag-region={customBar ? "" : undefined}
     >
@@ -145,7 +144,7 @@ export function TopBar() {
         {activeTool !== "welcome" && <PreferencesButton />}
       </div>
 
-      {isLinux && <WindowControls />}
+      {linuxControls && <WindowControls />}
     </header>
   )
 }

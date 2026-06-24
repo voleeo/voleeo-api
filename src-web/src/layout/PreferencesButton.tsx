@@ -7,7 +7,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { formatKeyCombo, SHORTCUTS } from "@/config/shortcuts"
+import { SHORTCUTS } from "@/config/shortcuts"
 import { useKeydown } from "@/hooks/useKeydown"
 import { useUpdateStore } from "@/store/update"
 import { useUiStore } from "@/store/workspace"
@@ -56,9 +56,6 @@ export function PreferencesButton() {
                 color="var(--base04)"
               />
               Switch to {panelLayout === "columns" ? "Rows" : "Columns"} Layout
-              <span className="ml-auto font-mono text-[0.714rem] tracking-[0.2em] text-muted">
-                {formatKeyCombo(SHORTCUTS.TOGGLE_LAYOUT)}
-              </span>
             </DropdownMenuItem>
           )}
           <DropdownMenuItem
@@ -69,9 +66,6 @@ export function PreferencesButton() {
           >
             <Glyph kind="keyboard" size={13} color="var(--base04)" />
             Keyboard Shortcuts
-            <span className="ml-auto font-mono text-[0.714rem] tracking-[0.2em] text-muted">
-              {formatKeyCombo(SHORTCUTS.SHOW_SHORTCUTS)}
-            </span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem

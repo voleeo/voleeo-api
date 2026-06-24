@@ -5,22 +5,18 @@ import { useChromeStore } from "@/store/chrome"
 export function WelcomeTitleBar() {
   const customTitleBar = useChromeStore((s) => s.customTitleBar)
 
-  // Linux: decorations are stripped (see window_chrome.rs), so the welcome screen
-  // needs its own drag strip + window controls to stay movable.
-  if (isLinux) {
+  if (isLinux && customTitleBar) {
     return (
       <div
         className="relative bg-bg"
         style={{ height: "var(--topbar-height)" }}
         data-tauri-drag-region=""
       >
-        <WindowControls />
+        <WindowControls showMaximize={false} />
       </div>
     )
   }
 
-  // macOS: a strip backing the overlay titlebar (traffic-light room + drag region).
-  // Windows keeps its native title bar, so nothing here.
   if (!isMac || !customTitleBar) return null
   return (
     <div

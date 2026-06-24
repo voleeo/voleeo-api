@@ -12,7 +12,7 @@ const DEFAULT_THEME: &str = "dark";
 const DEFAULT_COLOR_MODE: &str = "dark";
 
 fn default_custom_title_bar() -> bool {
-    cfg!(target_os = "macos")
+    cfg!(any(target_os = "macos", target_os = "linux"))
 }
 
 fn default_auto_update() -> bool {
