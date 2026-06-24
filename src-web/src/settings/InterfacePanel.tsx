@@ -8,7 +8,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { isMac } from "@/lib/platform"
+import { isWindows } from "@/lib/platform"
 import { cn } from "@/lib/utils"
 import { useInterfaceStore, type WorkspaceBehavior } from "@/store/interface"
 import { commands } from "../../../packages/types/bindings"
@@ -89,7 +89,7 @@ export function InterfacePanel() {
       </p>
 
       <div className="flex flex-col gap-5">
-        {isMac && <CustomTitleBarRow />}
+        {!isWindows && <CustomTitleBarRow />}
 
         <div>
           <label className="block text-[0.929rem] text-muted mb-1.5">
@@ -143,8 +143,6 @@ export function InterfacePanel() {
   )
 }
 
-/** macOS-only: toggles the overlay title bar. The native window chrome is set up
- *  at launch, so flipping this relaunches the app (handled in the Rust command). */
 function CustomTitleBarRow() {
   const [enabled, setEnabled] = useState<boolean | null>(null)
 

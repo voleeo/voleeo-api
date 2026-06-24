@@ -3,6 +3,8 @@ mod mcp_server;
 pub(crate) mod platform;
 mod secret_store;
 mod state;
+#[cfg(target_os = "linux")]
+mod window_chrome;
 
 use state::AppState;
 use tauri::{Emitter, Manager};
@@ -241,6 +243,9 @@ pub fn run() {
     // Native macOS titlebar plugin
     #[cfg(target_os = "macos")]
     let builder = builder.plugin(voleeo_mac_window::init());
+
+    #[cfg(target_os = "linux")]
+    let builder = builder.plugin(window_chrome::init());
 
     // Debug-only E2E bridge: exposes a localhost WebSocket (:9223) so the
     // voleeo-e2e suite can drive the webview. Absent from release builds.

@@ -4,27 +4,23 @@ import {
   LogicalPosition,
   LogicalSize,
 } from "@tauri-apps/api/window"
-import { isMac } from "@/lib/platform"
+import { isWindows } from "@/lib/platform"
+import { useChromeStore } from "@/store/chrome"
 
 export const FLOW_WIDTH = 900
 const MIN_HEIGHT = 280
-
-const TOP_CHROME = isMac ? 40 : 0
 
 export async function applyFlowWindowHeight(height: number) {
   try {
     const win = getCurrentWebviewWindow()
     const monitor = await currentMonitor()
-    // Leave 80px margin for macOS menu bar + dock; fall back to 900 if no monitor info
+    const topChrome =
+      !isWindows && useChromeStore.getState().customTitleBar ? 40 : 0
     const maxH = monitor
       ? Math.floor(monitor.size.height / monitor.scaleFactor) - 80
       : 900
-    const contentH = Math.max(MIN_HEIGHT, Math.min(height, maxH - TOP_CHROME))
-    const windowH = contentH + TOP_CHROME
-    // Lower the OS min-height first: the window's configured minHeight (680)
-    // would otherwise clamp short flows back up on resizable Windows/Linux,
-    // re-introducing the empty space. Width stays at the 900 floor. Its own
-    // try/catch so a failure here never skips the setSize below.
+    const contentH = Math.max(MIN_HEIGHT, Math.min(height, maxH - topChrome))
+    const windowH = contentH + topChrome
     try {
       await win.setMinSize(new LogicalSize(FLOW_WIDTH, MIN_HEIGHT))
     } catch {}

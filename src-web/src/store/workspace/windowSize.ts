@@ -4,7 +4,7 @@ import {
   LogicalPosition,
   LogicalSize,
 } from "@tauri-apps/api/window"
-import { isMac } from "@/lib/platform"
+import { isWindows } from "@/lib/platform"
 import { patchSettings } from "@/lib/workspaceSettings"
 
 export const WELCOME_WIDTH = 900
@@ -12,7 +12,6 @@ export const WELCOME_HEIGHT = 680
 export const DEFAULT_WORKSPACE_WIDTH = 1000
 export const DEFAULT_WORKSPACE_HEIGHT = 800
 
-// Programmatic resizes fire `onResized`; this counter suppresses persisting them.
 let ignoringResizeCount = 0
 
 export async function applyWindowSize(
@@ -24,9 +23,13 @@ export async function applyWindowSize(
     const win = getCurrentWebviewWindow()
     const monitor = await currentMonitor()
     ignoringResizeCount += 1
+
+    if (await win.isFullscreen().catch(() => false))
+      await win.setFullscreen(false)
+
+    if (await win.isMaximized().catch(() => false)) await win.unmaximize()
+
     await win.setResizable(resizable)
-    // Restore the standard floor (flows lower it to fit short content). Own
-    // try/catch so a failure never skips the setSize below.
     try {
       await win.setMinSize(new LogicalSize(WELCOME_WIDTH, WELCOME_HEIGHT))
     } catch {}
@@ -52,14 +55,10 @@ export async function applyWindowSize(
   }
 }
 
-/** Resize + centre the window to the welcome-screen dimensions. Fixed-size on
- *  macOS (the launcher auto-fits its content there); resizable on Windows/Linux,
- *  where the launcher fills and centres instead. */
 export function applyWelcomeWindowSize() {
-  return applyWindowSize(WELCOME_WIDTH, WELCOME_HEIGHT, !isMac)
+  return applyWindowSize(WELCOME_WIDTH, WELCOME_HEIGHT, isWindows)
 }
 
-/** Persist user-driven window resizes (debounced) for the active workspace. */
 export function attachResizeListener(
   getActiveWorkspaceId: () => string | null,
 ) {
@@ -72,7 +71,6 @@ export function attachResizeListener(
       if (resizeTimer) clearTimeout(resizeTimer)
       resizeTimer = setTimeout(async () => {
         try {
-          // onResized delivers physical pixels — convert to logical before saving
           const monitor = await currentMonitor()
           const sf = monitor?.scaleFactor ?? 1
           patchSettings(activeWorkspaceId, {
