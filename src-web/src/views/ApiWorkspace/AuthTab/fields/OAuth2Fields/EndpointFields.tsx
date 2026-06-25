@@ -1,12 +1,30 @@
 import { cn } from "@/lib/utils"
 import type { OAuth2ClientAuth } from "../../../../../../../packages/types/bindings"
-import { type FieldsProps, PlainField, SecretField } from "../shared"
+import {
+  type FieldsProps,
+  PlainField,
+  SecretField,
+  WarningBlock,
+} from "../shared"
 import { PkceFields } from "./PkceFields"
 
 const CLIENT_AUTH: { value: OAuth2ClientAuth; label: string }[] = [
   { value: "basic_header", label: "Basic header" },
   { value: "request_body", label: "Request body" },
 ]
+
+/** http:// to a non-loopback host sends client secrets and tokens in cleartext
+ *  (RFC 6749 §3.1.2.1/§10 mandate TLS). Loopback http is fine for local test
+ *  servers; templated URLs are skipped since they may resolve to https. */
+function isInsecureUrl(url: string): boolean {
+  const u = url.trim().toLowerCase()
+  if (!u.startsWith("http://") || u.includes("{{")) return false
+  const authority = u.slice(7).split(/[/?#]/)[0]
+  const host = authority.startsWith("[")
+    ? authority.slice(0, authority.indexOf("]") + 1)
+    : authority.split(":")[0]
+  return host !== "localhost" && host !== "[::1]" && !host.startsWith("127.")
+}
 
 /** Grant-aware endpoint + credential fields for OAuth 2.0. */
 export function EndpointFields({
@@ -19,8 +37,21 @@ export function EndpointFields({
   const set = <K extends keyof typeof auth>(key: K, value: (typeof auth)[K]) =>
     setAuth((p) => (p.kind === "oauth2" ? { ...p, [key]: value } : p))
 
+  const insecure = [
+    grant === "authorization_code" || implicit ? auth.auth_url : "",
+    implicit ? "" : auth.token_url,
+  ].some((u) => isInsecureUrl(u ?? ""))
+
   return (
     <>
+      {insecure && (
+        <WarningBlock>
+          An endpoint uses <span className="font-mono">http://</span> — client
+          secrets and tokens will be sent in cleartext. Use{" "}
+          <span className="font-mono">https://</span> unless this is a local
+          test server.
+        </WarningBlock>
+      )}
       {(grant === "authorization_code" || implicit) && (
         <>
           <PlainField
