@@ -126,7 +126,6 @@ export const commands = {
 	 *  password, or the interactive browser + loopback flow for authorization-code.
 	 */
 	oauth2FetchToken: (workspaceId: string, auth: AuthConfig_Deserialize) => typedError<Oauth2TokenStatus, VoleeoError>(__TAURI_INVOKE("oauth2_fetch_token", { workspaceId, auth })),
-	oauth2RefreshToken: (workspaceId: string, auth: AuthConfig_Deserialize) => typedError<Oauth2TokenStatus, VoleeoError>(__TAURI_INVOKE("oauth2_refresh_token", { workspaceId, auth })),
 	oauth2ClearToken: (workspaceId: string, auth: AuthConfig_Deserialize) => typedError<null, VoleeoError>(__TAURI_INVOKE("oauth2_clear_token", { workspaceId, auth })),
 	/**
 	 *  Send-path: return a valid access token, refreshing or (for non-interactive
@@ -1461,11 +1460,6 @@ export type Oauth2TokenDetails = {
 /**  Token state for the Auth-tab panel. Secrets are previewed, never returned. */
 export type Oauth2TokenStatus = {
 	hasToken: boolean,
-	/**
-	 *  Whether a refresh token is cached. Client-credentials never issues one, so
-	 *  the Auth-tab panel hides its Refresh button when this is false.
-	 */
-	hasRefreshToken: boolean,
 	/**
 	 *  Unix seconds; `None` = no token or no expiry. `f64` (not `i64`) because
 	 *  specta forbids exporting BigInt-style types — lossless for real dates.

@@ -20,9 +20,6 @@ use crate::state::AppState;
 #[serde(rename_all = "camelCase")]
 pub struct Oauth2TokenStatus {
     pub has_token: bool,
-    /// Whether a refresh token is cached. Client-credentials never issues one, so
-    /// the Auth-tab panel hides its Refresh button when this is false.
-    pub has_refresh_token: bool,
     /// Unix seconds; `None` = no token or no expiry. `f64` (not `i64`) because
     /// specta forbids exporting BigInt-style types — lossless for real dates.
     pub expires_at: Option<f64>,
@@ -34,14 +31,12 @@ fn status_of(token: Option<&CachedToken>) -> Oauth2TokenStatus {
     match token {
         Some(t) => Oauth2TokenStatus {
             has_token: true,
-            has_refresh_token: !t.refresh_token.is_empty(),
             expires_at: (t.expires_at != 0).then_some(t.expires_at as f64),
             scope: t.scope.clone(),
             token_preview: preview(&t.access_token),
         },
         None => Oauth2TokenStatus {
             has_token: false,
-            has_refresh_token: false,
             expires_at: None,
             scope: String::new(),
             token_preview: String::new(),
@@ -252,29 +247,6 @@ pub async fn oauth2_fetch_token(
     };
     let status = store_and_status(&state, &workspace_id, config.cache_key(), result).await?;
     app.emit("oauth2:token-acquired", config.cache_key()).ok();
-    Ok(status)
-}
-
-#[tauri::command]
-#[specta::specta]
-pub async fn oauth2_refresh_token(
-    app: tauri::AppHandle,
-    state: State<'_, AppState>,
-    workspace_id: String,
-    auth: AuthConfig,
-) -> Result<Oauth2TokenStatus, VoleeoError> {
-    let config = config_of(&auth)?;
-    let key = config.cache_key();
-    let cached = load_cached(&state, &workspace_id, &key).await?;
-    let refresh_token = cached
-        .as_ref()
-        .map(|t| t.refresh_token.clone())
-        .filter(|r| !r.is_empty())
-        .ok_or_else(|| VoleeoError::Http("No refresh token available".into()))?;
-    let client = reqwest::Client::new();
-    let result = flow::refresh(&client, &config, &refresh_token).await?;
-    let status = store_and_status(&state, &workspace_id, key.clone(), result).await?;
-    app.emit("oauth2:token-acquired", key).ok();
     Ok(status)
 }
 

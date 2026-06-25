@@ -75,11 +75,14 @@ impl OAuth2Config {
         }
     }
 
-    /// Stable cache key — shared by every request with the same client/endpoint.
+    /// Stable cache key — one token per token_url/client/user/scope/audience.
+    /// `username` is included so password-grant tokens for different users don't
+    /// collide (it's empty, hence a constant, for the other grants).
     pub fn cache_key(&self) -> String {
         voleeo_auth::oauth2::config_hash(&[
             &self.token_url,
             &self.client_id,
+            &self.username,
             self.grant_str(),
             &self.scope,
             &self.audience,
