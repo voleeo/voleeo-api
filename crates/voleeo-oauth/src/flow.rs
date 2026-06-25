@@ -168,27 +168,45 @@ pub fn build_auth_url(
     format!("{}{sep}{}", config.auth_url, q.join("&"))
 }
 
+/// Scope/audience belong only on the direct-fetch token requests (RFC 6749
+/// §4.4.2/§4.3.2). The authorization-code exchange (§4.1.3) binds scope at
+/// `/authorize`, and refresh (§6) omitting scope means "the originally granted
+/// scope" — safer than echoing a possibly-divergent configured value.
+fn grant_sends_scope(grant: OAuth2Grant) -> bool {
+    matches!(
+        grant,
+        OAuth2Grant::ClientCredentials | OAuth2Grant::Password
+    )
+}
+
+/// A confidential client authenticates with HTTP Basic (RFC 6749 §2.3.1). A
+/// public client — no secret, e.g. authorization_code + PKCE — must NOT: an
+/// empty-password Basic header reads as a misconfigured confidential client, so
+/// `client_id` goes in the request body instead (§4.1.3).
+fn uses_basic_auth(client_auth: OAuth2ClientAuth, client_secret: &str) -> bool {
+    client_auth == OAuth2ClientAuth::BasicHeader && !client_secret.is_empty()
+}
+
 async fn post_token(
     client: &reqwest::Client,
     config: &OAuth2Config,
     mut form: Vec<(&str, String)>,
 ) -> Result<TokenResult, VoleeoError> {
-    if !config.scope.is_empty() {
-        form.push(("scope", config.scope.clone()));
-    }
-    if !config.audience.is_empty() {
-        form.push(("audience", config.audience.clone()));
+    if grant_sends_scope(config.grant) {
+        if !config.scope.is_empty() {
+            form.push(("scope", config.scope.clone()));
+        }
+        if !config.audience.is_empty() {
+            form.push(("audience", config.audience.clone()));
+        }
     }
     let mut req = client.post(&config.token_url);
-    match config.client_auth {
-        OAuth2ClientAuth::BasicHeader => {
-            req = req.basic_auth(&config.client_id, Some(&config.client_secret));
-        }
-        OAuth2ClientAuth::RequestBody => {
-            form.push(("client_id", config.client_id.clone()));
-            if !config.client_secret.is_empty() {
-                form.push(("client_secret", config.client_secret.clone()));
-            }
+    if uses_basic_auth(config.client_auth, &config.client_secret) {
+        req = req.basic_auth(&config.client_id, Some(&config.client_secret));
+    } else {
+        form.push(("client_id", config.client_id.clone()));
+        if !config.client_secret.is_empty() {
+            form.push(("client_secret", config.client_secret.clone()));
         }
     }
 
@@ -313,5 +331,27 @@ mod tests {
         assert_eq!(token("new").carry_refresh("old").refresh_token, "new");
         // Server omitted it → keep the prior token rather than clobbering it.
         assert_eq!(token("").carry_refresh("old").refresh_token, "old");
+    }
+
+    #[test]
+    fn only_direct_fetch_grants_send_scope() {
+        assert!(grant_sends_scope(OAuth2Grant::ClientCredentials));
+        assert!(grant_sends_scope(OAuth2Grant::Password));
+        // Auth-code binds scope at /authorize (§4.1.3); refresh omits it (§6).
+        assert!(!grant_sends_scope(OAuth2Grant::AuthorizationCode));
+        assert!(!grant_sends_scope(OAuth2Grant::Implicit));
+    }
+
+    #[test]
+    fn public_client_skips_basic_auth() {
+        use OAuth2ClientAuth::*;
+        // Confidential client: Basic header selected and a secret present.
+        assert!(uses_basic_auth(BasicHeader, "secret"));
+        // Public PKCE client (no secret) sends client_id in the body, never an
+        // empty-password Basic header.
+        assert!(!uses_basic_auth(BasicHeader, ""));
+        // Request-body mode never uses Basic, secret or not.
+        assert!(!uses_basic_auth(RequestBody, "secret"));
+        assert!(!uses_basic_auth(RequestBody, ""));
     }
 }
