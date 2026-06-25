@@ -96,6 +96,18 @@ pub struct TokenResult {
     pub expires_at: i64,
 }
 
+impl TokenResult {
+    /// RFC 6749 §6: a refresh response MAY omit a new refresh token, and then the
+    /// client keeps the old one. Without this we'd persist an empty refresh token
+    /// and lose the ability to refresh again — forcing a full interactive re-auth.
+    fn carry_refresh(mut self, prior: &str) -> Self {
+        if self.refresh_token.is_empty() {
+            self.refresh_token = prior.to_string();
+        }
+        self
+    }
+}
+
 #[derive(Deserialize)]
 struct TokenResponse {
     access_token: String,
@@ -269,7 +281,7 @@ pub async fn refresh(
     config: &OAuth2Config,
     refresh_token: &str,
 ) -> Result<TokenResult, VoleeoError> {
-    post_token(
+    let result = post_token(
         client,
         config,
         vec![
@@ -277,5 +289,29 @@ pub async fn refresh(
             ("refresh_token", refresh_token.to_string()),
         ],
     )
-    .await
+    .await?;
+    Ok(result.carry_refresh(refresh_token))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn token(refresh: &str) -> TokenResult {
+        TokenResult {
+            access_token: "at".into(),
+            refresh_token: refresh.into(),
+            token_type: "Bearer".into(),
+            scope: String::new(),
+            expires_at: 0,
+        }
+    }
+
+    #[test]
+    fn refresh_token_preserved_when_response_omits_it() {
+        // Server rotated the token → use the new one.
+        assert_eq!(token("new").carry_refresh("old").refresh_token, "new");
+        // Server omitted it → keep the prior token rather than clobbering it.
+        assert_eq!(token("").carry_refresh("old").refresh_token, "old");
+    }
 }
