@@ -403,12 +403,6 @@ params_location?: OAuth1Location; callback?: string; verifier?: string; timestam
 	 *  `new`). The frontend turns these into the friendly field-level review.
 	 */
 	gitChanges: (workspaceId: string) => typedError<GitEntityChange_Serialize[], VoleeoError>(__TAURI_INVOKE("git_changes", { workspaceId })),
-	/**
-	 *  The raw unified patch (working tree vs HEAD) for one entity file — backs the
-	 *  "code diff" toggle in the Changes window. Shows on-disk bytes (so encrypted
-	 *  workspaces show `enc:v1:` ciphertext), unlike the decrypted snapshots
-	 *  `git_changes` returns.
-	 */
 	gitEntityDiff: (workspaceId: string, path: string) => typedError<string, VoleeoError>(__TAURI_INVOKE("git_entity_diff", { workspaceId, path })),
 	gitStage: (workspaceId: string, paths: string[]) => typedError<null, VoleeoError>(__TAURI_INVOKE("git_stage", { workspaceId, paths })),
 	gitStageAll: (workspaceId: string) => typedError<null, VoleeoError>(__TAURI_INVOKE("git_stage_all", { workspaceId })),
