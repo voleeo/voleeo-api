@@ -35,8 +35,12 @@ jobs:
       - name: Determine bump
         id: bump
         run: |
-          next=$(git cliff --bumped-version)
           current=$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || echo none)
+          if [ "$current" = none ]; then
+            next=$(git cliff --bumped-version)
+          else
+            next=$(git cliff "$current"..HEAD --bumped-version)
+          fi
           echo "current=$current next=$next"
           if [ "$next" = "$current" ]; then
             echo "No releasable commits since $current — skipping release."
