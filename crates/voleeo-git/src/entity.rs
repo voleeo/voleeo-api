@@ -1,6 +1,6 @@
 use crate::status::status;
 use crate::{classify_path, git_err, open_repo};
-use git2::{Oid, Repository};
+use git2::{DiffFormat, DiffOptions, Oid, Repository};
 use std::collections::BTreeSet;
 use std::path::Path;
 use voleeo_core::{GitChange, GitNodeKind, VoleeoError};
@@ -156,4 +156,33 @@ fn head_text(repo: &Repository, rel: &str) -> Option<String> {
         .ok()
         .and_then(|e| repo.find_blob(e.id()).ok())?;
     Some(String::from_utf8_lossy(blob.content()).into_owned())
+}
+
+/// Unified patch (working tree vs HEAD) for one file — the raw "code diff" view in
+/// the Changes window. Same direction as `changed_blobs`, but emits git's own
+/// `DiffFormat::Patch` text. The `diff --git`/`index`/`---`/`+++` preamble is
+/// dropped (the UI already labels the entity); hunk headers + content lines stay.
+pub fn entity_diff_text(path: &Path, rel: &str) -> Result<String, VoleeoError> {
+    let repo = open_repo(path)?;
+    let head_tree = repo.head().ok().and_then(|h| h.peel_to_tree().ok());
+    let mut opts = DiffOptions::new();
+    opts.pathspec(rel);
+    let diff = repo
+        .diff_tree_to_workdir(head_tree.as_ref(), Some(&mut opts))
+        .map_err(git_err)?;
+    let mut out = String::new();
+    diff.print(DiffFormat::Patch, |_delta, _hunk, line| {
+        match line.origin() {
+            'F' => {} // drop the file-header preamble
+            origin @ ('+' | '-' | ' ') => {
+                out.push(origin);
+                out.push_str(&String::from_utf8_lossy(line.content()));
+            }
+            // Hunk headers (`@@ … @@`) and EOFNL markers carry their own text.
+            _ => out.push_str(&String::from_utf8_lossy(line.content())),
+        }
+        true
+    })
+    .map_err(git_err)?;
+    Ok(out)
 }

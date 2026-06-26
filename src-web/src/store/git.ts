@@ -52,6 +52,7 @@ export interface GitStore {
   setRemote: (name: string, url: string) => Promise<void>
   loadLog: (limit?: number) => Promise<void>
   logForPath: (path: string, limit?: number) => Promise<GitCommit[]>
+  entityDiff: (path: string) => Promise<string>
   commitChanges: (commitId: string) => Promise<GitEntityChange[]>
   rollback: (path: string | string[]) => Promise<void>
   /** Undo a commit into the working tree as pending changes (whole commit, or
@@ -198,6 +199,12 @@ export const useGitStore = create<GitStore>((set, get) => ({
     const id = get().loadedWorkspaceId
     if (!id) return []
     return unwrap(commands.gitLogForPath(id, path, limit))
+  },
+
+  entityDiff: async (path) => {
+    const id = get().loadedWorkspaceId
+    if (!id) return ""
+    return unwrap(commands.gitEntityDiff(id, path))
   },
 
   commitChanges: async (commitId) => {

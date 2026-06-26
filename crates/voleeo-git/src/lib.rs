@@ -23,7 +23,7 @@ pub use commit::commit;
 pub use conflict::{
     conflict_blobs, finish_merge, heal_merge_worktree, resolve, resolve_delete, ConflictBlob,
 };
-pub use entity::{changed_blobs, commit_blobs, revert_commit_files, ChangedBlob};
+pub use entity::{changed_blobs, commit_blobs, entity_diff_text, revert_commit_files, ChangedBlob};
 pub use log::{log, log_for_path};
 pub use remote::{remotes, set_remote, set_upstream};
 pub use repo::{get_identity, init, repo_info, set_identity};

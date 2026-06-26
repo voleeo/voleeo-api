@@ -37,7 +37,6 @@ export const RV = {
   dhTop: "flex items-center gap-2.5",
   dhName:
     "font-[var(--ui)] text-[1rem] font-semibold text-fg bg-transparent border-0 p-0 cursor-pointer text-left hover:text-accent",
-  dhStatus: "text-[0.857rem] font-semibold",
   detailBody: "flex-1 min-h-0 overflow-auto px-[18px] pt-2 pb-10",
   detailEmpty:
     "flex-1 grid place-items-center text-[var(--fg-faint)] text-[0.893rem]",
