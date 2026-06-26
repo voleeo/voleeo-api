@@ -1,6 +1,7 @@
 use crate::commit::write_commit;
 use crate::{classify_path, git_err, io_err, open_repo};
-use git2::{Index, IndexEntry, Oid, Repository};
+use git2::{DiffDelta, DiffHunk, DiffLine, Index, IndexEntry, Oid, Repository};
+use std::cell::RefCell;
 use std::path::Path;
 use voleeo_core::{GitCommit, GitNodeKind, VoleeoError};
 
@@ -63,6 +64,68 @@ pub fn conflict_blobs(path: &Path) -> Result<Vec<ConflictBlob>, VoleeoError> {
         });
     }
     Ok(out)
+}
+
+pub fn conflict_diff_text(path: &Path, rel: &str) -> Result<String, VoleeoError> {
+    let repo = open_repo(path)?;
+    let index = repo.index().map_err(git_err)?;
+    let (mut ours, mut theirs) = (None, None);
+    for c in index.conflicts().map_err(git_err)? {
+        let c = c.map_err(git_err)?;
+        let p = c
+            .our
+            .as_ref()
+            .or(c.their.as_ref())
+            .or(c.ancestor.as_ref())
+            .map(|e| String::from_utf8_lossy(&e.path).into_owned());
+        if p.as_deref() != Some(rel) {
+            continue;
+        }
+        ours = c.our.as_ref().map(|e| e.id);
+        theirs = c.their.as_ref().map(|e| e.id);
+        break;
+    }
+    let ours_blob = ours
+        .map(|o| repo.find_blob(o))
+        .transpose()
+        .map_err(git_err)?;
+    let theirs_blob = theirs
+        .map(|o| repo.find_blob(o))
+        .transpose()
+        .map_err(git_err)?;
+
+    let out = RefCell::new(String::new());
+    let mut hunk_cb = |_d: DiffDelta, hunk: DiffHunk| {
+        out.borrow_mut()
+            .push_str(&String::from_utf8_lossy(hunk.header()));
+        true
+    };
+    let mut line_cb = |_d: DiffDelta, _h: Option<DiffHunk>, line: DiffLine| {
+        let mut o = out.borrow_mut();
+        match line.origin() {
+            origin @ ('+' | '-' | ' ') => {
+                o.push(origin);
+                o.push_str(&String::from_utf8_lossy(line.content()));
+            }
+            // Hunk headers come via hunk_cb; the rest (EOFNL markers) carry text.
+            'F' | 'H' => {}
+            _ => o.push_str(&String::from_utf8_lossy(line.content())),
+        }
+        true
+    };
+    repo.diff_blobs(
+        ours_blob.as_ref(),
+        Some(rel),
+        theirs_blob.as_ref(),
+        Some(rel),
+        None,
+        None,
+        None,
+        Some(&mut hunk_cb),
+        Some(&mut line_cb),
+    )
+    .map_err(git_err)?;
+    Ok(out.into_inner())
 }
 
 /// Write the resolved file content, then stage it — staging a conflicted path

@@ -4,6 +4,7 @@ import { buildReview } from "@/lib/gitEntityDiff"
 import { useGitStore } from "@/store/git"
 import { useRequestStore } from "@/store/requests"
 import { PaneSeparator } from "@/views/ApiWorkspace/PaneSeparator"
+import type { ViewMode } from "../diffMode"
 import { History } from "../History"
 import { RV } from "../reviewClasses"
 import { useSidebarResize } from "../useSidebarResize"
@@ -19,7 +20,7 @@ export function ReviewChanges() {
   const { width, onSepDown } = useSidebarResize(wsId)
   const [selectedPath, setSelectedPath] = useState<string | null>(null)
   const [deselected, setDeselected] = useState<Set<string>>(new Set())
-  const [viewMode, setViewMode] = useState<"summary" | "diff">("summary")
+  const [viewMode, setViewMode] = useState<ViewMode>("summary")
 
   const review = useMemo(
     () =>

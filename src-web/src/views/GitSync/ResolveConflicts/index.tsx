@@ -9,6 +9,7 @@ import {
 } from "@/store/gitReview"
 import { useRequestStore } from "@/store/requests"
 import { PaneSeparator } from "@/views/ApiWorkspace/PaneSeparator"
+import type { ViewMode } from "../diffMode"
 import { useSidebarResize } from "../useSidebarResize"
 import { ConflictDetail } from "./ConflictDetail"
 import { ConflictSidebar } from "./ConflictSidebar"
@@ -27,6 +28,7 @@ export function ResolveConflicts() {
   const storeError = useGitStore((s) => s.error)
   const [choices, setChoices] = useState<ChoiceMap>({})
   const [selPath, setSelPath] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<ViewMode>("summary")
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [error, setError] = useState<string | null>(null)
@@ -190,6 +192,8 @@ export function ResolveConflicts() {
             choices={choices}
             onPick={pick}
             onKeepAll={keepAll}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
           />
         ) : (
           <div className="flex-1 grid place-items-center px-8 text-center text-[0.893rem] text-[var(--fg-faint)]">
@@ -199,7 +203,7 @@ export function ResolveConflicts() {
           </div>
         )}
 
-        {selected && (
+        {selected && viewMode === "summary" && (
           <div
             className="absolute top-0 bottom-0 w-[11px] z-[3] cursor-col-resize -translate-x-1/2 before:content-[''] before:absolute before:left-1/2 before:top-0 before:bottom-0 before:w-px before:-translate-x-1/2 before:bg-border before:transition-colors hover:before:w-0.5 hover:before:bg-accent"
             style={{

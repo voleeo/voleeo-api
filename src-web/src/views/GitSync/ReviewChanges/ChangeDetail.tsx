@@ -1,20 +1,13 @@
-import { useEffect, useState } from "react"
 import { Segmented } from "@/components/Segmented"
 import { methodColor } from "@/components/tokens"
 import { type EntityChange, GROUP_ORDER } from "@/lib/gitEntityDiff"
 import { useGitStore } from "@/store/git"
 import { discardField, revealEntity } from "@/store/gitReview"
+import { useEntityPatch, VIEW_MODES, type ViewMode } from "../diffMode"
 import { EntityIcon } from "../EntityIcon"
 import { RV } from "../reviewClasses"
 import { DiffView } from "./DiffView"
 import { FieldGroup } from "./FieldGroups"
-
-type ViewMode = "summary" | "diff"
-
-const VIEW_MODES = [
-  { value: "summary", label: "Summary" },
-  { value: "diff", label: "Diff" },
-] as const
 
 const STATUS_META = {
   modified: { word: "Edited", color: "var(--accent)" },
@@ -35,19 +28,7 @@ export function ChangeDetail({
 }) {
   const mode = viewMode ?? "summary"
   const entityDiff = useGitStore((s) => s.entityDiff)
-  const [patch, setPatch] = useState<string | null>(null)
-  const path = entity?.path
-  useEffect(() => {
-    if (mode !== "diff" || !path) return
-    let alive = true
-    setPatch(null)
-    void entityDiff(path).then((p) => {
-      if (alive) setPatch(p)
-    })
-    return () => {
-      alive = false
-    }
-  }, [mode, path, entityDiff])
+  const patch = useEntityPatch(mode, entity?.path, entityDiff)
 
   if (!entity) {
     return <div className={RV.detailEmpty}>Select a change to review it.</div>

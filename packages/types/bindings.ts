@@ -404,6 +404,7 @@ params_location?: OAuth1Location; callback?: string; verifier?: string; timestam
 	 */
 	gitChanges: (workspaceId: string) => typedError<GitEntityChange_Serialize[], VoleeoError>(__TAURI_INVOKE("git_changes", { workspaceId })),
 	gitEntityDiff: (workspaceId: string, path: string) => typedError<string, VoleeoError>(__TAURI_INVOKE("git_entity_diff", { workspaceId, path })),
+	gitConflictDiff: (workspaceId: string, path: string) => typedError<string, VoleeoError>(__TAURI_INVOKE("git_conflict_diff", { workspaceId, path })),
 	gitStage: (workspaceId: string, paths: string[]) => typedError<null, VoleeoError>(__TAURI_INVOKE("git_stage", { workspaceId, paths })),
 	gitStageAll: (workspaceId: string) => typedError<null, VoleeoError>(__TAURI_INVOKE("git_stage_all", { workspaceId })),
 	gitUnstage: (workspaceId: string, paths: string[]) => typedError<null, VoleeoError>(__TAURI_INVOKE("git_unstage", { workspaceId, paths })),

@@ -162,6 +162,14 @@ fn merge_conflict_roundtrip() {
     assert!(c.theirs.as_deref().unwrap().contains("FROM_MAIN"));
     assert!(c.base.as_deref().unwrap().contains("MIDDLE"));
 
+    // Raw ours-vs-theirs patch for the "code diff" view: ours (FROM_FEATURE)
+    // removed, theirs (FROM_MAIN) added, context preserved, no file preamble.
+    let diff = conflict_diff_text(&path, "req_a.yaml").unwrap();
+    assert!(diff.contains("@@"));
+    assert!(diff.contains("-FROM_FEATURE"));
+    assert!(diff.contains("+FROM_MAIN"));
+    assert!(!diff.contains("diff --git"));
+
     resolve(&path, "req_a.yaml", "line1\nMERGED\nline3\n").unwrap();
     finish_merge(&path, "merge main", None).unwrap();
 
