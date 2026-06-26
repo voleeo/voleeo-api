@@ -1,9 +1,12 @@
+import { Checkbox } from "@/components/ui/checkbox"
 import { cn } from "@/lib/utils"
 import type { OAuth2ClientAuth } from "../../../../../../../packages/types/bindings"
 import {
   type FieldsProps,
+  HelpText,
   PlainField,
   SecretField,
+  Segmented,
   WarningBlock,
 } from "../shared"
 import { PkceFields } from "./PkceFields"
@@ -77,6 +80,17 @@ export function EndpointFields({
               onVarClick={onVarClick}
             />
           </div>
+          <label className="flex w-fit items-center gap-2 cursor-pointer font-sans text-[0.857rem] text-fg">
+            <Checkbox
+              checked={auth.use_external_browser ?? false}
+              onCheckedChange={(v) => set("use_external_browser", v === true)}
+            />
+            Use external browser
+          </label>
+          <HelpText>
+            Signs in via your system browser. Enable for providers that block
+            embedded windows (e.g. Google).
+          </HelpText>
         </>
       )}
       {!implicit && (
@@ -142,32 +156,13 @@ export function EndpointFields({
           onVarClick={onVarClick}
         />
       </div>
-      <div
-        className={cn(
-          "flex items-center gap-3 flex-wrap",
-          implicit && "hidden",
-        )}
-      >
-        <span className="font-sans text-[0.857rem] text-muted">
-          Client auth
-        </span>
-        <div className="flex items-center gap-0.5 rounded-[6px] border border-border bg-bg p-[2px]">
-          {CLIENT_AUTH.map((c) => (
-            <button
-              key={c.value}
-              type="button"
-              onClick={() => set("client_auth", c.value)}
-              className={cn(
-                "flex items-center px-2.5 py-0.5 rounded-[4px] border-0 outline-none cursor-pointer font-sans text-[0.857rem] transition-colors",
-                (auth.client_auth ?? "basic_header") === c.value
-                  ? "bg-accent/15 text-accent"
-                  : "bg-transparent text-muted hover:text-fg",
-              )}
-            >
-              {c.label}
-            </button>
-          ))}
-        </div>
+      <div className={cn(implicit && "hidden")}>
+        <Segmented
+          label="Client auth"
+          value={auth.client_auth ?? "basic_header"}
+          options={CLIENT_AUTH}
+          onChange={(v) => set("client_auth", v)}
+        />
       </div>
       {grant === "authorization_code" && (
         <PkceFields auth={auth} setAuth={setAuth} onVarClick={onVarClick} />

@@ -328,6 +328,13 @@ export function authEntries(auth: AuthConfig): AuthEntry[] {
           value: auth.audience,
         })
       }
+      if (auth.use_external_browser) {
+        entries.push({
+          key: "auth.use_external_browser",
+          label: "Use external browser",
+          value: "Enabled",
+        })
+      }
       entries.push(stateEntry(auth.enabled))
       return entries
     }
