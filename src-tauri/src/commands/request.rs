@@ -93,6 +93,35 @@ pub(crate) fn transform_auth_secrets(
     Ok(())
 }
 
+pub(crate) fn preserve_unchanged_secrets(
+    next: &mut AuthConfig,
+    decrypted_old: &mut AuthConfig,
+    stored_old: &mut AuthConfig,
+) {
+    if std::mem::discriminant(&*next) != std::mem::discriminant(&*decrypted_old) {
+        return;
+    }
+    let plain: Vec<String> = decrypted_old
+        .secret_fields_mut()
+        .into_iter()
+        .map(|(v, _)| v.clone())
+        .collect();
+    let cipher: Vec<String> = stored_old
+        .secret_fields_mut()
+        .into_iter()
+        .map(|(v, _)| v.clone())
+        .collect();
+    for ((value, _), (p, c)) in next
+        .secret_fields_mut()
+        .into_iter()
+        .zip(plain.iter().zip(cipher.iter()))
+    {
+        if value.as_str() == p.as_str() {
+            *value = c.clone();
+        }
+    }
+}
+
 /// Encrypt/decrypt the `encrypted` folder variables in place using the
 /// workspace key. Mirrors `transform_auth_secrets` for `EnvironmentVariable`.
 pub(crate) fn transform_var_secrets(
@@ -266,6 +295,7 @@ pub async fn update_request(
         // fresh nonce, so an unchanged request would otherwise look different and
         // re-save, bumping updatedAt into a phantom git change.
         let mut current = stores.requests.get_request(&workspace_id, &id)?;
+        let mut stored_auth = current.auth.clone();
         transform_auth_secrets(
             &mut current.auth,
             &workspace_id,
@@ -282,6 +312,7 @@ pub async fn update_request(
         if next == current {
             return Ok(());
         }
+        preserve_unchanged_secrets(&mut next.auth, &mut current.auth, &mut stored_auth);
         transform_auth_secrets(&mut next.auth, &workspace_id, &stores, Direction::Encrypt)?;
         stores.requests.update_request(
             &workspace_id,
@@ -322,6 +353,7 @@ pub async fn update_folder(
     run_blocking(move || {
         // Plaintext comparison before encrypting — see `update_request`.
         let mut current = stores.requests.get_folder(&workspace_id, &id)?;
+        let mut stored_auth = current.auth.clone();
         transform_auth_secrets(
             &mut current.auth,
             &workspace_id,
@@ -334,6 +366,7 @@ pub async fn update_folder(
         if next == current {
             return Ok(());
         }
+        preserve_unchanged_secrets(&mut next.auth, &mut current.auth, &mut stored_auth);
         transform_auth_secrets(&mut next.auth, &workspace_id, &stores, Direction::Encrypt)?;
         stores
             .requests
@@ -431,4 +464,60 @@ pub async fn move_items(
         requests.move_items(&workspace_id, updates)
     })
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn aws(secret_key: &str, session_token: &str) -> AuthConfig {
+        AuthConfig::AwsSigV4 {
+            access_key: "AKIA".into(),
+            secret_key: secret_key.into(),
+            secret_key_encrypted: true,
+            session_token: session_token.into(),
+            session_token_encrypted: true,
+            region: "us-east-1".into(),
+            service: "s3".into(),
+            enabled: true,
+        }
+    }
+
+    #[test]
+    fn preserves_only_unchanged_secret_ciphertext() {
+        let mut stored = aws("enc:v1:SK", "enc:v1:ST"); // as persisted
+        let mut decrypted = aws("sk-plain", "st-plain"); // stored, decrypted
+                                                         // secret_key unchanged vs decrypted; session_token edited.
+        let mut next = aws("sk-plain", "st-new");
+        preserve_unchanged_secrets(&mut next, &mut decrypted, &mut stored);
+        let AuthConfig::AwsSigV4 {
+            secret_key,
+            session_token,
+            ..
+        } = next
+        else {
+            unreachable!()
+        };
+        assert_eq!(
+            secret_key, "enc:v1:SK",
+            "unchanged secret reuses ciphertext"
+        );
+        assert_eq!(session_token, "st-new", "changed secret stays plaintext");
+    }
+
+    #[test]
+    fn preserves_nothing_when_auth_kind_differs() {
+        let mut stored = aws("enc:v1:SK", "enc:v1:ST");
+        let mut decrypted = aws("sk-plain", "st-plain");
+        let mut next = AuthConfig::Bearer {
+            token: "sk-plain".into(),
+            token_encrypted: true,
+            enabled: true,
+        };
+        preserve_unchanged_secrets(&mut next, &mut decrypted, &mut stored);
+        let AuthConfig::Bearer { token, .. } = next else {
+            unreachable!()
+        };
+        assert_eq!(token, "sk-plain", "different kind ⇒ no ciphertext reuse");
+    }
 }
