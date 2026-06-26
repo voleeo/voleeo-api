@@ -12,40 +12,9 @@ import { cn } from "@/lib/utils"
 import type { AuthConfig } from "@/store/requests"
 import type { SetAuth } from "../useAuthEditor"
 
-export function Segmented<T extends string>({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string
-  value: T
-  options: readonly { value: T; label: string }[]
-  onChange: (next: T) => void
-}) {
-  return (
-    <div className="flex items-center gap-3">
-      <span className="font-sans text-[0.857rem] text-muted">{label}</span>
-      <div className="flex items-center gap-0.5 rounded-[6px] border border-border bg-bg p-[2px]">
-        {options.map((o) => (
-          <button
-            key={o.value}
-            type="button"
-            onClick={() => onChange(o.value)}
-            className={cn(
-              "flex items-center px-2.5 py-0.5 rounded-[4px] border-0 outline-none cursor-pointer font-sans text-[0.857rem] transition-colors",
-              value === o.value
-                ? "bg-accent/15 text-accent"
-                : "bg-transparent text-muted hover:text-fg",
-            )}
-          >
-            {o.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  )
-}
+// Hoisted to a shared, domain-agnostic component; re-exported so the AuthTab
+// field modules keep their `./shared` import.
+export { Segmented } from "@/components/Segmented"
 
 export function LabeledDropdown<T extends string>({
   label,
@@ -232,7 +201,7 @@ export function AuthToggleButton({
       className={cn(
         "absolute top-0 right-0 z-10 p-1 rounded-[3px] border bg-transparent cursor-pointer transition-colors",
         enabled
-          ? "border-success/40 text-success hover:border-success/70"
+          ? "border-border text-muted hover:text-success hover:border-success/70"
           : "border-error/40 text-error hover:border-error/70",
       )}
     >
