@@ -114,7 +114,15 @@ pub async fn git_clone_workspace(
         )));
     }
     let target2 = target.clone();
-    run(move || voleeo_git::clone(&effective, &target2, creds)).await?;
+    let clone = run(move || voleeo_git::clone(&effective, &target2, creds));
+    match tokio::time::timeout(std::time::Duration::from_secs(15), clone).await {
+        Ok(inner) => inner?,
+        Err(_) => {
+            return Err(VoleeoError::Git(
+                "Clone timed out after 15s — check the repository URL and your connection".into(),
+            ))
+        }
+    }
     register_workspace_folder(&state.app_data_dir, &target)
 }
 

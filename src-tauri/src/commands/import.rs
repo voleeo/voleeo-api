@@ -55,7 +55,7 @@ pub async fn import_fetch_url(url: String) -> Result<String, VoleeoError> {
     // WAF-fronted hosts (e.g. the Swagger demo) 404 when the UA header is absent.
     let client = reqwest::Client::builder()
         .user_agent("Voleeo")
-        .timeout(std::time::Duration::from_secs(30))
+        .timeout(std::time::Duration::from_secs(15))
         .build()
         .map_err(|e| VoleeoError::Http(e.to_string()))?;
     let resp = client
