@@ -229,6 +229,7 @@ fn to_auth(auth: &ImportedAuth) -> AuthConfig {
             username: String::new(),
             password: String::new(),
             password_encrypted: false,
+            use_external_browser: false,
             enabled: true,
         },
     }

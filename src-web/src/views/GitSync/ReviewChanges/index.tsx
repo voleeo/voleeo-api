@@ -19,6 +19,7 @@ export function ReviewChanges() {
   const { width, onSepDown } = useSidebarResize(wsId)
   const [selectedPath, setSelectedPath] = useState<string | null>(null)
   const [deselected, setDeselected] = useState<Set<string>>(new Set())
+  const [viewMode, setViewMode] = useState<"summary" | "diff">("summary")
 
   const review = useMemo(
     () =>
@@ -79,7 +80,11 @@ export function ReviewChanges() {
       </aside>
       <PaneSeparator dir="col" onMouseDown={onSepDown} />
       <section className={RV.detail}>
-        <ChangeDetail entity={selected} />
+        <ChangeDetail
+          entity={selected}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+        />
       </section>
     </div>
   )

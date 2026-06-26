@@ -8,7 +8,9 @@ use tauri::State;
 use voleeo_core::{AuthConfig, GrpcRequest, ProtoSource, RequestParameter, VoleeoError};
 use voleeo_storage::GrpcUpdate;
 
-use crate::commands::request::{run_blocking, transform_auth_secrets, Direction, Stores};
+use crate::commands::request::{
+    preserve_unchanged_secrets, run_blocking, transform_auth_secrets, Direction, Stores,
+};
 use crate::state::AppState;
 
 /// Editable fields of a gRPC request, bundled so the command stays within
@@ -116,6 +118,7 @@ pub async fn update_grpc_request(
     run_blocking(move || {
         // Plaintext compare before encrypting — see `update_ws_connection`.
         let mut current = grpc.get(&workspace_id, &id)?;
+        let mut stored_auth = current.auth.clone();
         transform_auth_secrets(
             &mut current.auth,
             &workspace_id,
@@ -134,6 +137,7 @@ pub async fn update_grpc_request(
         if next == current {
             return Ok(());
         }
+        preserve_unchanged_secrets(&mut next.auth, &mut current.auth, &mut stored_auth);
         transform_auth_secrets(&mut next.auth, &workspace_id, &stores, Direction::Encrypt)?;
         grpc.update(
             &workspace_id,

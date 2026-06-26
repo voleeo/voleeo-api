@@ -6,7 +6,7 @@
 use std::time::Duration;
 
 use serde::Serialize;
-use tauri::{Emitter, State};
+use tauri::{Emitter, Manager, State};
 use voleeo_core::{AuthConfig, OAuth2Grant, OAuth2PkceMethod, VoleeoError};
 
 use voleeo_oauth::flow::{self, OAuth2Config};
@@ -20,9 +20,6 @@ use crate::state::AppState;
 #[serde(rename_all = "camelCase")]
 pub struct Oauth2TokenStatus {
     pub has_token: bool,
-    /// Whether a refresh token is cached. Client-credentials never issues one, so
-    /// the Auth-tab panel hides its Refresh button when this is false.
-    pub has_refresh_token: bool,
     /// Unix seconds; `None` = no token or no expiry. `f64` (not `i64`) because
     /// specta forbids exporting BigInt-style types — lossless for real dates.
     pub expires_at: Option<f64>,
@@ -34,14 +31,12 @@ fn status_of(token: Option<&CachedToken>) -> Oauth2TokenStatus {
     match token {
         Some(t) => Oauth2TokenStatus {
             has_token: true,
-            has_refresh_token: !t.refresh_token.is_empty(),
             expires_at: (t.expires_at != 0).then_some(t.expires_at as f64),
             scope: t.scope.clone(),
             token_preview: preview(&t.access_token),
         },
         None => Oauth2TokenStatus {
             has_token: false,
-            has_refresh_token: false,
             expires_at: None,
             scope: String::new(),
             token_preview: String::new(),
@@ -176,6 +171,64 @@ pub async fn oauth2_token_details(
     }))
 }
 
+const OAUTH_WINDOW_LABEL: &str = "oauth";
+
+async fn open_auth_page(
+    app: &tauri::AppHandle,
+    url: &str,
+    external: bool,
+) -> Result<Option<tauri::WebviewWindow>, VoleeoError> {
+    if external {
+        open::that(url).map_err(|e| VoleeoError::Http(format!("Failed to open browser: {e}")))?;
+        return Ok(None);
+    }
+    if let Some(w) = app.get_webview_window(OAUTH_WINDOW_LABEL) {
+        let _ = w.close();
+    }
+    let parsed = tauri::Url::parse(url)
+        .map_err(|e| VoleeoError::InvalidConfig(format!("Invalid authorization URL: {e}")))?;
+    tauri::WebviewWindowBuilder::new(app, OAUTH_WINDOW_LABEL, tauri::WebviewUrl::External(parsed))
+        .title("Sign in")
+        .incognito(true)
+        .inner_size(760.0, 600.0)
+        .center()
+        .resizable(true)
+        .build()
+        .map(Some)
+        .map_err(|e| VoleeoError::Http(format!("Failed to open sign-in window: {e}")))
+}
+
+/// Race a loopback wait against the user closing the sign-in window, so closing
+/// it cancels the flow at once instead of hanging until the loopback timeout.
+/// Plain await when there's no internal window (external browser) — we can't
+/// observe the system browser closing. The `Mutex` guard is never held across an
+/// await (taken only inside the sync event callback), so rule 19 holds.
+async fn await_or_window_closed<T>(
+    window: &Option<tauri::WebviewWindow>,
+    wait: impl std::future::Future<Output = Result<T, VoleeoError>>,
+) -> Result<T, VoleeoError> {
+    let Some(w) = window else {
+        return wait.await;
+    };
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let slot = std::sync::Mutex::new(Some(tx));
+    w.on_window_event(move |event| {
+        if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
+            if let Ok(mut guard) = slot.lock() {
+                if let Some(tx) = guard.take() {
+                    let _ = tx.send(());
+                }
+            }
+        }
+    });
+    tokio::select! {
+        r = wait => r,
+        _ = rx => Err(VoleeoError::Http(
+            "Sign-in window closed before authorizing".into(),
+        )),
+    }
+}
+
 /// Acquire a token per the grant type: a direct POST for client-credentials /
 /// password, or the interactive browser + loopback flow for authorization-code.
 #[tauri::command]
@@ -187,6 +240,13 @@ pub async fn oauth2_fetch_token(
     auth: AuthConfig,
 ) -> Result<Oauth2TokenStatus, VoleeoError> {
     let config = config_of(&auth)?;
+    let use_external_browser = matches!(
+        &auth,
+        AuthConfig::OAuth2 {
+            use_external_browser: true,
+            ..
+        }
+    );
     // Implicit has no token endpoint; every other grant needs one.
     if config.grant != OAuth2Grant::Implicit && config.token_url.trim().is_empty() {
         return Err(VoleeoError::InvalidConfig(
@@ -205,11 +265,16 @@ pub async fn oauth2_fetch_token(
             }
             let (csrf, loopback, redirect) = interactive_setup(&config).await?;
             let url = flow::build_auth_url(&config, &redirect, &csrf, None);
-            open::that(&url)
-                .map_err(|e| VoleeoError::Http(format!("Failed to open browser: {e}")))?;
-            loopback
-                .wait_for_token(&csrf, Duration::from_secs(120))
-                .await?
+            let window = open_auth_page(&app, &url, use_external_browser).await?;
+            let token = await_or_window_closed(
+                &window,
+                loopback.wait_for_token(&csrf, Duration::from_secs(120)),
+            )
+            .await;
+            if let Some(w) = window {
+                let _ = w.close();
+            }
+            token?
         }
         OAuth2Grant::AuthorizationCode => {
             if config.auth_url.trim().is_empty() {
@@ -241,40 +306,22 @@ pub async fn oauth2_fetch_token(
                 &csrf,
                 pkce.as_ref().map(|p| p.challenge.as_str()),
             );
-            open::that(&url)
-                .map_err(|e| VoleeoError::Http(format!("Failed to open browser: {e}")))?;
-            let code = loopback
-                .wait_for_code(&csrf, Duration::from_secs(120))
-                .await?;
+            let window = open_auth_page(&app, &url, use_external_browser).await?;
+            let code_result = await_or_window_closed(
+                &window,
+                loopback.wait_for_code(&csrf, Duration::from_secs(120)),
+            )
+            .await;
+            if let Some(w) = window {
+                let _ = w.close();
+            }
+            let code = code_result?;
             let verifier = pkce.as_ref().map(|p| p.verifier.as_str()).unwrap_or("");
             flow::exchange_code(&client, &config, code, verifier, &redirect).await?
         }
     };
     let status = store_and_status(&state, &workspace_id, config.cache_key(), result).await?;
     app.emit("oauth2:token-acquired", config.cache_key()).ok();
-    Ok(status)
-}
-
-#[tauri::command]
-#[specta::specta]
-pub async fn oauth2_refresh_token(
-    app: tauri::AppHandle,
-    state: State<'_, AppState>,
-    workspace_id: String,
-    auth: AuthConfig,
-) -> Result<Oauth2TokenStatus, VoleeoError> {
-    let config = config_of(&auth)?;
-    let key = config.cache_key();
-    let cached = load_cached(&state, &workspace_id, &key).await?;
-    let refresh_token = cached
-        .as_ref()
-        .map(|t| t.refresh_token.clone())
-        .filter(|r| !r.is_empty())
-        .ok_or_else(|| VoleeoError::Http("No refresh token available".into()))?;
-    let client = reqwest::Client::new();
-    let result = flow::refresh(&client, &config, &refresh_token).await?;
-    let status = store_and_status(&state, &workspace_id, key.clone(), result).await?;
-    app.emit("oauth2:token-acquired", key).ok();
     Ok(status)
 }
 

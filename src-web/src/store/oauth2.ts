@@ -77,15 +77,6 @@ export async function oauth2FetchToken(
   return res.data
 }
 
-export async function oauth2RefreshToken(
-  workspaceId: string,
-  auth: AuthConfig,
-): Promise<Oauth2TokenStatus> {
-  const res = await commands.oauth2RefreshToken(workspaceId, auth)
-  if (res.status === "error") throw new Error(errorMessage(res.error))
-  return res.data
-}
-
 export async function oauth2ClearToken(
   workspaceId: string,
   auth: AuthConfig,

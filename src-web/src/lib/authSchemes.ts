@@ -113,6 +113,7 @@ export const AUTH_SCHEMES: Record<AuthKind, AuthScheme> = {
       code_verifier: "",
       username: "",
       password: "",
+      use_external_browser: false,
     }),
   },
   digest: {

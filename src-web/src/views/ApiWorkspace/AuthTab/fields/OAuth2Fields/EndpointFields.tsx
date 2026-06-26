@@ -1,12 +1,33 @@
+import { Checkbox } from "@/components/ui/checkbox"
 import { cn } from "@/lib/utils"
 import type { OAuth2ClientAuth } from "../../../../../../../packages/types/bindings"
-import { type FieldsProps, PlainField, SecretField } from "../shared"
+import {
+  type FieldsProps,
+  HelpText,
+  PlainField,
+  SecretField,
+  Segmented,
+  WarningBlock,
+} from "../shared"
 import { PkceFields } from "./PkceFields"
 
 const CLIENT_AUTH: { value: OAuth2ClientAuth; label: string }[] = [
   { value: "basic_header", label: "Basic header" },
   { value: "request_body", label: "Request body" },
 ]
+
+/** http:// to a non-loopback host sends client secrets and tokens in cleartext
+ *  (RFC 6749 §3.1.2.1/§10 mandate TLS). Loopback http is fine for local test
+ *  servers; templated URLs are skipped since they may resolve to https. */
+function isInsecureUrl(url: string): boolean {
+  const u = url.trim().toLowerCase()
+  if (!u.startsWith("http://") || u.includes("{{")) return false
+  const authority = u.slice(7).split(/[/?#]/)[0]
+  const host = authority.startsWith("[")
+    ? authority.slice(0, authority.indexOf("]") + 1)
+    : authority.split(":")[0]
+  return host !== "localhost" && host !== "[::1]" && !host.startsWith("127.")
+}
 
 /** Grant-aware endpoint + credential fields for OAuth 2.0. */
 export function EndpointFields({
@@ -19,8 +40,21 @@ export function EndpointFields({
   const set = <K extends keyof typeof auth>(key: K, value: (typeof auth)[K]) =>
     setAuth((p) => (p.kind === "oauth2" ? { ...p, [key]: value } : p))
 
+  const insecure = [
+    grant === "authorization_code" || implicit ? auth.auth_url : "",
+    implicit ? "" : auth.token_url,
+  ].some((u) => isInsecureUrl(u ?? ""))
+
   return (
     <>
+      {insecure && (
+        <WarningBlock>
+          An endpoint uses <span className="font-mono">http://</span> — client
+          secrets and tokens will be sent in cleartext. Use{" "}
+          <span className="font-mono">https://</span> unless this is a local
+          test server.
+        </WarningBlock>
+      )}
       {(grant === "authorization_code" || implicit) && (
         <>
           <PlainField
@@ -46,6 +80,17 @@ export function EndpointFields({
               onVarClick={onVarClick}
             />
           </div>
+          <label className="flex w-fit items-center gap-2 cursor-pointer font-sans text-[0.857rem] text-fg">
+            <Checkbox
+              checked={auth.use_external_browser ?? false}
+              onCheckedChange={(v) => set("use_external_browser", v === true)}
+            />
+            Use external browser
+          </label>
+          <HelpText>
+            Signs in via your system browser. Enable for providers that block
+            embedded windows (e.g. Google).
+          </HelpText>
         </>
       )}
       {!implicit && (
@@ -111,32 +156,13 @@ export function EndpointFields({
           onVarClick={onVarClick}
         />
       </div>
-      <div
-        className={cn(
-          "flex items-center gap-3 flex-wrap",
-          implicit && "hidden",
-        )}
-      >
-        <span className="font-sans text-[0.857rem] text-muted">
-          Client auth
-        </span>
-        <div className="flex items-center gap-0.5 rounded-[6px] border border-border bg-bg p-[2px]">
-          {CLIENT_AUTH.map((c) => (
-            <button
-              key={c.value}
-              type="button"
-              onClick={() => set("client_auth", c.value)}
-              className={cn(
-                "flex items-center px-2.5 py-0.5 rounded-[4px] border-0 outline-none cursor-pointer font-sans text-[0.857rem] transition-colors",
-                (auth.client_auth ?? "basic_header") === c.value
-                  ? "bg-accent/15 text-accent"
-                  : "bg-transparent text-muted hover:text-fg",
-              )}
-            >
-              {c.label}
-            </button>
-          ))}
-        </div>
+      <div className={cn(implicit && "hidden")}>
+        <Segmented
+          label="Client auth"
+          value={auth.client_auth ?? "basic_header"}
+          options={CLIENT_AUTH}
+          onChange={(v) => set("client_auth", v)}
+        />
       </div>
       {grant === "authorization_code" && (
         <PkceFields auth={auth} setAuth={setAuth} onVarClick={onVarClick} />

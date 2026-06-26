@@ -516,7 +516,9 @@ impl ApiBackend {
         // OAuth 2.0 resolves to a Bearer from the shared token cache: the
         // non-interactive grants fetch/refresh as needed; authorization_code
         // reuses a token previously acquired via the UI (it can't open a browser
-        // here). `apply_to_request` already expanded its `{{ }}` fields.
+        // here). `apply_to_request` already expanded its `{{ }}` fields. Always
+        // `Bearer` — non-Bearer types (MAC/DPoP) need real protocol support, not
+        // a scheme swap, so the cached `token_type` is inspector-only.
         if matches!(req.auth, AuthConfig::OAuth2 { .. }) {
             if req.auth.is_active() {
                 if let Some(config) = voleeo_oauth::OAuth2Config::from_auth(&req.auth) {

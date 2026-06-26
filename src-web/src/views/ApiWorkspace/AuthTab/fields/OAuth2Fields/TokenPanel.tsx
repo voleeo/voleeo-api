@@ -16,6 +16,14 @@ import { TokenDetails } from "./TokenDetails"
 
 type OAuth2 = Extract<AuthConfig, { kind: "oauth2" }>
 
+function isExpired(status: Oauth2TokenStatus | null): boolean {
+  return (
+    status?.hasToken === true &&
+    status.expiresAt != null &&
+    status.expiresAt - Date.now() / 1000 <= 0
+  )
+}
+
 function describe(status: Oauth2TokenStatus | null): {
   dot: string
   text: string
@@ -24,7 +32,6 @@ function describe(status: Oauth2TokenStatus | null): {
   if (status.expiresAt == null)
     return { dot: "bg-success", text: "Token valid" }
   const secondsLeft = status.expiresAt - Date.now() / 1000
-  if (secondsLeft <= 0) return { dot: "bg-warn", text: "Token expired" }
   const mins = Math.round(secondsLeft / 60)
   const left =
     mins >= 60 ? `${Math.round(mins / 60)}h` : `${Math.max(mins, 1)}m`
@@ -37,6 +44,7 @@ export function TokenPanel({ auth }: { auth: OAuth2 }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(false)
+  const [, bumpExpiryCheck] = useState(0)
 
   const { activeVars, fns } = useTemplateInputData()
   const [resolved, setResolved] = useState<OAuth2>(auth)
@@ -77,6 +85,14 @@ export function TokenPanel({ auth }: { auth: OAuth2 }) {
     void reloadStatus()
   }, [cacheId, reloadStatus])
 
+  useEffect(() => {
+    if (!status?.hasToken || status.expiresAt == null) return
+    const msLeft = status.expiresAt * 1000 - Date.now()
+    if (msLeft <= 0) return
+    const t = setTimeout(() => bumpExpiryCheck((n) => n + 1), msLeft)
+    return () => clearTimeout(t)
+  }, [status?.hasToken, status?.expiresAt])
+
   const clearToken = async () => {
     if (!workspaceId) return
     setBusy(true)
@@ -106,9 +122,8 @@ export function TokenPanel({ auth }: { auth: OAuth2 }) {
   }
 
   const { dot, text } = describe(status)
-  // Tokens are acquired automatically on send now, so the panel only manages an
-  // existing token — nothing to show (or fetch) until one exists.
-  if (!status?.hasToken) return null
+
+  if (!status?.hasToken || isExpired(status)) return null
 
   return (
     <div className="flex flex-col gap-2 rounded-md border border-border bg-surface px-2.5 py-2">

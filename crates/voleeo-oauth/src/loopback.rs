@@ -100,9 +100,19 @@ impl Loopback {
                     .accept()
                     .await
                     .map_err(|e| VoleeoError::Http(e.to_string()))?;
-                let mut buf = vec![0u8; 8192];
-                let n = stream.read(&mut buf).await.unwrap_or(0);
-                let req = String::from_utf8_lossy(&buf[..n]);
+                let mut data = Vec::new();
+                let mut buf = [0u8; 4096];
+                loop {
+                    let n = stream.read(&mut buf).await.unwrap_or(0);
+                    if n == 0 {
+                        break;
+                    }
+                    data.extend_from_slice(&buf[..n]);
+                    if data.contains(&b'\n') || data.len() > 16 * 1024 {
+                        break;
+                    }
+                }
+                let req = String::from_utf8_lossy(&data);
                 let path = req
                     .lines()
                     .next()
@@ -168,6 +178,13 @@ enum TokenOutcome {
     Ignore,
 }
 
+/// CSRF check: the redirect's `state` must echo the one we generated. Present on
+/// both success and error responses (RFC 6749 §4.1.2/§4.2.2), so verify it before
+/// acting on either.
+fn state_ok(params: &HashMap<String, String>, expected_state: &str) -> bool {
+    params.get("state").map(String::as_str) == Some(expected_state)
+}
+
 fn parse_token(path: &str, expected_state: &str) -> TokenOutcome {
     if !path.starts_with("/callback") {
         return TokenOutcome::Ignore;
@@ -185,6 +202,9 @@ fn parse_token(path: &str, expected_state: &str) -> TokenOutcome {
         .collect();
 
     if let Some(err) = params.get("error") {
+        if !state_ok(&params, expected_state) {
+            return TokenOutcome::Error("state mismatch (possible CSRF)".into());
+        }
         let detail = params
             .get("error_description")
             .map(|d| format!(" — {d}"))
@@ -194,7 +214,7 @@ fn parse_token(path: &str, expected_state: &str) -> TokenOutcome {
     let Some(token) = params.get("access_token").filter(|t| !t.is_empty()) else {
         return TokenOutcome::Relay;
     };
-    if params.get("state").map(String::as_str) != Some(expected_state) {
+    if !state_ok(&params, expected_state) {
         return TokenOutcome::Error("state mismatch (possible CSRF)".into());
     }
     let expires_at = params
@@ -230,15 +250,15 @@ fn parse_callback(path: &str, expected_state: &str) -> Outcome {
         })
         .collect();
 
+    if !state_ok(&params, expected_state) {
+        return Outcome::Error("state mismatch (possible CSRF)".into());
+    }
     if let Some(err) = params.get("error") {
         let detail = params
             .get("error_description")
             .map(|d| format!(" — {d}"))
             .unwrap_or_default();
         return Outcome::Error(format!("{err}{detail}"));
-    }
-    if params.get("state").map(String::as_str) != Some(expected_state) {
-        return Outcome::Error("state mismatch (possible CSRF)".into());
     }
     match params.get("code") {
         Some(code) if !code.is_empty() => Outcome::Code(code.clone()),
@@ -282,6 +302,15 @@ mod tests {
             parse_callback("/callback?error=access_denied&state=xyz", "xyz"),
             Outcome::Error(_)
         ));
+    }
+
+    #[test]
+    fn provider_error_with_forged_state_is_csrf() {
+        // State is verified before the provider error is surfaced.
+        match parse_callback("/callback?error=access_denied&state=bad", "xyz") {
+            Outcome::Error(m) => assert!(m.contains("state mismatch")),
+            _ => panic!("expected state-mismatch error"),
+        }
     }
 
     #[test]

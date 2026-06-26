@@ -1,9 +1,20 @@
+import { useEffect, useState } from "react"
+import { Segmented } from "@/components/Segmented"
 import { methodColor } from "@/components/tokens"
 import { type EntityChange, GROUP_ORDER } from "@/lib/gitEntityDiff"
+import { useGitStore } from "@/store/git"
 import { discardField, revealEntity } from "@/store/gitReview"
 import { EntityIcon } from "../EntityIcon"
 import { RV } from "../reviewClasses"
+import { DiffView } from "./DiffView"
 import { FieldGroup } from "./FieldGroups"
+
+type ViewMode = "summary" | "diff"
+
+const VIEW_MODES = [
+  { value: "summary", label: "Summary" },
+  { value: "diff", label: "Diff" },
+] as const
 
 const STATUS_META = {
   modified: { word: "Edited", color: "var(--accent)" },
@@ -14,10 +25,30 @@ const STATUS_META = {
 export function ChangeDetail({
   entity,
   readOnly,
+  viewMode,
+  onViewModeChange,
 }: {
   entity: EntityChange | null
   readOnly?: boolean
+  viewMode?: ViewMode
+  onViewModeChange?: (mode: ViewMode) => void
 }) {
+  const mode = viewMode ?? "summary"
+  const entityDiff = useGitStore((s) => s.entityDiff)
+  const [patch, setPatch] = useState<string | null>(null)
+  const path = entity?.path
+  useEffect(() => {
+    if (mode !== "diff" || !path) return
+    let alive = true
+    setPatch(null)
+    void entityDiff(path).then((p) => {
+      if (alive) setPatch(p)
+    })
+    return () => {
+      alive = false
+    }
+  }, [mode, path, entityDiff])
+
   if (!entity) {
     return <div className={RV.detailEmpty}>Select a change to review it.</div>
   }
@@ -53,29 +84,54 @@ export function ChangeDetail({
             </button>
           </div>
         </div>
-        <span className={RV.dhStatus} style={{ color: sm.color }}>
-          {sm.word}
-        </span>
+        <div className="flex shrink-0 items-center gap-3">
+          <span
+            className="inline-flex items-center rounded-full px-2 py-0.5 font-sans text-[0.786rem] font-semibold"
+            style={{
+              color: sm.color,
+              backgroundColor: `color-mix(in oklch, ${sm.color} 16%, transparent)`,
+            }}
+          >
+            {sm.word}
+          </span>
+          {onViewModeChange && (
+            <Segmented
+              value={mode}
+              options={VIEW_MODES}
+              onChange={onViewModeChange}
+            />
+          )}
+        </div>
       </div>
 
-      <div className={RV.detailBody}>
-        {groups.length === 0 ? (
-          <div className={RV.detailEmpty}>No field-level changes.</div>
-        ) : (
-          groups.map(({ g, items }) => (
-            <FieldGroup
-              key={g}
-              group={g}
-              items={items}
-              onDiscard={
-                readOnly || entity.status === "removed"
-                  ? undefined
-                  : (key) => discardField(entity, key)
-              }
-            />
-          ))
-        )}
-      </div>
+      {mode === "diff" ? (
+        <div className="flex-1 min-h-0 overflow-auto">
+          {patch === null ? (
+            <div className={RV.detailEmpty}>Loading diff…</div>
+          ) : (
+            <DiffView patch={patch} />
+          )}
+        </div>
+      ) : (
+        <div className={RV.detailBody}>
+          {groups.length === 0 ? (
+            <div className={RV.detailEmpty}>No field-level changes.</div>
+          ) : (
+            groups.map(({ g, items }) => (
+              <FieldGroup
+                key={g}
+                group={g}
+                items={items}
+                onDiscard={
+                  readOnly || entity.status === "removed"
+                    ? undefined
+                    : (key) => discardField(entity, key)
+                }
+              />
+            ))
+          )}
+        </div>
+      )}
     </>
   )
 }

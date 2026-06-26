@@ -89,7 +89,7 @@ Several below are distilled from confirmed 100%+ CPU bugs in this codebase. Trea
 
 **19. Hold `Mutex`/`RwLock` only across sync work — never across `.await`.** Deadlock/starvation hazard. Clone out, drop the guard, then await.
 
-**20. Mark optional storage fields `#[serde(default, skip_serializing_if = "Option::is_none")]`** to keep YAML lean.
+**20. Skip default-valued storage fields from YAML** via `#[serde(default, skip_serializing_if = …)]` — `Option::is_none` for options, an `is_false`/`is_default_*` predicate for bools/enums. A field that serializes its default value is a phantom git diff on every unrelated edit.
 
 **21. Commands return `Result<T, VoleeoError>`.** Propagate with `?`; no `unwrap`/`panic` in command bodies. Register every new command in `tauri_specta::collect_commands!` inside `specta_builder()` (`src-tauri/src/lib.rs`), then `bun run codegen`.
 
@@ -142,6 +142,7 @@ crates/           pure Rust, zero Tauri deps
   voleeo-storage  YAML storage (workspaces, requests, folders)
   voleeo-crypto   AES-256-GCM + OS keychain
   voleeo-auth     request signing/encoding (digest, sigv4, oauth1, ntlm)
+  voleeo-oauth    OAuth 2.0 token flow — loopback authorize + machine-local cache
   voleeo-http     reqwest-based HTTP executor
   voleeo-import   collection import — OpenAPI/Swagger/Postman/Insomnia → IR → core
   voleeo-ws       live WebSocket connections (Tauri-free HttpExecutor counterpart)
@@ -161,7 +162,6 @@ src-web/src/
 ```
 
 **Invariant:** `crates/` never imports Tauri. `crates-tauri/` may import Tauri but not domain crates from `crates/` unless required. `src-tauri/` is the only assembly point.
-
 Rust deps: `voleeo-core ←` every domain crate `← src-tauri`; `src-tauri` also depends on `crates-tauri/voleeo-mac-window`.
 
 ### IPC / type safety
@@ -242,8 +242,8 @@ Voleeo is an MCP **server**: AI clients connect over the bridge (stdio ↔ Unix 
 
 `syncDir` is **never** in `workspace.yaml` — it's machine-local; `workspaces/{id}/` becomes a symlink. `derive_sync_dir()` reads `read_link` at runtime. Caller-supplied ids pass `validate_id` (`[A-Za-z0-9_-]`, ≤128) before any path construction — new storage paths must do the same.
 
-**Encryption** (`voleeo-crypto`): per-workspace AES-256-GCM. Key stored in OS keychain and `{app_data_dir}/keys/{workspace_id}.key` as fallback. Display: 32 bytes as 8 dash-separated groups of 8 uppercase hex. `keyCheck` token in `workspace.yaml` verifies imported keys. Secrets travel plaintext over IPC; the backend encrypts at rest via `transform_secrets` (env) / `transform_auth_secrets` (request) in `src-tauri/src/commands/`. Encrypted workspaces also write ciphertext into the YAML.
+**Encryption** (`voleeo-crypto`): per-workspace AES-256-GCM. Key stored in OS keychain and `{app_data_dir}/keys/{workspace_id}.key` as fallback. Display: 32 bytes as 8 dash-separated groups of 8 uppercase hex. `keyCheck` token in `workspace.yaml` verifies imported keys. Secrets travel plaintext over IPC; the backend encrypts at rest via `transform_secrets` (env) / `transform_auth_secrets` (request) in `src-tauri/src/commands/`. Encrypted workspaces also write ciphertext into the YAML. On save, reuse the stored ciphertext for any secret whose value is unchanged (`preserve_unchanged_secrets`) — AES-GCM's fresh nonce otherwise rewrites every secret on each edit, a phantom git diff.
 
 ### Pre-release development policy
 
-Voleeo has not shipped. **Do not write migration code or back-compat shims.** Applies to on-disk formats, IPC shapes, runtime fallbacks reconstructing missing data, and theme/plugin contracts. If a feature exists only to handle "older versions of our own code," delete it.
+Voleeo has not shipped: default to **no migration code or back-compat shims** for IPC shapes, runtime fallbacks reconstructing missing data, and theme/plugin contracts — delete code that only handles "older versions of our own code." **But weigh backward compatibility for critical changes to persisted data** (workspace/request YAML schema, encryption, on-disk layout): users now keep real git-synced workspaces, so keep old files readable (serde `default`/`rename`, tolerant parses) or call out the break — never silently corrupt or drop existing data. If a change touches data on disk, treat it as critical.

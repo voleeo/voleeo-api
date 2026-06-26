@@ -12,7 +12,9 @@ use voleeo_core::{
 use voleeo_storage::{StoredWsSession, StoredWsSessionSummary};
 use voleeo_ws::{WsEvent, WsEventSink};
 
-use crate::commands::request::{transform_auth_secrets, Direction, Stores};
+use crate::commands::request::{
+    preserve_unchanged_secrets, transform_auth_secrets, Direction, Stores,
+};
 use crate::state::AppState;
 
 async fn run_blocking<T: Send + 'static>(
@@ -117,6 +119,7 @@ pub async fn update_ws_connection(
     run_blocking(move || {
         // Plaintext compare before encrypting — see `update_request`.
         let mut current = ws.get(&workspace_id, &id)?;
+        let mut stored_auth = current.auth.clone();
         transform_auth_secrets(
             &mut current.auth,
             &workspace_id,
@@ -131,6 +134,7 @@ pub async fn update_ws_connection(
         if next == current {
             return Ok(());
         }
+        preserve_unchanged_secrets(&mut next.auth, &mut current.auth, &mut stored_auth);
         transform_auth_secrets(&mut next.auth, &workspace_id, &stores, Direction::Encrypt)?;
         ws.update(
             &workspace_id,

@@ -107,6 +107,10 @@ fn is_true(b: &bool) -> bool {
     *b
 }
 
+fn is_false(b: &bool) -> bool {
+    !*b
+}
+
 fn is_default_pkce_method(m: &OAuth2PkceMethod) -> bool {
     *m == OAuth2PkceMethod::default()
 }
@@ -227,16 +231,10 @@ pub enum AuthConfig {
         use_pkce: bool,
         #[serde(default, skip_serializing_if = "is_default_pkce_method")]
         code_challenge_method: OAuth2PkceMethod,
-        /// Optional PKCE verifier override — empty means generate a fresh one per
-        /// authorization. Advanced/debug use only.
         #[serde(default, skip_serializing_if = "String::is_empty")]
         code_verifier: String,
-        /// Redirect URI for the interactive grants. Empty = a random loopback
-        /// (`http://127.0.0.1:<port>/callback`). Set it to a fixed loopback when
-        /// the provider requires a pre-registered redirect.
         #[serde(default, skip_serializing_if = "String::is_empty")]
         redirect_uri: String,
-        /// Optional CSRF `state` override — empty means generate a fresh one.
         #[serde(default, skip_serializing_if = "String::is_empty")]
         state: String,
         #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -245,6 +243,8 @@ pub enum AuthConfig {
         password: String,
         #[serde(default)]
         password_encrypted: bool,
+        #[serde(default, skip_serializing_if = "is_false")]
+        use_external_browser: bool,
         #[serde(default = "default_true", skip_serializing_if = "is_true")]
         enabled: bool,
     },

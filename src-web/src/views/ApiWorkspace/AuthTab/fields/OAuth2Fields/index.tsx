@@ -10,11 +10,14 @@ import type { FieldsProps } from "../shared"
 import { EndpointFields } from "./EndpointFields"
 import { TokenPanel } from "./TokenPanel"
 
+// Implicit and Password (ROPC) are removed in OAuth 2.1 and discouraged by
+// RFC 9700 — kept for legacy providers but labelled so users reach for the
+// others first.
 const GRANTS: { value: OAuth2Grant; label: string }[] = [
   { value: "client_credentials", label: "Client Credentials" },
   { value: "authorization_code", label: "Authorization Code" },
-  { value: "implicit", label: "Implicit" },
-  { value: "password", label: "Password" },
+  { value: "implicit", label: "Implicit (legacy)" },
+  { value: "password", label: "Password (legacy)" },
 ]
 
 export function OAuth2Fields({
