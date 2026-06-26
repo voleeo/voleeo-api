@@ -21,7 +21,8 @@ pub mod conflict;
 pub use branch::{branches, checkout_branch, create_branch, rename_branch};
 pub use commit::commit;
 pub use conflict::{
-    conflict_blobs, finish_merge, heal_merge_worktree, resolve, resolve_delete, ConflictBlob,
+    conflict_blobs, conflict_diff_text, finish_merge, heal_merge_worktree, resolve, resolve_delete,
+    ConflictBlob,
 };
 pub use entity::{changed_blobs, commit_blobs, entity_diff_text, revert_commit_files, ChangedBlob};
 pub use log::{log, log_for_path};

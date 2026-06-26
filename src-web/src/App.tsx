@@ -1,6 +1,7 @@
 import { emit } from "@tauri-apps/api/event"
 import { useEffect } from "react"
 import { PluginPromptHost } from "@/components/PluginPromptHost"
+import { useDisableNativeAutofill } from "@/hooks/useDisableNativeAutofill"
 import { useGitReveal } from "@/hooks/useGitReveal"
 import { useGrpcSync } from "@/hooks/useGrpcSync"
 import { useMcpSync } from "@/hooks/useMcpSync"
@@ -47,6 +48,7 @@ export default function App() {
   useWsSync()
   useGrpcSync()
   useGitReveal(windowLabel === "main")
+  useDisableNativeAutofill()
 
   useEffect(() => {
     initialize()

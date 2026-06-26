@@ -87,6 +87,17 @@ pub async fn git_entity_diff(
 
 #[tauri::command]
 #[specta::specta]
+pub async fn git_conflict_diff(
+    state: State<'_, AppState>,
+    workspace_id: String,
+    path: String,
+) -> Result<String, VoleeoError> {
+    let dir = path_of(&state, &workspace_id);
+    run(move || voleeo_git::conflict_diff_text(&dir, &path)).await
+}
+
+#[tauri::command]
+#[specta::specta]
 pub async fn git_stage(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
