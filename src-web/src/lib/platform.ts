@@ -3,3 +3,5 @@ export const isMac =
 
 export const isWindows =
   typeof navigator !== "undefined" && /win/i.test(navigator.userAgent)
+
+export const isLinux = !isMac && !isWindows
