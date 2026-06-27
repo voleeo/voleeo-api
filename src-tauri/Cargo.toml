@@ -58,7 +58,7 @@ voleeo-mac-window = { path = "../crates-tauri/voleeo-mac-window" }
 # Windows-only: directory junctions for workspace sync links (no privilege
 # needed, unlike symlink_dir). See src/platform.rs.
 [target.'cfg(windows)'.dependencies]
-junction = "1"
+junction = "2"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
