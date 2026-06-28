@@ -1,5 +1,6 @@
 import { emit } from "@tauri-apps/api/event"
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow"
+import { EVENTS } from "@/config/events"
 import { checkoutBranch } from "@/store/gitBranches"
 import { useToastStore } from "@/store/toast"
 
@@ -28,7 +29,7 @@ export async function openGitWindow(
   if (existing) {
     await existing.show().catch(() => {})
     await existing.setFocus().catch(() => {})
-    await emit("git:view", {
+    await emit(EVENTS.gitView, {
       workspaceId,
       view,
       path: path ?? null,

@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils"
 import { commands } from "../../../../../packages/types/bindings"
 import { FlowBtn } from "../FlowBtn"
 
-const ACCEPTED = ["json", "yaml", "yml"]
+const ACCEPTED = ["voleeo", "json", "yaml", "yml"]
 const URL_INPUT =
   "w-full bg-bg border border-border rounded-[6px] pl-8 pr-2.5 py-2 text-[0.857rem] text-fg font-mono outline-none focus:border-accent"
 
@@ -44,7 +44,7 @@ export function ImportSourceStep({ onLoaded, onError }: ImportSourceStepProps) {
     )
     if (path) readPath(path)
     else if (paths.length > 0)
-      onError("Unsupported file — pick a .json, .yaml, or .yml file.")
+      onError("Unsupported file — pick a .voleeo, .json, .yaml, or .yml file.")
   }
 
   // Tauri intercepts OS file drops window-wide; accept any spec-typed file.
@@ -108,7 +108,7 @@ export function ImportSourceStep({ onLoaded, onError }: ImportSourceStepProps) {
           {dragging ? "Drop to import" : "Choose a file or drag it here"}
         </span>
         <span className="text-[0.786rem] text-muted">
-          .json, .yaml, or .yml · up to 10 MB
+          .voleeo, .json, .yaml, or .yml · up to 10 MB
         </span>
       </button>
 
@@ -139,6 +139,7 @@ export function ImportSourceStep({ onLoaded, onError }: ImportSourceStepProps) {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
+        <FormatChip label="Voleeo Bundle" active />
         <FormatChip label="OpenAPI 3.0 / 3.1" active />
         <FormatChip label="Swagger 2.0" active />
         <FormatChip label="Postman" active />
@@ -147,7 +148,8 @@ export function ImportSourceStep({ onLoaded, onError }: ImportSourceStepProps) {
         <FormatChip label="Yaak" active />
       </div>
       <p className="text-[0.714rem] text-muted leading-relaxed">
-        Import from OpenAPI, Swagger 2.0, Postman, Insomnia, Bruno, or Yaak.
+        Import a Voleeo Bundle, or from OpenAPI, Swagger 2.0, Postman, Insomnia,
+        Bruno, or Yaak.
       </p>
     </div>
   )

@@ -1,6 +1,7 @@
 import { listen } from "@tauri-apps/api/event"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useShallow } from "zustand/react/shallow"
+import { EVENTS } from "@/config/events"
 import { useHttpStore } from "@/store/http"
 import type { TreeNode } from "@/store/requests"
 import { commands } from "../../../../packages/types/bindings"
@@ -14,9 +15,6 @@ function collectRequestIds(nodes: TreeNode[]): string[] {
   return ids
 }
 
-/** Per-request last-response status code for the tree's status dots: persisted
- * history merged with live in-session responses (live wins). Fetches only
- * requests new to the tree, and patches single rows on `response:stored`. */
 export function useRequestStatuses(
   workspaceId: string,
   tree: TreeNode[],
@@ -25,21 +23,15 @@ export function useRequestStatuses(
     Record<string, number>
   >({})
 
-  // Tracks which (workspaceId, requestId) pairs have already been fetched so
-  // we only load statuses for requests that are new to the tree, not the whole
-  // list every time a rename or reorder changes the tree reference.
   const statusFetchRef = useRef<{ wsId: string; ids: Set<string> }>({
     wsId: "",
     ids: new Set(),
   })
 
-  // Load history status dots. Re-runs when the tree changes so newly created
-  // requests pick up their historical status without a full workspace reload.
   useEffect(() => {
     if (!workspaceId) return
     let cancelled = false
 
-    // Full reset when the workspace changes.
     if (statusFetchRef.current.wsId !== workspaceId) {
       statusFetchRef.current = { wsId: workspaceId, ids: new Set() }
       setPersistedStatuses({})
@@ -94,14 +86,14 @@ export function useRequestStatuses(
     let u1: (() => void) | null = null
     let u2: (() => void) | null = null
     listen<{ workspaceId: string; requestId: string }>(
-      "response:stored",
+      EVENTS.responseStored,
       handler,
     ).then((fn) => {
       if (unmounted) fn()
       else u1 = fn
     })
     listen<{ workspaceId: string; requestId: string }>(
-      "mcp:response:stored",
+      EVENTS.mcpResponseStored,
       handler,
     ).then((fn) => {
       if (unmounted) fn()

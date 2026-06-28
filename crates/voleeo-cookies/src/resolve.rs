@@ -52,8 +52,8 @@ pub fn normalize_domain(domain: &str) -> String {
 
 fn resolve_field(text: &str, vars: &HashMap<String, String>, key: Option<&[u8; 32]>) -> String {
     let with_vars = resolve_vars(text, vars);
-    let unchipped = strip_encrypt_chips(&with_vars);
-    decrypt_inline(&unchipped, key)
+    let unchipped = voleeo_crypto::strip_encrypt_chips(&with_vars);
+    voleeo_crypto::decrypt_inline(&unchipped, key)
 }
 
 /// Substitute `{{ NAME }}` identifier tokens. Function-call tokens like
@@ -96,69 +96,15 @@ fn is_identifier(s: &str) -> bool {
         && chars.all(|c| c.is_alphanumeric() || c == '_')
 }
 
-/// Unwrap every `{{ encrypt(value="…") }}` chip to its inner `value` arg
-/// (usually `enc:v1:<hex>`, fed to `decrypt_inline` next). Literal-string
-/// match is safe because the chip format is hand-written by
-/// `template::serializeFuncToken` — avoids pulling in a regex dep.
-fn strip_encrypt_chips(text: &str) -> String {
-    let prefix = r#"{{ encrypt(value=""#;
-    let suffix = r#"") }}"#;
-    let mut result = String::with_capacity(text.len());
-    let mut rest = text;
-    while let Some(idx) = rest.find(prefix) {
-        result.push_str(&rest[..idx]);
-        let after = &rest[idx + prefix.len()..];
-        if let Some(end) = after.find(suffix) {
-            result.push_str(&after[..end]);
-            rest = &after[end + suffix.len()..];
-        } else {
-            // Malformed chip — flush remainder verbatim and stop.
-            result.push_str(&rest[idx..]);
-            return result;
-        }
-    }
-    result.push_str(rest);
-    result
-}
-
-/// Decrypt-only counterpart to `resolve_cookies` — used when the frontend
-/// has already done env-var sub + chip-strip, leaving only `enc:v1:` blobs.
+/// Decrypt-only counterpart to `resolve_cookies` — used when the frontend has
+/// already done env-var sub + chip-strip, leaving only `enc:v1:` blobs. The
+/// chip-strip and inline-decrypt primitives live in `voleeo-crypto`.
 pub fn decrypt_cookies(cookies: &mut [StoredCookie], key: Option<&[u8; 32]>) {
     for c in cookies.iter_mut() {
-        c.domain = normalize_domain(&decrypt_inline(&c.domain, key));
-        c.value = decrypt_inline(&c.value, key);
-        c.path = decrypt_inline(&c.path, key);
+        c.domain = normalize_domain(&voleeo_crypto::decrypt_inline(&c.domain, key));
+        c.value = voleeo_crypto::decrypt_inline(&c.value, key);
+        c.path = voleeo_crypto::decrypt_inline(&c.path, key);
     }
-}
-
-/// Replace each `enc:v1:<hex>` substring with its plaintext. On failure the
-/// ciphertext is left in place — visible breakage beats silent empties.
-fn decrypt_inline(text: &str, key: Option<&[u8; 32]>) -> String {
-    let Some(key) = key else {
-        return text.to_string();
-    };
-    let prefix = "enc:v1:";
-    let mut result = String::with_capacity(text.len());
-    let mut rest = text;
-    while let Some(idx) = rest.find(prefix) {
-        result.push_str(&rest[..idx]);
-        let after_prefix = &rest[idx + prefix.len()..];
-        // Hex blob runs to the first non-hex byte.
-        let hex_len = after_prefix
-            .as_bytes()
-            .iter()
-            .take_while(|b| b.is_ascii_hexdigit())
-            .count();
-        let total = prefix.len() + hex_len;
-        let cipher = &rest[idx..idx + total];
-        match voleeo_crypto::decrypt(cipher, key) {
-            Ok(plain) => result.push_str(&plain),
-            Err(_) => result.push_str(cipher),
-        }
-        rest = &rest[idx + total..];
-    }
-    result.push_str(rest);
-    result
 }
 
 #[cfg(test)]

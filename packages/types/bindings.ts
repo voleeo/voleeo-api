@@ -95,6 +95,23 @@ export const commands = {
 	importFetchUrl: (url: string) => typedError<string, VoleeoError>(__TAURI_INVOKE("import_fetch_url", { url })),
 	/**  Parse, filter by `selected`, and persist into the target workspace. */
 	importCommit: (format: ImportFormat, content: string, dest: ImportDest, selected: string[] | null) => typedError<ImportSummary, VoleeoError>(__TAURI_INVOKE("import_commit", { format, content, dest, selected })),
+	/**
+	 *  Import a native Voleeo Bundle (`voleeoBundle: "1.0"`). Recreates each workspace
+	 *  in the bundle verbatim — folders, HTTP/WS/gRPC requests, environments, and
+	 *  workspace auth/headers/DNS — as a fresh, unencrypted workspace. Bypasses the
+	 *  IR entirely (already core types). Returns the last workspace so the UI can
+	 *  open it.
+	 */
+	importVoleeo: (content: string, workspaceIds: string[]) => typedError<ImportSummary, VoleeoError>(__TAURI_INVOKE("import_voleeo", { content, workspaceIds })),
+	importVoleeoPreview: (content: string) => typedError<VoleeoBundlePreview_Serialize, VoleeoError>(__TAURI_INVOKE("import_voleeo_preview", { content })),
+	exportSummary: () => typedError<ExportTarget[], VoleeoError>(__TAURI_INVOKE("export_summary")),
+	/**
+	 *  The notes the real export would attach, computed up front so the window can
+	 *  show them before the user commits. Skips decryption (warnings don't depend on
+	 *  secret values) and writes nothing.
+	 */
+	exportPreview: (workspaceIds: string[], format: ExportFormat, includeEnvironments: boolean, includePrivate: boolean, exportProto: boolean) => typedError<string[], VoleeoError>(__TAURI_INVOKE("export_preview", { workspaceIds, format, includeEnvironments, includePrivate, exportProto })),
+	exportWorkspaces: (workspaceIds: string[], format: ExportFormat, includeEnvironments: boolean, includePrivate: boolean, exportProto: boolean, exportAsyncapi: boolean, dest: string) => typedError<ExportOutcome, VoleeoError>(__TAURI_INVOKE("export_workspaces", { workspaceIds, format, includeEnvironments, includePrivate, exportProto, exportAsyncapi, dest })),
 	sendRequest: (workspaceId: string, requestId: string, overrides: SendOverrides_Deserialize) => typedError<HttpResponse_Serialize, VoleeoError>(__TAURI_INVOKE("send_request", { workspaceId, requestId, overrides })),
 	cancelRequest: (requestId: string) => typedError<null, VoleeoError>(__TAURI_INVOKE("cancel_request", { requestId })),
 	/**
@@ -665,6 +682,36 @@ export type BodyWindow = {
 	totalLines: number,
 };
 
+export type BundleWorkspacePreview = BundleWorkspacePreview_Serialize | BundleWorkspacePreview_Deserialize;
+
+export type BundleWorkspacePreview_Deserialize = {
+	/**
+	 *  The bundle's own workspace id — the selection key passed back to
+	 *  `import_voleeo` (a fresh id is minted on import).
+	 */
+	id: string,
+	name: string,
+	encrypted: boolean,
+	requestCount: number,
+	environmentCount: number,
+	/**  Folder/request tree in the shared `ImportNode` shape the import tree renders. */
+	tree: ImportNode_Deserialize[],
+};
+
+export type BundleWorkspacePreview_Serialize = {
+	/**
+	 *  The bundle's own workspace id — the selection key passed back to
+	 *  `import_voleeo` (a fresh id is minted on import).
+	 */
+	id: string,
+	name: string,
+	encrypted: boolean,
+	requestCount: number,
+	environmentCount: number,
+	/**  Folder/request tree in the shared `ImportNode` shape the import tree renders. */
+	tree: ImportNode_Serialize[],
+};
+
 export type CookieJar = CookieJar_Serialize | CookieJar_Deserialize;
 
 export type CookieJar_Deserialize = {
@@ -739,6 +786,39 @@ export type EnvironmentVariable = {
 	encrypted: boolean,
 	/**  When false, skipped during interpolation. Pre-field YAML reads as enabled. */
 	enabled?: boolean,
+};
+
+export type ExportFormat = 
+/**  Native, lossless: one self-contained YAML re-importable into Voleeo. */
+"voleeo" | 
+/**  Portable Postman Collection v2.1 (+ companion files). */
+"postman";
+
+export type ExportOutcome = {
+	/**  Absolute path(s) written. */
+	paths: string[],
+	warnings: string[],
+};
+
+/**  Per-workspace counts the Export picker renders. */
+export type ExportTarget = {
+	id: string,
+	name: string,
+	/**  HTTP + WebSocket + gRPC requests. */
+	requests: number,
+	/**  WebSocket connections (drive the AsyncAPI section). */
+	wsCount: number,
+	/**  gRPC requests (drive the .proto section). */
+	grpcCount: number,
+	sharedEnvs: number,
+	privateEnvs: number,
+	sharedSecrets: number,
+	privateSecrets: number,
+	/**
+	 *  Inline `encrypt()` secret chips in non-env fields (URLs, params, headers,
+	 *  bodies) — always exported, so always counted toward the warning.
+	 */
+	inlineSecrets: number,
 };
 
 export type GitBranch = {
@@ -1815,6 +1895,28 @@ export type TimelineEvent = {
 	atMs: number | null,
 	kind: string,
 	text: string,
+};
+
+/**
+ *  Read-only summary of a bundle for the import confirm screen — what each
+ *  workspace would restore — without writing anything.
+ */
+export type VoleeoBundlePreview = VoleeoBundlePreview_Serialize | VoleeoBundlePreview_Deserialize;
+
+/**
+ *  Read-only summary of a bundle for the import confirm screen — what each
+ *  workspace would restore — without writing anything.
+ */
+export type VoleeoBundlePreview_Deserialize = {
+	workspaces: BundleWorkspacePreview_Deserialize[],
+};
+
+/**
+ *  Read-only summary of a bundle for the import confirm screen — what each
+ *  workspace would restore — without writing anything.
+ */
+export type VoleeoBundlePreview_Serialize = {
+	workspaces: BundleWorkspacePreview_Serialize[],
 };
 
 export type VoleeoError = { kind: "storage"; data: string } | { kind: "http"; data: string } | { kind: "http_failed"; data: HttpFailure } | { kind: "cancelled" } | { kind: "not_found"; data: string } | { kind: "invalid_config"; data: string } | { kind: "crypto"; data: string } | { kind: "git"; data: string } | { kind: "web_socket"; data: string } | { kind: "web_socket_closed" } | { kind: "grpc"; data: string } | { kind: "grpc_failed"; data: GrpcFailure } | { kind: "import"; data: string };

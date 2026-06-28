@@ -1,5 +1,6 @@
 import { emit } from "@tauri-apps/api/event"
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow"
+import { EVENTS } from "@/config/events"
 
 export async function openSettingsWindow(section?: string) {
   const existing = await WebviewWindow.getByLabel("settings").catch(() => null)
@@ -7,7 +8,7 @@ export async function openSettingsWindow(section?: string) {
     await existing.show().catch(() => {})
     await existing.setFocus().catch(() => {})
     if (section)
-      await emit("settings:goto-section", { section }).catch(() => {})
+      await emit(EVENTS.settingsGotoSection, { section }).catch(() => {})
     return
   }
 

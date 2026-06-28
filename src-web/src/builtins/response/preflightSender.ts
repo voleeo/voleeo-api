@@ -1,4 +1,5 @@
 import { emit } from "@tauri-apps/api/event"
+import { EVENTS } from "@/config/events"
 import type { ResolutionEvent } from "@/lib/template"
 import { resolveTemplate } from "@/lib/template"
 import { useEnvironmentStore } from "@/store/environment"
@@ -14,8 +15,6 @@ import {
 } from "@/views/ApiWorkspace/sendResolution"
 import { markResolving, type RequestSender, unmarkResolving } from "./strategy"
 
-// Pre-flight events accumulated during a resolution cycle.
-// RequestPane drains this after resolveSendPayload so they appear in the timing tab.
 export const pendingPreflightEvents: ResolutionEvent[] = []
 
 export function buildSender(callerName: string): RequestSender {
@@ -39,7 +38,7 @@ export function buildSender(callerName: string): RequestSender {
         environments
           .find((e) => e.id === activeEnvId)
           ?.variables.filter((v) => v.enabled) ?? []
-      // Active env takes precedence over global (same logic as RequestPane/mergeEnvVars).
+
       const activeKeys = new Set(activeVars.map((v) => v.key))
       const vars = [
         ...activeVars,
@@ -63,10 +62,7 @@ export function buildSender(callerName: string): RequestSender {
           encodeURIComponent(value),
         )
       }
-      // Resolve URL, headers, and body here. Template *functions* (e.g.
-      // faker.animal.type()) only exist in the JS registry — the Rust backend
-      // can resolve {{ ENV }} vars but not function calls, so the body must be
-      // fully resolved here or it reaches the server as a literal token.
+
       const ctx = { vars, fns, log: { events: [], label: "" } }
       const resolvedUrl = await resolveTemplate(urlWithPathParams, vars, fns)
       const resolvedHeaders = await Promise.all(
@@ -123,7 +119,7 @@ export function buildSender(callerName: string): RequestSender {
       })
 
       // Notify the UI so the source request's history panel refreshes.
-      void emit("response:stored", { workspaceId, requestId })
+      void emit(EVENTS.responseStored, { workspaceId, requestId })
     } finally {
       unmarkResolving(requestId)
     }

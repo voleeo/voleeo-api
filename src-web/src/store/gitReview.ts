@@ -1,6 +1,7 @@
 import { emit, listen } from "@tauri-apps/api/event"
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow"
 import { getCurrentWindow } from "@tauri-apps/api/window"
+import { EVENTS } from "@/config/events"
 import type {
   Choice,
   ConflictEntity,
@@ -25,10 +26,6 @@ import { useUiStore } from "./workspace"
 const set = useGitStore.setState
 const get = useGitStore.getState
 
-const ENTITIES_RELOAD_EVENT = "git:entities-reload"
-
-export const GIT_REVEAL_EVENT = "git:reveal"
-
 /** Payload telling the main window which entity to open. */
 export interface GitRevealPayload {
   workspaceId: string
@@ -43,7 +40,7 @@ export async function revealEntity(
 ): Promise<void> {
   const workspaceId = get().loadedWorkspaceId
   if (!workspaceId) return
-  await emit(GIT_REVEAL_EVENT, {
+  await emit(EVENTS.gitReveal, {
     workspaceId,
     type,
     nodeId,
@@ -57,9 +54,6 @@ export async function revealEntity(
     .catch(() => {})
 }
 
-/** Close the git window once a commit/merge leaves nothing else to act on — no
- * pending changes and no unresolved conflicts. Called after a successful submit;
- * if work remains the window stays open on it. */
 export async function closeIfNothingLeft(): Promise<void> {
   const g = get()
   if (g.changes.length > 0 || g.entityConflicts.length > 0) return
@@ -68,7 +62,6 @@ export async function closeIfNothingLeft(): Promise<void> {
     .catch(() => {})
 }
 
-/** A discard/pull/merge rewrote files on disk — reload every entity store. */
 async function reloadEntities(): Promise<void> {
   await useRequestStore.getState().reload()
   await useEnvironmentStore.getState().reload()
@@ -76,27 +69,22 @@ async function reloadEntities(): Promise<void> {
   await useUiStore.getState().loadWorkspaces()
 }
 
-/** Reload locally AND tell other windows (the main window's tree + open panes
- * are a separate webview, so they must re-read the rewritten files too). */
 export async function reloadEverywhere(): Promise<void> {
   await reloadEntities()
-  void emit(ENTITIES_RELOAD_EVENT, {}).catch(() => {})
+  void emit(EVENTS.gitEntitiesReload, {}).catch(() => {})
 }
 
 // Re-read entities whenever any window rewrites the worktree.
-listen(ENTITIES_RELOAD_EVENT, () => {
+listen(EVENTS.gitEntitiesReload, () => {
   void reloadEntities()
 }).catch(() => {})
 
-/** Publish only the chosen entities to history (commit only — `paths` is the
- * selected subset; unselected changes stay pending). */
 export function publish(
   message: string,
   paths: string[],
   author?: { name: string; email: string },
 ): Promise<void> {
   return withOp(set, get, "publish", async (id) => {
-    // Start from a clean index so only the selected files get committed.
     await unwrap(commands.gitUnstageAll(id))
     await unwrap(commands.gitStage(id, paths))
     await unwrap(
@@ -113,10 +101,6 @@ export function publish(
   })
 }
 
-/** Pull remote changes; on conflict switch the screen to the chooser.
- * Always surfaces the outcome as a toast — including errors and "nothing new" —
- * so an Update from anywhere (e.g. the menu) gives visible feedback. The toast
- * fires BEFORE the reload so a follow-up read failure can't swallow it. */
 export function getUpdates(): Promise<void> {
   return withOp(set, get, "update", async (id) => {
     const toast = useToastStore.getState().show
@@ -127,8 +111,6 @@ export function getUpdates(): Promise<void> {
     set({ repo: await unwrap(commands.gitRepoInfo(id)) })
     if (result.conflicted) {
       await get().loadConflicts(id)
-      // Clean (field-level) conflicts merge silently — no prompt, no flashed
-      // resolver. Only ask the user when there's an actual choice to make.
       if (await autoResolveCleanMerge(id)) {
         toast("Got the latest updates", 2500, "success")
       } else {
@@ -147,9 +129,6 @@ export function getUpdates(): Promise<void> {
   })
 }
 
-/** Push local history to the remote. Always toasts the outcome —
- * including a clear reason when the remote rejects (e.g. it has changes you
- * don't, so Update is needed first). */
 export function share(): Promise<void> {
   return withOp(set, get, "share", async (id) => {
     const toast = useToastStore.getState().show
@@ -193,8 +172,6 @@ export async function discardField(
   await get().refresh(id)
 }
 
-/** Write a user-resolved entity back and drop it from the conflict list. A null
- * merge means the kept side deleted the entity — accept the deletion instead. */
 export async function resolveEntity(
   entity: ConflictEntity,
   choice: Record<string, Choice>,
@@ -220,8 +197,6 @@ export async function resolveEntity(
   })
 }
 
-/** Commit the resolved merge and reload everything — the shared body, without an
- * op-wrapper so it can run inside another op (e.g. the pull's auto-resolve). */
 async function applyFinishMerge(
   id: string,
   message: string,
@@ -241,8 +216,6 @@ async function applyFinishMerge(
   await get().refresh(id)
 }
 
-/** Commit the resolved merge and reload everything. `author` is required only
- * when the workspace has no configured git identity (mirrors publish). */
 export function finishMerge(
   message: string,
   author?: { name: string; email: string },
@@ -252,10 +225,6 @@ export function finishMerge(
   )
 }
 
-/** After a conflicted pull, finish the merge automatically when there's nothing
- * for the user to decide — every conflict merges cleanly field-by-field — and an
- * identity is configured. Returns true when handled, so the caller skips the
- * "resolve first" prompt and never flashes the resolver open. */
 async function autoResolveCleanMerge(id: string): Promise<boolean> {
   if (!(get().repo?.hasAuthor ?? true)) return false
   const folders = useRequestStore

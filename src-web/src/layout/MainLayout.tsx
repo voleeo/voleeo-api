@@ -1,4 +1,6 @@
+import { listen } from "@tauri-apps/api/event"
 import { useCallback, useEffect } from "react"
+import { EVENTS } from "@/config/events"
 import { SHORTCUTS } from "@/config/shortcuts"
 import { useKeydown } from "@/hooks/useKeydown"
 import { CommandPalette } from "@/layout/CommandPalette"
@@ -7,6 +9,7 @@ import { ToolViewport } from "@/layout/ToolViewport"
 import { TopBar } from "@/layout/TopBar"
 import { UpdateBanner } from "@/layout/UpdateBanner"
 import { isMac } from "@/lib/platform"
+import { type ToastKind, useToastStore } from "@/store/toast"
 import {
   getAutoUpdate,
   UPDATE_CHECK_INTERVAL_MS,
@@ -30,6 +33,15 @@ export function MainLayout() {
     void tick()
     const id = setInterval(() => void tick(), UPDATE_CHECK_INTERVAL_MS)
     return () => clearInterval(id)
+  }, [])
+
+  useEffect(() => {
+    const unlisten = listen<{ message: string; kind: ToastKind }>(
+      EVENTS.exportToast,
+      (e) =>
+        useToastStore.getState().show(e.payload.message, 3500, e.payload.kind),
+    )
+    return () => void unlisten.then((un) => un())
   }, [])
 
   const openSettings = useCallback(() => void openSettingsWindow(), [])

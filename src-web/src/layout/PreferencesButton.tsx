@@ -11,6 +11,7 @@ import { SHORTCUTS } from "@/config/shortcuts"
 import { useKeydown } from "@/hooks/useKeydown"
 import { useUpdateStore } from "@/store/update"
 import { useUiStore } from "@/store/workspace"
+import { openExportWindow } from "./exportWindow"
 import { ImportRequestsModal } from "./ImportRequestsModal"
 import { McpModal } from "./McpBridge/McpModal"
 import { McpStatusItem } from "./McpBridge/McpStatusItem"
@@ -43,6 +44,15 @@ export function PreferencesButton() {
           >
             <Glyph kind="import" size={13} color="var(--base04)" />
             Import
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="font-sans text-[0.857rem] flex items-center gap-2 focus:bg-subtle focus:text-fg cursor-pointer"
+            onClick={() =>
+              void openExportWindow(useUiStore.getState().activeWorkspaceId)
+            }
+          >
+            <Glyph kind="upload-simple" size={13} color="var(--base04)" />
+            Export
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           {activeTool === "api" && (

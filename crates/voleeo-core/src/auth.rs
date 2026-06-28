@@ -397,6 +397,57 @@ impl AuthConfig {
         }
     }
 
+    /// Clear every secret field's `*_encrypted` flag — the inverse of
+    /// `mark_secrets_encrypted`. Used when exporting plaintext (Voleeo Bundle) so
+    /// the flags match the now-plaintext values; otherwise an unencrypted import
+    /// would trip the `workspace_encryption_required` guard on load.
+    pub fn mark_secrets_plaintext(&mut self) {
+        match self {
+            AuthConfig::Bearer {
+                token_encrypted, ..
+            } => *token_encrypted = false,
+            AuthConfig::Basic {
+                password_encrypted, ..
+            }
+            | AuthConfig::Digest {
+                password_encrypted, ..
+            }
+            | AuthConfig::Ntlm {
+                password_encrypted, ..
+            } => *password_encrypted = false,
+            AuthConfig::ApiKey {
+                value_encrypted, ..
+            } => *value_encrypted = false,
+            AuthConfig::AwsSigV4 {
+                secret_key_encrypted,
+                session_token_encrypted,
+                ..
+            } => {
+                *secret_key_encrypted = false;
+                *session_token_encrypted = false;
+            }
+            AuthConfig::OAuth1 {
+                consumer_secret_encrypted,
+                token_secret_encrypted,
+                private_key_encrypted,
+                ..
+            } => {
+                *consumer_secret_encrypted = false;
+                *token_secret_encrypted = false;
+                *private_key_encrypted = false;
+            }
+            AuthConfig::OAuth2 {
+                client_secret_encrypted,
+                password_encrypted,
+                ..
+            } => {
+                *client_secret_encrypted = false;
+                *password_encrypted = false;
+            }
+            AuthConfig::None | AuthConfig::Inherit { .. } => {}
+        }
+    }
+
     /// Whether a configured scheme is switched on. The UI toggles this per
     /// scope (request/folder/workspace); `None`/`Inherit` have nothing to gate
     /// so they report enabled.

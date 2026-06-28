@@ -9,6 +9,7 @@ pub mod convert;
 pub mod descriptors;
 pub mod executor;
 pub mod manager;
+pub mod proto_print;
 
 #[cfg(test)]
 mod tests;
@@ -17,3 +18,4 @@ pub use codec::DynamicCodec;
 pub use descriptors::{DescriptorCache, ResolvedDescriptors};
 pub use executor::GrpcExecutor;
 pub use manager::{GrpcEvent, GrpcEventSink, GrpcManager, StreamSpec};
+pub use proto_print::{pool_to_files, ProtoFile};

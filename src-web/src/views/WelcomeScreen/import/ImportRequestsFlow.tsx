@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { useShallow } from "zustand/shallow"
 import { Glyph } from "@/components/Glyph"
 import { Spinner } from "@/components/ui/spinner"
@@ -8,6 +8,7 @@ import { useUiStore } from "@/store/workspace"
 import type {
   ImportDest,
   ImportPreview_Serialize as ImportPreview,
+  VoleeoBundlePreview_Serialize as VoleeoBundlePreview,
 } from "../../../../../packages/types/bindings"
 import { commands } from "../../../../../packages/types/bindings"
 import { FlowBtn } from "../FlowBtn"
@@ -15,6 +16,7 @@ import { FlowShell } from "../FlowShell"
 import { ImportPreviewStep } from "./ImportPreviewStep"
 import { ImportSourceStep } from "./ImportSourceStep"
 import { formatLabel, requestIds } from "./importFilter"
+import { VoleeoBundlePreviewStep } from "./VoleeoBundlePreviewStep"
 
 interface ImportRequestsFlowProps {
   onCancel: () => void
@@ -39,6 +41,11 @@ export function ImportRequestsFlow({
   const [content, setContent] = useState("")
   const [sourceLabel, setSourceLabel] = useState("")
   const [preview, setPreview] = useState<ImportPreview | null>(null)
+  const [bundlePreview, setBundlePreview] =
+    useState<VoleeoBundlePreview | null>(null)
+  const [selectedWorkspaces, setSelectedWorkspaces] = useState<Set<string>>(
+    new Set(),
+  )
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [destId, setDestId] = useState(defaultDestId ?? "new")
   const [error, setError] = useState("")
@@ -51,6 +58,28 @@ export function ImportRequestsFlow({
         : 0,
     [preview, selected],
   )
+  const bundleRequestCount = useMemo(
+    () =>
+      bundlePreview?.workspaces
+        .filter((w) => selectedWorkspaces.has(w.id))
+        .reduce((a, w) => a + w.requestCount, 0) ?? 0,
+    [bundlePreview, selectedWorkspaces],
+  )
+  const toggleWorkspace = useCallback((id: string) => {
+    setSelectedWorkspaces((p) => {
+      const n = new Set(p)
+      n.has(id) ? n.delete(id) : n.add(id)
+      return n
+    })
+  }, [])
+
+  async function openImported(workspaceId: string) {
+    await loadWorkspaces()
+    openWorkspace(workspaceId, "api")
+    const reqStore = useRequestStore.getState()
+    if (reqStore.loadedWorkspaceId === workspaceId) await reqStore.reload()
+    if (embedded) onCancel()
+  }
 
   async function loadPreview(text: string, label: string) {
     setContent(text)
@@ -58,11 +87,27 @@ export function ImportRequestsFlow({
     setBusy(true)
     setError("")
     try {
+      // A native Voleeo Bundle restores whole workspaces as-is — preview its
+      // contents for confirmation rather than building a cherry-pick tree.
+      if (/^\s*voleeoBundle\s*:/m.test(text)) {
+        const res = await commands.importVoleeoPreview(text)
+        if (res.status !== "ok") {
+          setError(errorMessage(res.error))
+          return
+        }
+        setPreview(null)
+        setBundlePreview(res.data)
+        setSelectedWorkspaces(new Set(res.data.workspaces.map((w) => w.id)))
+        setStep(2)
+        return
+      }
+
       const res = await commands.importPreview(null, text)
       if (res.status !== "ok") {
         setError(errorMessage(res.error))
         return
       }
+      setBundlePreview(null)
       setPreview(res.data)
       setSelected(new Set(requestIds(res.data.tree)))
       setStep(2)
@@ -72,6 +117,23 @@ export function ImportRequestsFlow({
   }
 
   async function commit() {
+    if (bundlePreview) {
+      setBusy(true)
+      setError("")
+      try {
+        const res = await commands.importVoleeo(content, [
+          ...selectedWorkspaces,
+        ])
+        if (res.status !== "ok") {
+          setError(errorMessage(res.error))
+          return
+        }
+        await openImported(res.data.workspaceId)
+      } finally {
+        setBusy(false)
+      }
+      return
+    }
     if (!preview || selectedCount === 0) return
     setBusy(true)
     setError("")
@@ -94,28 +156,29 @@ export function ImportRequestsFlow({
         setError(errorMessage(res.error))
         return
       }
-      await loadWorkspaces()
-      openWorkspace(res.data.workspaceId, "api")
-
-      const reqStore = useRequestStore.getState()
-      if (reqStore.loadedWorkspaceId === res.data.workspaceId) {
-        await reqStore.reload()
-      }
-      if (embedded) onCancel()
+      await openImported(res.data.workspaceId)
     } finally {
       setBusy(false)
     }
   }
 
   const description =
-    step === 1 || !preview ? (
+    step === 1 ? (
       "Bring requests in from OpenAPI, Swagger, Postman, or Insomnia."
-    ) : (
+    ) : bundlePreview ? (
+      <>
+        Restore everything from{" "}
+        <span className="text-fg font-medium">{sourceLabel}</span> · Voleeo
+        Bundle
+      </>
+    ) : preview ? (
       <>
         Choose what to bring in from{" "}
         <span className="text-fg font-medium">{sourceLabel}</span> ·{" "}
         {formatLabel(preview.format, preview.formatVersion)}
       </>
+    ) : (
+      "Bring requests in from OpenAPI, Swagger, Postman, or Insomnia."
     )
 
   return (
@@ -133,11 +196,18 @@ export function ImportRequestsFlow({
           {step === 2 && (
             <FlowBtn
               cta
-              disabled={selectedCount === 0 || busy}
+              disabled={
+                busy ||
+                (bundlePreview
+                  ? selectedWorkspaces.size === 0
+                  : selectedCount === 0)
+              }
               onClick={commit}
             >
               {busy ? <Spinner className="size-3 shrink-0" /> : null}
-              Import {selectedCount} request{selectedCount === 1 ? "" : "s"}
+              {bundlePreview
+                ? `Import ${bundleRequestCount} request${bundleRequestCount === 1 ? "" : "s"}`
+                : `Import ${selectedCount} request${selectedCount === 1 ? "" : "s"}`}
               <Glyph kind="arrow" size={14} color="var(--base00)" />
             </FlowBtn>
           )}
@@ -146,6 +216,13 @@ export function ImportRequestsFlow({
     >
       {step === 1 && (
         <ImportSourceStep onLoaded={loadPreview} onError={setError} />
+      )}
+      {step === 2 && bundlePreview && (
+        <VoleeoBundlePreviewStep
+          preview={bundlePreview}
+          selected={selectedWorkspaces}
+          onToggle={toggleWorkspace}
+        />
       )}
       {step === 2 && preview && (
         <ImportPreviewStep

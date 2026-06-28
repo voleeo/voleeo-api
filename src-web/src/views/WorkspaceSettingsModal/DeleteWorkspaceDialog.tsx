@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react"
 import { Glyph } from "@/components/Glyph"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
+import { EVENTS } from "@/config/events"
 import { errorMessage } from "@/lib/error"
 import type { Workspace } from "@/store/workspace"
 import { useUiStore } from "@/store/workspace"
@@ -41,7 +42,7 @@ export function DeleteWorkspaceDialog({
       const res = await commands.deleteWorkspace(workspace.id)
       if (res.status === "ok") {
         await loadWorkspaces()
-        await emit("workspace:close", {})
+        await emit(EVENTS.workspaceClose, {})
       } else {
         setError(errorMessage(res.error))
         setDeleting(false)

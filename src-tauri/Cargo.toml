@@ -28,6 +28,7 @@ voleeo-grpc = { path = "../crates/voleeo-grpc" }
 voleeo-git = { path = "../crates/voleeo-git" }
 voleeo-mcp = { path = "../crates/voleeo-mcp" }
 voleeo-import = { path = "../crates/voleeo-import" }
+voleeo-export = { path = "../crates/voleeo-export" }
 voleeo-storage = { path = "../crates/voleeo-storage" }
 voleeo-auth = { path = "../crates/voleeo-auth" }
 voleeo-oauth = { path = "../crates/voleeo-oauth" }

@@ -1,5 +1,6 @@
 import { listen } from "@tauri-apps/api/event"
 import { useEffect, useState } from "react"
+import { EVENTS } from "@/config/events"
 import { commands } from "../../../../packages/types/bindings"
 
 // MCP enabled state, kept live via the `mcp:enabled:changed` backend event.
@@ -12,7 +13,7 @@ export function useMcpEnabled() {
       if (!cancelled && res.status === "ok") setEnabled(res.data.enabled)
     })
     const unlisten = listen<{ enabled: boolean }>(
-      "mcp:enabled:changed",
+      EVENTS.mcpEnabledChanged,
       ({ payload }) => setEnabled(payload.enabled),
     )
     return () => {

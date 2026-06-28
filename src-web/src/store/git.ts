@@ -1,5 +1,6 @@
 import { emit, listen } from "@tauri-apps/api/event"
 import { create } from "zustand"
+import { EVENTS } from "@/config/events"
 import type {
   GitChange,
   GitCommit,
@@ -56,8 +57,6 @@ export interface GitStore {
   conflictDiff: (path: string) => Promise<string>
   commitChanges: (commitId: string) => Promise<GitEntityChange[]>
   rollback: (path: string | string[]) => Promise<void>
-  /** Undo a commit into the working tree as pending changes (whole commit, or
-   *  one entity when `path` is given), then surface the Changes view. */
   revertCommit: (commitId: string, path?: string | null) => Promise<void>
   setShowHistory: (v: boolean) => void
   reset: () => void
@@ -227,7 +226,7 @@ export const useGitStore = create<GitStore>((set, get) => ({
     if (paths.length === 0) return
     await unwrap(commands.gitDiscard(id, paths))
     await useRequestStore.getState().reload()
-    void emit("git:entities-reload", {}).catch(() => {})
+    void emit(EVENTS.gitEntitiesReload, {}).catch(() => {})
     await get().refresh(id)
     await get().loadChanges(id)
   },
@@ -237,7 +236,7 @@ export const useGitStore = create<GitStore>((set, get) => ({
     if (!id) return
     await unwrap(commands.gitRevertCommit(id, commitId, path ?? null))
     await useRequestStore.getState().reload()
-    void emit("git:entities-reload", {}).catch(() => {})
+    void emit(EVENTS.gitEntitiesReload, {}).catch(() => {})
     await get().refresh(id)
     await get().loadChanges(id)
     set({ showHistory: false, historyPath: null, historyName: null })
@@ -289,7 +288,7 @@ useUiStore.subscribe((state, prev) => {
   if (id) useGitStore.getState().refreshDebounced(id)
 })
 
-listen<{ workspaceId: string }>("git:status-changed", (e) => {
+listen<{ workspaceId: string }>(EVENTS.gitStatusChanged, (e) => {
   const store = useGitStore.getState()
   const id = store.loadedWorkspaceId
   if (!id || id !== e.payload.workspaceId) return
@@ -297,14 +296,12 @@ listen<{ workspaceId: string }>("git:status-changed", (e) => {
   store.refreshDebounced(id)
 }).catch(() => {})
 
-// The menu (main window) drives the git window between Changes and History.
-// `path`/`name` (set when opened from a tree row) scope History to one entity.
 listen<{
   workspaceId: string
   view: "changes" | "history"
   path?: string | null
   name?: string | null
-}>("git:view", (e) => {
+}>(EVENTS.gitView, (e) => {
   const id = useGitStore.getState().loadedWorkspaceId
   if (!id || id !== e.payload.workspaceId) return
   useGitStore.setState({

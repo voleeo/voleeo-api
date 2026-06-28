@@ -1,5 +1,6 @@
 import { listen } from "@tauri-apps/api/event"
 import { useCallback, useEffect, useState } from "react"
+import { EVENTS } from "@/config/events"
 import { useHttpStore } from "@/store/http"
 import type { HttpResponse } from "../../../../../packages/types/bindings"
 import { commands } from "../../../../../packages/types/bindings"
@@ -111,14 +112,14 @@ export function useHistorySync({
     }
 
     listen<{ workspaceId: string; requestId: string }>(
-      "mcp:response:stored",
+      EVENTS.mcpResponseStored,
       handleStored,
     ).then((fn) => {
       if (unmounted) fn()
       else unlistenFn = fn
     })
     listen<{ workspaceId: string; requestId: string }>(
-      "response:stored",
+      EVENTS.responseStored,
       handleStored,
     ).then((fn) => {
       if (unmounted) fn()

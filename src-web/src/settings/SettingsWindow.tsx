@@ -1,5 +1,6 @@
 import { listen } from "@tauri-apps/api/event"
 import { useEffect, useState } from "react"
+import { EVENTS } from "@/config/events"
 import { cn } from "@/lib/utils"
 import { GeneralPanel } from "@/settings/GeneralPanel"
 import { InterfacePanel } from "@/settings/InterfacePanel"
@@ -28,7 +29,7 @@ export function SettingsWindow() {
 
   useEffect(() => {
     const unlistenP = listen<{ section: Section }>(
-      "settings:goto-section",
+      EVENTS.settingsGotoSection,
       (e) => {
         const next = e.payload.section
         if (NAV_ITEMS.some((n) => n.id === next)) setSection(next)

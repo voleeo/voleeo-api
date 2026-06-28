@@ -15,6 +15,7 @@ members = [
     "crates/voleeo-git",
     "crates/voleeo-mcp",
     "crates/voleeo-import",
+    "crates/voleeo-export",
     "crates-tauri/voleeo-mac-window",
 ]
 

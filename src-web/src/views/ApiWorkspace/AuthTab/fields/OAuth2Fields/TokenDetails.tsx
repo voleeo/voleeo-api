@@ -1,6 +1,7 @@
 import { listen } from "@tauri-apps/api/event"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { CodeView } from "@/components/CodeView"
+import { EVENTS } from "@/config/events"
 import { type Oauth2TokenDetails, oauth2TokenDetails } from "@/store/oauth2"
 import type { AuthConfig } from "@/store/requests"
 
@@ -39,7 +40,7 @@ export function TokenDetails({
   const cacheId = `${auth.token_url}|${auth.client_id}|${auth.grant_type}|${auth.scope}|${auth.audience}`
 
   useEffect(() => {
-    const un = listen("oauth2:token-acquired", () => void reload())
+    const un = listen(EVENTS.oauth2TokenAcquired, () => void reload())
     return () => {
       void un.then((f) => f())
     }

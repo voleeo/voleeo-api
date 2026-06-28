@@ -1,6 +1,7 @@
 import { emit, listen } from "@tauri-apps/api/event"
 import type { z } from "zod"
 import { create } from "zustand"
+import { EVENTS } from "@/config/events"
 import {
   InterfaceStorageSchema,
   type WorkspaceBehaviorSchema,
@@ -46,12 +47,6 @@ function applyFont(family: string, size: number) {
   el.style.setProperty("--interface-font-size", `${size}px`)
 }
 
-// `--editor-font-family` and `--editor-font-size` are scoped to CodeMirror
-// surfaces only (request body, response body, HTML response viewer, SQL
-// editor) via a CSS rule in base.css that targets `.cm-editor`. The
-// app-wide `font-mono` Tailwind utility stays bound to a fixed JetBrains
-// Mono fallback for code-like UI badges (HTTP method, autocomplete IDs,
-// etc.) so user font choices don't accidentally rebrand those.
 function applyEditorFont(family: string, size: number) {
   const el = document.documentElement
   el.style.setProperty(
@@ -69,17 +64,6 @@ const initEditorSize = saved.editorFontSize ?? 12
 applyFont(initFamily, initSize)
 applyEditorFont(initEditorFamily, initEditorSize)
 
-// Cross-window sync. Each Tauri webview has its own DOM and its own Zustand
-// instance, so a change in the Settings window doesn't reach the main window
-// unless we broadcast. We emit a Tauri event after every setter; every
-// window (including the emitter, which is harmless — apply is idempotent)
-// listens, reapplies CSS vars, persists to localStorage, and updates its
-// local store state.
-const INTERFACE_CHANGED = "interface:changed"
-
-/** State shape shared by the store, localStorage, and the broadcast payload —
- *  declaring it once keeps the listener body short and the three sites in
- *  lock-step. */
 type Snapshot = {
   workspaceBehavior: WorkspaceBehavior
   fontFamily: string
@@ -99,9 +83,6 @@ function snapshot(): Snapshot {
   }
 }
 
-/** Apply a snapshot end-to-end: CSS vars + localStorage + Zustand state. Used
- *  both by the cross-window listener and (indirectly) by individual setters
- *  via `broadcast` + the emitter's own listen callback. Idempotent. */
 function applySnapshot(s: Snapshot): void {
   applyFont(s.fontFamily, s.fontSize)
   applyEditorFont(s.editorFontFamily, s.editorFontSize)
@@ -110,12 +91,12 @@ function applySnapshot(s: Snapshot): void {
 }
 
 function broadcast() {
-  void emit(INTERFACE_CHANGED, snapshot()).catch(() => {})
+  void emit(EVENTS.interfaceChanged, snapshot()).catch(() => {})
 }
 
-listen<Snapshot>(INTERFACE_CHANGED, (e) => applySnapshot(e.payload)).catch(
-  () => {},
-)
+listen<Snapshot>(EVENTS.interfaceChanged, (e) =>
+  applySnapshot(e.payload),
+).catch(() => {})
 
 export const useInterfaceStore = create<InterfaceStore>((set, get) => ({
   workspaceBehavior: saved.workspaceBehavior ?? "ask",

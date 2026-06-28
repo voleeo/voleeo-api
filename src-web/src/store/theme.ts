@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
 import type { Theme } from "@voleeo/plugin-api"
 import { create } from "zustand"
+import { EVENTS } from "@/config/events"
 import { ThemeIdSchema } from "@/lib/schemas"
 import { registry } from "@/plugins/registry"
 
@@ -71,7 +72,7 @@ export const useThemeStore = create<ThemeStore>(() => ({
     repositionWindowControls()
     useThemeStore.setState({ activeTheme: theme, colorMode })
 
-    listen<{ id: string }>("theme:changed", (event) => {
+    listen<{ id: string }>(EVENTS.themeChanged, (event) => {
       const changed = findTheme(event.payload.id)
       if (changed) {
         applyThemeToCss(changed)
@@ -80,7 +81,7 @@ export const useThemeStore = create<ThemeStore>(() => ({
       }
     })
 
-    listen<{ mode: string }>("color_mode:changed", (event) => {
+    listen<{ mode: string }>(EVENTS.colorModeChanged, (event) => {
       const mode: ColorMode = event.payload.mode === "light" ? "light" : "dark"
       useThemeStore.setState({ colorMode: mode })
     })
