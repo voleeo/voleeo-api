@@ -2,6 +2,7 @@ import { listen } from "@tauri-apps/api/event"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Glyph } from "@/components/Glyph"
 import { useTemplateInputData } from "@/components/TemplateInput/useTemplateInputData"
+import { EVENTS } from "@/config/events"
 import { cn } from "@/lib/utils"
 import {
   type Oauth2TokenStatus,
@@ -73,7 +74,7 @@ export function TokenPanel({ auth }: { auth: OAuth2 }) {
 
   // Subscribe once; any flow that acquires a token re-checks status.
   useEffect(() => {
-    const un = listen("oauth2:token-acquired", () => void reloadStatus())
+    const un = listen(EVENTS.oauth2TokenAcquired, () => void reloadStatus())
     return () => {
       void un.then((f) => f())
     }

@@ -149,6 +149,14 @@ impl GrpcStore {
         Ok(req)
     }
 
+    pub fn save(&self, req: &GrpcRequest) -> Result<(), VoleeoError> {
+        self.workspace_dir(&req.workspace_id)?;
+        let path = self.grpc_path(&req.workspace_id, &req.id)?;
+        let content =
+            serde_yaml::to_string(req).map_err(|e| VoleeoError::Storage(e.to_string()))?;
+        std::fs::write(path, content).map_err(|e| VoleeoError::Storage(e.to_string()))
+    }
+
     /// Smallest `grpc_` sibling order strictly greater than `after`; midpoint
     /// places a duplicate directly below the original.
     fn order_after(

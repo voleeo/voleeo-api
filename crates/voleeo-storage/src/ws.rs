@@ -133,6 +133,16 @@ impl WsStore {
         Ok(conn)
     }
 
+    /// Write a connection verbatim — id/order/folder/auth set by the caller.
+    /// Used by native (Voleeo Bundle) import to land a connection in one pass.
+    pub fn save(&self, conn: &WsConnection) -> Result<(), VoleeoError> {
+        self.workspace_dir(&conn.workspace_id)?;
+        let path = self.ws_path(&conn.workspace_id, &conn.id)?;
+        let content =
+            serde_yaml::to_string(conn).map_err(|e| VoleeoError::Storage(e.to_string()))?;
+        std::fs::write(path, content).map_err(|e| VoleeoError::Storage(e.to_string()))
+    }
+
     /// Smallest `ws_` sibling order strictly greater than `after`; midpoint
     /// places a duplicate directly below the original. Considers only WS
     /// siblings — interleaved requests sort correctly at display time anyway.

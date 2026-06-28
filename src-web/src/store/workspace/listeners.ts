@@ -1,6 +1,7 @@
 import { emit, listen } from "@tauri-apps/api/event"
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow"
 import { exit } from "@tauri-apps/plugin-process"
+import { EVENTS } from "@/config/events"
 import { useUiStore } from "./index"
 import { applyWelcomeWindowSize } from "./windowSize"
 
@@ -23,7 +24,7 @@ function resetWorkspaceStores() {
  */
 export function initWorkspaceListeners() {
   listen<{ workspaceId: string; windowLabel: string }>(
-    "workspace:window:registered",
+    EVENTS.workspaceRegistered,
     (e) => {
       useUiStore.setState((s) => ({
         workspaceWindowMap: {
@@ -34,27 +35,24 @@ export function initWorkspaceListeners() {
     },
   ).catch(() => {})
 
-  listen("workspace:window:announce", () => {
+  listen(EVENTS.workspaceAnnounce, () => {
     const { activeWorkspaceId } = useUiStore.getState()
     if (!activeWorkspaceId) return
     try {
       const label = getCurrentWebviewWindow().label
-      emit("workspace:window:registered", {
+      emit(EVENTS.workspaceRegistered, {
         workspaceId: activeWorkspaceId,
         windowLabel: label,
       }).catch(() => {})
     } catch {}
   }).catch(() => {})
 
-  listen("workspace:close", () => {
+  listen(EVENTS.workspaceClose, () => {
     useUiStore.setState({ activeTool: "welcome", activeWorkspaceId: null })
     applyWelcomeWindowSize()
     resetWorkspaceStores()
   }).catch(() => {})
 
-  // Intercept the main window's close. With a workspace open, prevent the close and step back to Welcome.
-  // On Welcome, quit the process directly via the process plugin this can't be blocked by any backend `prevent_close`
-  // so the app always closes regardless of the Rust close handler's state.
   try {
     const win = getCurrentWebviewWindow()
     if (win.label === "main") {
@@ -62,7 +60,7 @@ export function initWorkspaceListeners() {
         .onCloseRequested((event) => {
           if (useUiStore.getState().activeWorkspaceId) {
             event.preventDefault()
-            emit("workspace:close", {}).catch(() => {})
+            emit(EVENTS.workspaceClose, {}).catch(() => {})
           } else {
             event.preventDefault()
             exit(0).catch(() => {})

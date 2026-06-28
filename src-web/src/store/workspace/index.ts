@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core"
 import { emit } from "@tauri-apps/api/event"
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow"
 import { create } from "zustand"
+import { EVENTS } from "@/config/events"
 import { WorkspaceListSchema } from "@/lib/schemas"
 import {
   getCachedSettings,
@@ -28,7 +29,6 @@ export type { AuthConfig, DnsOverride, RequestParameter }
 
 export type Tool = "welcome" | "api" | "git"
 export type PanelLayout = "columns" | "rows"
-/** Workspace settings sections that can be deep-linked from anywhere in the app. */
 export type WorkspaceSettingsSection =
   | "workspace"
   | "storage"
@@ -171,7 +171,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
     )
     try {
       const label = getCurrentWebviewWindow().label
-      emit("workspace:window:registered", {
+      emit(EVENTS.workspaceRegistered, {
         workspaceId: id,
         windowLabel: label,
       }).catch(() => {})

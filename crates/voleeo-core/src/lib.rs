@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod bundle;
 pub mod cookies;
 pub mod error;
 pub mod git;
@@ -10,6 +11,7 @@ pub use auth::{
     ApiKeyLocation, AuthConfig, InheritSource, OAuth1Location, OAuth1Signature, OAuth2ClientAuth,
     OAuth2Grant, OAuth2PkceMethod, Protocol,
 };
+pub use bundle::{VoleeoBundle, VoleeoWorkspace, VOLEEO_BUNDLE_VERSION};
 pub use cookies::{CookieJar, SameSite, StoredCookie};
 pub use error::{GrpcFailure, HttpFailure, VoleeoError};
 pub use git::*;

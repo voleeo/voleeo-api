@@ -8219,6 +8219,7 @@ dependencies = [
  "voleeo-cookies",
  "voleeo-core",
  "voleeo-crypto",
+ "voleeo-export",
  "voleeo-git",
  "voleeo-grpc",
  "voleeo-http",
@@ -8284,6 +8285,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "voleeo-export"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "serde_yaml",
+ "voleeo-core",
+ "voleeo-import",
+]
+
+[[package]]
 name = "voleeo-git"
 version = "0.1.0"
 dependencies = [
@@ -8304,6 +8315,7 @@ dependencies = [
  "prost-types",
  "protox",
  "serde_json",
+ "tempfile",
  "tokio",
  "tokio-stream",
  "tonic",

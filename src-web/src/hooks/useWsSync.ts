@@ -1,16 +1,14 @@
 import { listen } from "@tauri-apps/api/event"
 import { useEffect } from "react"
+import { EVENTS } from "@/config/events"
 import { useRequestStore } from "@/store/requests"
 import { useWebsocketStore, type WsConnStatus } from "@/store/websocket"
 import type { TimelineEvent, WsMessage } from "../../../packages/types/bindings"
 
-/** Subscribe once to the backend's `ws:*` event stream and the MCP
- *  connection-change notification. Fixed event names carry `connectionId` in the
- *  payload so a single listener per channel feeds every connection's state. */
 export function useWsSync() {
   useEffect(() => {
     const unStatus = listen<{ connectionId: string; status: WsConnStatus }>(
-      "ws:status",
+      EVENTS.wsStatus,
       ({ payload }) => {
         useWebsocketStore
           .getState()
@@ -18,7 +16,7 @@ export function useWsSync() {
       },
     )
     const unMessage = listen<{ connectionId: string; message: WsMessage }>(
-      "ws:message",
+      EVENTS.wsMessage,
       ({ payload }) => {
         useWebsocketStore
           .getState()
@@ -26,16 +24,16 @@ export function useWsSync() {
       },
     )
     const unTimeline = listen<{ connectionId: string; event: TimelineEvent }>(
-      "ws:timeline",
+      EVENTS.wsTimeline,
       ({ payload }) => {
         useWebsocketStore
           .getState()
           .appendTimeline(payload.connectionId, payload.event)
       },
     )
-    // MCP create/duplicate of a connection → reload the tree.
+
     const unConnections = listen<{ workspaceId: string }>(
-      "mcp:connections:changed",
+      EVENTS.mcpConnectionsChanged,
       ({ payload }) => {
         if (
           payload.workspaceId === useRequestStore.getState().loadedWorkspaceId

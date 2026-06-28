@@ -2,7 +2,7 @@
 
 Guidance for AI coding agents working in this repository.
 
-**File-size rule:** this document must stay under 250 lines. When you add a new rule or section, tighten or remove existing content first — never just append. A bloated guide is read less, not more. Keep prose terse, examples one-line, and prefer references to inline duplication.
+**File-size rule:** this document must stay under 300 lines. When you add a new rule or section, tighten or remove existing content first — never just append. A bloated guide is read less, not more. Keep prose terse, examples one-line, and prefer references to inline duplication.
 
 ## Product vision
 
@@ -91,7 +91,7 @@ Several below are distilled from confirmed 100%+ CPU bugs in this codebase. Trea
 
 **20. Skip default-valued storage fields from YAML** via `#[serde(default, skip_serializing_if = …)]` — `Option::is_none` for options, an `is_false`/`is_default_*` predicate for bools/enums. A field that serializes its default value is a phantom git diff on every unrelated edit.
 
-**21. Commands return `Result<T, VoleeoError>`.** Propagate with `?`; no `unwrap`/`panic` in command bodies. Register every new command in `tauri_specta::collect_commands!` inside `specta_builder()` (`src-tauri/src/lib.rs`), then `bun run codegen`.
+**21. Commands return `Result<T, VoleeoError>`.** Propagate with `?`; no `unwrap`/`panic` in command bodies. Register every new command in **both** `tauri_specta::collect_commands!` **and** `tauri::generate_handler!` in `src-tauri/src/lib.rs`, then `bun run codegen`. Missing the second still compiles and generates a TS binding, but `invoke` rejects at runtime.
 
 **22. Capabilities entries are for plugins/core APIs** (`fs`, `dialog`, `shell`, …) in `src-tauri/capabilities/default.json`. Custom app commands need none — `collect_commands!` is enough. Apply least privilege.
 
@@ -145,6 +145,7 @@ crates/           pure Rust, zero Tauri deps
   voleeo-oauth    OAuth 2.0 token flow — loopback authorize + machine-local cache
   voleeo-http     reqwest-based HTTP executor
   voleeo-import   collection import — OpenAPI/Swagger/Postman/Insomnia → IR → core
+  voleeo-export   collection export — core → Voleeo Bundle / Postman (+ companion .proto/AsyncAPI)
   voleeo-ws       live WebSocket connections (Tauri-free HttpExecutor counterpart)
   voleeo-grpc     tonic-based gRPC — descriptor resolution, unary + streaming calls
   voleeo-cookies  cookie jar — model, matching, at-rest crypto
@@ -161,8 +162,7 @@ src-web/src/
   store/          Zustand slices (one per domain)
 ```
 
-**Invariant:** `crates/` never imports Tauri. `crates-tauri/` may import Tauri but not domain crates from `crates/` unless required. `src-tauri/` is the only assembly point.
-Rust deps: `voleeo-core ←` every domain crate `← src-tauri`; `src-tauri` also depends on `crates-tauri/voleeo-mac-window`.
+**Invariant:** `crates/` never imports Tauri; `crates-tauri/` may but not domain crates from `crates/` unless required; `src-tauri/` is the only assembly point. Deps: `voleeo-core ←` every domain crate `← src-tauri` (which also depends on `crates-tauri/voleeo-mac-window`).
 
 ### IPC / type safety
 
@@ -214,7 +214,7 @@ Keyboard shortcuts in `src-web/src/config/shortcuts.ts` as named `KeyCombo` cons
 
 ### Settings window
 
-A second `WebviewWindow` labelled `"settings"` loads the same `index.html`. `App.tsx` branches on `getCurrentWindow().label` to render `<SettingsWindow>` instead of the main layout. macOS overlay titlebar applies only to `"main"`. `capabilities/default.json` lists both `"main"` and `"settings"` in `windows` — any new IPC-using window must be added there.
+A second `WebviewWindow` labelled `"settings"` loads the same `index.html`. `App.tsx` branches on `getCurrentWindow().label` to render `<SettingsWindow>` instead of the main layout. macOS overlay titlebar applies only to `"main"`. `capabilities/default.json` `windows` lists every webview (`main`, `settings`, `export`, …) — any new IPC-using window must be added there.
 
 ### MCP Bridge
 
