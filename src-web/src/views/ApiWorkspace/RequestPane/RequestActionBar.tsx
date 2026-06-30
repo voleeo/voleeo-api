@@ -75,6 +75,7 @@ export function RequestActionBar({
   const [customValue, setCustomValue] = useState("")
 
   const isKnown = (HTTP_METHODS as readonly string[]).includes(method)
+  const inputsDisabled = disabled || isSending
 
   function commitCustom() {
     const v = customValue.trim().toUpperCase()
@@ -127,7 +128,7 @@ export function RequestActionBar({
         ) : (
           <DropdownMenu>
             <DropdownMenuTrigger
-              disabled={disabled}
+              disabled={inputsDisabled}
               title={method}
               className="self-stretch px-2.5 editor-font font-semibold flex items-center gap-[5px] cursor-pointer hover:bg-subtle disabled:cursor-not-allowed outline-none border-0 bg-transparent border-r border-border rounded-none shrink-0"
               style={{ color: methodColor(method), fontSize: "0.786rem" }}
@@ -162,7 +163,7 @@ export function RequestActionBar({
 
         <UrlInput
           value={urlDraft}
-          disabled={disabled}
+          disabled={inputsDisabled}
           onChange={onUrlChange}
           onCommit={onUrlCommit}
           onSend={isSending ? onCancel : onSend}
@@ -176,7 +177,7 @@ export function RequestActionBar({
 
         <button
           type="button"
-          disabled={disabled}
+          disabled={inputsDisabled}
           onClick={onInspect}
           aria-label="Inspect request"
           title="Inspect request"
