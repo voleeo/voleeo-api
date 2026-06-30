@@ -1,4 +1,5 @@
 import { useContext } from "react"
+import { ActiveIndicator } from "@/components/ActiveIndicator"
 import { Ctx } from "@/components/ApiRequestTree/types"
 import { C_WS } from "@/components/tokens"
 import { cn } from "@/lib/utils"
@@ -24,6 +25,7 @@ export function ConnectionRow({
   const status = wsStatuses[id] ?? "closed"
   const activeConnectionId = useRequestStore((s) => s.activeConnectionId)
   const dotClass = STATUS_DOT[status]
+  const live = status === "open" || status === "connecting"
 
   return (
     <LeafRow
@@ -43,10 +45,14 @@ export function ConnectionRow({
         </span>
       }
       statusDot={
-        dotClass && (
-          <span
-            className={cn("ml-auto w-2 h-2 rounded-full shrink-0", dotClass)}
-          />
+        live ? (
+          <ActiveIndicator className="ml-auto" />
+        ) : (
+          dotClass && (
+            <span
+              className={cn("ml-auto w-2 h-2 rounded-full shrink-0", dotClass)}
+            />
+          )
         )
       }
     />

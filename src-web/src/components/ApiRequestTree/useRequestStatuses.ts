@@ -83,8 +83,26 @@ export function useRequestStatuses(
         }))
       })
     }
+
+    // History cleared for a request → drop its last-status dot.
+    const onCleared = ({
+      payload,
+    }: {
+      payload: { workspaceId: string; requestId: string }
+    }) => {
+      if (unmounted || payload.workspaceId !== workspaceId) return
+      statusFetchRef.current.ids.delete(payload.requestId)
+      setPersistedStatuses((prev) => {
+        if (!(payload.requestId in prev)) return prev
+        const next = { ...prev }
+        delete next[payload.requestId]
+        return next
+      })
+    }
+
     let u1: (() => void) | null = null
     let u2: (() => void) | null = null
+    let u3: (() => void) | null = null
     listen<{ workspaceId: string; requestId: string }>(
       EVENTS.responseStored,
       handler,
@@ -99,10 +117,18 @@ export function useRequestStatuses(
       if (unmounted) fn()
       else u2 = fn
     })
+    listen<{ workspaceId: string; requestId: string }>(
+      EVENTS.responseCleared,
+      onCleared,
+    ).then((fn) => {
+      if (unmounted) fn()
+      else u3 = fn
+    })
     return () => {
       unmounted = true
       u1?.()
       u2?.()
+      u3?.()
     }
   }, [workspaceId])
 
