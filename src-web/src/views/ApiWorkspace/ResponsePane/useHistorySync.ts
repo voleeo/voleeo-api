@@ -1,4 +1,4 @@
-import { listen } from "@tauri-apps/api/event"
+import { emit, listen } from "@tauri-apps/api/event"
 import { useCallback, useEffect, useState } from "react"
 import { EVENTS } from "@/config/events"
 import { useHttpStore } from "@/store/http"
@@ -9,6 +9,7 @@ interface Options {
   activeWorkspaceId: string | null
   activeRequestId: string | null
   liveResponse: HttpResponse | undefined
+  loading: boolean
 }
 
 export interface HistoryState {
@@ -19,12 +20,14 @@ export interface HistoryState {
   isLatestHistory: boolean
   handleHistorySelect: (responseId: string, isLatest: boolean) => Promise<void>
   handleHistoryClear: () => void
+  showLive: () => void
 }
 
 export function useHistorySync({
   activeWorkspaceId,
   activeRequestId,
   liveResponse,
+  loading,
 }: Options): HistoryState {
   const [historyRefreshKey, setHistoryRefreshKey] = useState(0)
   const [historicalResponse, setHistoricalResponse] =
@@ -37,15 +40,19 @@ export function useHistorySync({
   >(null)
   const [isLatestHistory, setIsLatestHistory] = useState(false)
 
-  // Clear historical view when the active request changes, then auto-load
-  // the most recent history entry if no live response exists for this request.
-  useEffect(() => {
+  const resetSelection = useCallback(() => {
     setHistoricalResponse(null)
     setSelectedHistoryId(null)
     setSelectedHistoryRecordedAt(null)
     setIsLatestHistory(false)
+  }, [])
+
+  useEffect(() => {
+    resetSelection()
     if (!activeWorkspaceId || !activeRequestId) return
     if (useHttpStore.getState().responses[activeRequestId]) return
+    if (useHttpStore.getState().loading[activeRequestId]) return
+
     let cancelled = false
     commands.responseList(activeWorkspaceId, activeRequestId).then((res) => {
       if (cancelled || res.status !== "ok" || res.data.length === 0) return
@@ -63,19 +70,22 @@ export function useHistorySync({
     return () => {
       cancelled = true
     }
-  }, [activeRequestId, activeWorkspaceId])
+  }, [activeRequestId, activeWorkspaceId, resetSelection])
 
   // Clear historical view when a new live response arrives and bump the
   // refresh key so HistoryPicker re-fetches its list.
   useEffect(() => {
     if (liveResponse) {
-      setHistoricalResponse(null)
-      setSelectedHistoryId(null)
-      setSelectedHistoryRecordedAt(null)
-      setIsLatestHistory(false)
+      resetSelection()
       setHistoryRefreshKey((k) => k + 1)
     }
-  }, [liveResponse])
+  }, [liveResponse, resetSelection])
+
+  // A send starting (or landing on an already-streaming request) snaps to the
+  // live/active response — the user can still pick a historical one afterward.
+  useEffect(() => {
+    if (loading) resetSelection()
+  }, [loading, resetSelection])
 
   // When the MCP bridge or a pre-flight send stores a response for the active
   // request, refresh history and display the new response.
@@ -152,12 +162,15 @@ export function useHistorySync({
   )
 
   const handleHistoryClear = useCallback(() => {
-    setHistoricalResponse(null)
-    setSelectedHistoryId(null)
-    setSelectedHistoryRecordedAt(null)
-    setIsLatestHistory(false)
-    if (activeRequestId) useHttpStore.getState().clearResponse(activeRequestId)
-  }, [activeRequestId])
+    resetSelection()
+    if (activeRequestId) {
+      useHttpStore.getState().clearResponse(activeRequestId)
+      emit(EVENTS.responseCleared, {
+        workspaceId: activeWorkspaceId,
+        requestId: activeRequestId,
+      })
+    }
+  }, [activeWorkspaceId, activeRequestId, resetSelection])
 
   return {
     historyRefreshKey,
@@ -167,5 +180,6 @@ export function useHistorySync({
     isLatestHistory,
     handleHistorySelect,
     handleHistoryClear,
+    showLive: resetSelection,
   }
 }

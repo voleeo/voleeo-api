@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+import { Dot } from "@/components/Dot"
 import { StatusPill } from "@/components/ResponseHeader"
 import { Spinner } from "@/components/ui/spinner"
 import { cn } from "@/lib/utils"
@@ -83,8 +84,9 @@ export function StatusBadge({
         >
           {response.statusCode} {response.statusMessage || (ok ? "OK" : "")}
         </StatusPill>
-        <span className="font-mono text-[0.75rem] text-muted">
-          {formatDuration(response.totalMs ?? 0)} ·{" "}
+        <span className="inline-flex items-center font-mono text-[0.75rem] text-muted">
+          {formatDuration(response.totalMs ?? 0)}
+          <Dot size={13} />
           {formatBytes(byteLen(response.message))}
         </span>
       </>
