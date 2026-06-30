@@ -143,7 +143,7 @@ crates/           pure Rust, zero Tauri deps
   voleeo-crypto   AES-256-GCM + OS keychain
   voleeo-auth     request signing/encoding (digest, sigv4, oauth1, ntlm)
   voleeo-oauth    OAuth 2.0 token flow — loopback authorize + machine-local cache
-  voleeo-http     reqwest-based HTTP executor
+  voleeo-http     reqwest-based HTTP executor (+ live SSE streaming)
   voleeo-import   collection import — OpenAPI/Swagger/Postman/Insomnia → IR → core
   voleeo-export   collection export — core → Voleeo Bundle / Postman (+ companion .proto/AsyncAPI)
   voleeo-ws       live WebSocket connections (Tauri-free HttpExecutor counterpart)
@@ -175,6 +175,8 @@ All IPC types carry `#[derive(specta::Type)]`; commands annotated `#[specta::spe
 `HttpExecutor` holds a long-lived `reqwest::Client` (built once in `AppState::new()`). Per-request state (start `Instant`, redirect hops) flows via `tokio::task_local!` — never via per-request `Client::builder()`. `HttpResponse.events: Vec<TimelineEvent>` is the canonical phase log (`config`, `send`, `dns`, `info`, `recv`, `chunk`, `redirect`, `error`, `done`); `TimelineTab` maps events directly to rows.
 
 **In-flight cancellation.** `HttpExecutor` tracks active sends in `Arc<Mutex<HashMap<RequestId, oneshot::Sender<()>>>>`. `send()` races `send_inner` against `cancel_rx` via `tokio::select!`. Cancelled → `VoleeoError::Cancelled` (unit). `useHttpStore` special-cases `kind === "cancelled"`: no error banner, build a shell response whose Timeline shows pre-flight resolution + a "Request cancelled" row. Any `VoleeoError` matcher must handle `Cancelled` (no `.data`). The send button in `RequestActionBar` swaps to an `x` glyph while sending; click and Enter/⌘-Enter route to `cancelRequest`.
+
+**SSE (`text/event-stream`).** Streaming bodies have no EOF, so buffering would hang — `send_streamed` branches on content-type, parses frames with `sse.rs`, and pushes each through an `SseSink` (`Fn(SseEvent)`, Tauri-free; `Open` carries status/headers/setup-timeline, `Frame` a frame + its timeline row). `send_request` supplies the sink: it emits `sse:open` then `sse:frame` (each with its timeline row) live, and feeds a bounded `SseAccum` (`sse_accum.rs`; caps frames/timeline at 2000, tracks byte total). So the header (status/size/time) and Timeline tab fill **live** while streaming, and a **cancelled** *or* mid-stream-**interrupted** (server dropped) stream rebuilds a real response — keeping the partial frames and surfacing any error inline — instead of a status-0 shell. Frames persist on `HttpResponse.sse_frames`. Frontend: `useSseStore` holds live frames/timeline/open (`sse:*` listeners); `useSseView` owns RESPONSE-tab view state (filter/search/raw); rendered in the RESPONSE tab by `SseStreamTab` (parsed cards) or `SseRawView` (wire text). Shared atoms born here: `components/{ActiveIndicator,Dot,SearchField,IconToggle}` — `ActiveIndicator` is the green live/streaming dot, reused in the tree, run rows, and footer.
 
 ### gRPC execution (`voleeo-grpc`)
 
@@ -208,9 +210,9 @@ Use `@/` for `src-web/src/` imports (`@/store/requests`). Outside `src-web/src/`
 
 Conditional classes: always `cn()` from `@/lib/utils`, never template-string `${cond?…:…}`.
 
-Each tool (API) owns a Zustand slice; global state (theme, workspace, settings) in `src-web/src/store/`. Co-locate `invoke()` inside the relevant store slice.
+Each tool (API) owns a Zustand slice; global state (theme, workspace, settings) in `src-web/src/store/`. Co-locate `invoke()` inside the relevant store slice. Reveal/select a sidebar-tree node with `revealInTree(id, folderId, folders)` (`views/ApiWorkspace/revealInTree.ts`) — never re-inline `ensureFoldersOpen`+`setSelection`+`setFocusedNodeId`.
 
-Keyboard shortcuts in `src-web/src/config/shortcuts.ts` as named `KeyCombo` constants. Consume via `useKeydown(SHORTCUTS.X, handler)`. Never hardcode a combo inline. Every new shortcut must also be added to `SHORTCUT_HELP` in the same file with the correct `scope` so it appears in the Keyboard Shortcuts modal.
+Keyboard shortcuts in `src-web/src/config/shortcuts.ts` as named `KeyCombo` constants. Consume via `useKeydown(SHORTCUTS.X, handler)`. Never hardcode a combo inline. Every new shortcut must also be added to `SHORTCUT_HELP` (`{ combo, description }`) in the same file so it shows in the Keyboard Shortcuts modal — `formatKeyCombo` renders the combo (⌘ on macOS, Ctrl elsewhere).
 
 ### Settings window
 
