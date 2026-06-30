@@ -4,6 +4,7 @@ import { EVENTS } from "@/config/events"
 import { SHORTCUTS } from "@/config/shortcuts"
 import { useKeydown } from "@/hooks/useKeydown"
 import { CommandPalette } from "@/layout/CommandPalette"
+import { ShaderBackground } from "@/layout/ShaderBackground"
 import { Toast } from "@/layout/Toast"
 import { ToolViewport } from "@/layout/ToolViewport"
 import { TopBar } from "@/layout/TopBar"
@@ -49,6 +50,7 @@ export function MainLayout() {
 
   return (
     <div className="flex flex-col h-screen">
+      <ShaderBackground />
       {activeTool === "welcome" ? <WelcomeTitleBar /> : <TopBar />}
       <div className="flex-1 min-h-0 overflow-hidden">
         <ToolViewport activeTool={activeTool} />
