@@ -7,6 +7,7 @@ export const EVENTS = {
   // Response history
   responseStored: "response:stored",
   mcpResponseStored: "mcp:response:stored",
+  responseCleared: "response:cleared",
 
   // Git
   gitEntitiesReload: "git:entities-reload",
@@ -26,6 +27,11 @@ export const EVENTS = {
   wsStatus: "ws:status",
   wsMessage: "ws:message",
   wsTimeline: "ws:timeline",
+
+  // SSE streaming (one frame per `text/event-stream` event, backend → frontend)
+  sseFrame: "sse:frame",
+  // Setup timeline (config/connect/headers) emitted once when the stream opens.
+  sseOpen: "sse:open",
 
   // MCP-driven cache invalidation
   mcpRequestsChanged: "mcp:requests:changed",

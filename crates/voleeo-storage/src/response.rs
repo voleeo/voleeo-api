@@ -332,6 +332,15 @@ impl ResponseStore {
         Ok(items.into_iter().find(|r| r.id == response_id))
     }
 
+    /// The most recent stored response (files are newest-first).
+    pub fn latest(
+        &self,
+        workspace_id: &str,
+        request_id: &str,
+    ) -> Result<Option<StoredHttpResponse>, VoleeoError> {
+        Ok(self.read_all(workspace_id, request_id)?.into_iter().next())
+    }
+
     pub fn clear(&self, workspace_id: &str, request_id: &str) -> Result<(), VoleeoError> {
         let entries = self.read_all(workspace_id, request_id)?;
         self.remove_body_files(workspace_id, &entries);
@@ -381,6 +390,7 @@ mod tests {
             redirect_warning: None,
             captured_cookies: vec![],
             attached_cookies: vec![],
+            sse_frames: vec![],
         }
     }
 

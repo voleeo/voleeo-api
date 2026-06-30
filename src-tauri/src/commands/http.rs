@@ -1,8 +1,11 @@
-use tauri::State;
+use std::sync::{Arc, Mutex};
+
+use tauri::{AppHandle, Emitter, State};
 use voleeo_core::{
     AuthConfig, HttpResponse, RequestBody, RequestParameter, StoredCookie, TimelineEvent,
     VoleeoError,
 };
+use voleeo_http::SseAccum;
 
 use crate::commands::cookie::{
     active_jar_id_for_workspace, ingest_captured_cookies, load_active_jar_for_send,
@@ -29,6 +32,7 @@ pub struct SendOverrides {
 #[tauri::command]
 #[specta::specta]
 pub async fn send_request(
+    app: AppHandle,
     state: State<'_, AppState>,
     workspace_id: String,
     request_id: String,
@@ -118,10 +122,73 @@ pub async fn send_request(
     })
     .await
     .map_err(|e| VoleeoError::Storage(e.to_string()))?;
-    let mut resp = state
+
+    let accum: Arc<Mutex<SseAccum>> = Arc::new(Mutex::new(SseAccum::default()));
+    let frame_app = app.clone();
+    let frame_rid = request_id.clone();
+    let sink_accum = accum.clone();
+    let sse_sink: voleeo_http::SseSink = Arc::new(move |ev| match ev {
+        voleeo_http::SseEvent::Open {
+            status,
+            status_text,
+            headers,
+            events,
+        } => {
+            let _ = frame_app.emit(
+                "sse:open",
+                serde_json::json!({
+                    "requestId": frame_rid,
+                    "status": status,
+                    "statusText": &status_text,
+                    "headers": &headers,
+                    "events": &events,
+                }),
+            );
+            if let Ok(mut a) = sink_accum.lock() {
+                a.open(status, status_text, headers, events);
+            }
+        }
+        voleeo_http::SseEvent::Frame { frame, timeline } => {
+            let _ = frame_app.emit(
+                "sse:frame",
+                serde_json::json!({ "requestId": frame_rid, "frame": &frame, "timeline": &timeline }),
+            );
+            if let Ok(mut a) = sink_accum.lock() {
+                a.frame(frame, timeline);
+            }
+        }
+    });
+    let send_result = state
         .executor
-        .send(&req, attach_cookies, dns_overrides)
-        .await?;
+        .send_streamed(&req, attach_cookies, dns_overrides, sse_sink)
+        .await;
+    let take_accum = || {
+        accum
+            .lock()
+            .map(|mut g| std::mem::take(&mut *g))
+            .unwrap_or_default()
+    };
+    let mut resp = match send_result {
+        Ok(r) => take_accum().finalize(r),
+        Err(VoleeoError::Cancelled) => {
+            let a = take_accum();
+            if !a.is_sse() {
+                return Err(VoleeoError::Cancelled);
+            }
+            a.into_cancelled_response(&request_id)
+        }
+        Err(e) => {
+            let a = take_accum();
+            if !a.is_sse() {
+                return Err(e);
+            }
+            let message = match &e {
+                VoleeoError::HttpFailed(f) => f.message.clone(),
+                other => other.to_string(),
+            };
+            a.into_interrupted_response(&request_id, message)
+        }
+    };
 
     if !resp.captured_cookies.is_empty() {
         if let Err(e) = ingest_captured_cookies(
