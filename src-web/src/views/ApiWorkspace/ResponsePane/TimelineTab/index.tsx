@@ -1,5 +1,5 @@
 import { useVirtualizer } from "@tanstack/react-virtual"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Glyph } from "@/components/Glyph"
 import { Spinner } from "@/components/ui/spinner"
 import { cn } from "@/lib/utils"
@@ -7,6 +7,8 @@ import { useHttpStore } from "@/store/http"
 import { useRequestStore } from "@/store/requests"
 import { SentRequestSummary } from "@/views/ApiWorkspace/SentRequestInspector/SentRequestSummary"
 import type { TimelineEvent } from "../../../../../../packages/types/bindings"
+import { ScrollToBottomButton } from "../ScrollToBottomButton"
+import { useStickToBottom } from "../useStickToBottom"
 import {
   buildEntries,
   FILTER_GROUPS,
@@ -14,9 +16,6 @@ import {
   matchesFilter,
 } from "./entries"
 import { TimelineRow } from "./TimelineRow"
-
-// Within this many px of the bottom counts as "following the stream".
-const STICK_THRESHOLD = 40
 
 export function TimelineTab({
   events,
@@ -61,8 +60,9 @@ export function TimelineTab({
   )
 
   // Virtualized so an SSE response with thousands of per-frame rows stays smooth.
-  const parentRef = useRef<HTMLDivElement>(null)
-  const stick = useRef(true)
+  const { parentRef, stick, atBottom, recomputeStick, scrollToBottom } =
+    useStickToBottom()
+
   const virt = useVirtualizer({
     count: filtered.length,
     getScrollElement: () => parentRef.current,
@@ -70,12 +70,15 @@ export function TimelineTab({
     overscan: 20,
   })
 
-  const recomputeStick = useCallback(() => {
-    const el = parentRef.current
-    if (!el) return
-    stick.current =
-      el.scrollHeight - el.scrollTop - el.clientHeight < STICK_THRESHOLD
-  }, [])
+  // A filter relayout (and first mount) fires no scroll event — re-derive
+  // stick/atBottom so the button shows even at the top of a finished run. New
+  // rows don't need it (live-follow's scroll fires onScroll; a scrolled-up list
+  // keeps the button shown).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: relayout triggers, not read values
+  useEffect(() => {
+    const id = requestAnimationFrame(recomputeStick)
+    return () => cancelAnimationFrame(id)
+  }, [filter, recomputeStick])
 
   // While streaming, follow the newest timeline row as rows arrive, but pause the moment the user scrolls up. Mirrors the SSE frame list.
   // biome-ignore lint/correctness/useExhaustiveDependencies: row count is the trigger, not a read value
@@ -142,45 +145,50 @@ export function TimelineTab({
           )}
         </div>
       )}
-      <div
-        ref={parentRef}
-        onScroll={recomputeStick}
-        className="flex-1 min-h-0 overflow-auto font-mono text-[0.786rem] leading-[1.7]"
-      >
-        {filtered.length === 0 ? (
-          <div className="px-3.5 py-3 text-muted">
-            No events match this filter.
-          </div>
-        ) : (
-          <div
-            style={{
-              height: virt.getTotalSize(),
-              position: "relative",
-              width: "100%",
-            }}
-          >
-            {virt.getVirtualItems().map((vi) => (
-              <div
-                key={vi.key}
-                data-index={vi.index}
-                ref={virt.measureElement}
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: "100%",
-                  transform: `translateY(${vi.start}px)`,
-                }}
-              >
-                <TimelineRow
-                  entry={filtered[vi.index]}
-                  prevElapsed={
-                    vi.index > 0 ? filtered[vi.index - 1].elapsedMs : null
-                  }
-                />
-              </div>
-            ))}
-          </div>
+      <div className="relative flex-1 min-h-0">
+        <div
+          ref={parentRef}
+          onScroll={recomputeStick}
+          className="h-full overflow-auto font-mono text-[0.786rem] leading-[1.7]"
+        >
+          {filtered.length === 0 ? (
+            <div className="px-3.5 py-3 text-muted">
+              No events match this filter.
+            </div>
+          ) : (
+            <div
+              style={{
+                height: virt.getTotalSize(),
+                position: "relative",
+                width: "100%",
+              }}
+            >
+              {virt.getVirtualItems().map((vi) => (
+                <div
+                  key={vi.key}
+                  data-index={vi.index}
+                  ref={virt.measureElement}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    transform: `translateY(${vi.start}px)`,
+                  }}
+                >
+                  <TimelineRow
+                    entry={filtered[vi.index]}
+                    prevElapsed={
+                      vi.index > 0 ? filtered[vi.index - 1].elapsedMs : null
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        {!atBottom && filtered.length > 0 && (
+          <ScrollToBottomButton onClick={scrollToBottom} />
         )}
       </div>
 

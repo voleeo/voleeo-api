@@ -1,13 +1,13 @@
 import { useVirtualizer } from "@tanstack/react-virtual"
-import { useCallback, useEffect, useRef } from "react"
+import { useEffect } from "react"
 import { ActiveIndicator } from "@/components/ActiveIndicator"
 import { Dot } from "@/components/Dot"
 import { cn } from "@/lib/utils"
 import { useInterfaceStore } from "@/store/interface"
+import { ScrollToBottomButton } from "../ScrollToBottomButton"
+import { useStickToBottom } from "../useStickToBottom"
 import { FrameRow } from "./FrameRow"
 import type { SseView } from "./useSseView"
-
-const STICK_THRESHOLD = 40
 
 export function SseStreamTab({
   view,
@@ -21,8 +21,8 @@ export function SseStreamTab({
   const fontSize = useInterfaceStore((s) => s.editorFontSize)
   const rowH = Math.round(fontSize * 2.7)
 
-  const parentRef = useRef<HTMLDivElement>(null)
-  const stick = useRef(true)
+  const { parentRef, stick, atBottom, recomputeStick, scrollToBottom } =
+    useStickToBottom()
   const virt = useVirtualizer({
     count: filtered.length,
     getScrollElement: () => parentRef.current,
@@ -34,13 +34,6 @@ export function SseStreamTab({
   // Re-measure rows when the editor font size (and thus row height) changes.
   // biome-ignore lint/correctness/useExhaustiveDependencies: re-measure on fontSize change
   useEffect(() => virt.measure(), [fontSize])
-
-  const recomputeStick = useCallback(() => {
-    const el = parentRef.current
-    if (!el) return
-    stick.current =
-      el.scrollHeight - el.scrollTop - el.clientHeight < STICK_THRESHOLD
-  }, [])
 
   // Follow the bottom as rows enter (new matching frame) or a row's height
   // changes (expand/collapse) — but only while the user hasn't scrolled up.
@@ -55,9 +48,10 @@ export function SseStreamTab({
     return () => cancelAnimationFrame(id)
   }, [filtered.length, open])
 
-  // Changing the filter/query relayouts the list without firing a scroll event;
-  // re-derive `stick` from the new metrics so live-follow isn't left stale.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: filter/query are the relayout triggers
+  // A filter/query relayout (and first mount) fires no scroll event — re-derive
+  // stick/atBottom. New rows don't need it: live-follow's programmatic scroll
+  // already fires onScroll, and a scrolled-up list keeps the button shown.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: relayout triggers, not read values
   useEffect(() => {
     const id = requestAnimationFrame(recomputeStick)
     return () => cancelAnimationFrame(id)
@@ -90,53 +84,58 @@ export function SseStreamTab({
       tabIndex={0}
       onKeyDown={onTypeToSearch}
     >
-      <div
-        ref={parentRef}
-        onScroll={recomputeStick}
-        className="flex-1 min-h-0 overflow-y-auto"
-      >
-        {empty ? (
-          <div className="flex h-full items-center justify-center text-muted/70 text-[0.85rem]">
-            {total === 0
-              ? loading
-                ? "Waiting for events…"
-                : "No stream events"
-              : "No events match this filter."}
-          </div>
-        ) : (
-          <div
-            style={{
-              height: virt.getTotalSize(),
-              position: "relative",
-              width: "100%",
-            }}
-          >
-            {virt.getVirtualItems().map((vi) => {
-              const f = filtered[vi.index]
-              return (
-                <div
-                  key={f.seq}
-                  data-index={vi.index}
-                  ref={virt.measureElement}
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    width: "100%",
-                    transform: `translateY(${vi.start}px)`,
-                  }}
-                >
-                  <FrameRow
-                    frame={f}
-                    open={open.has(f.seq)}
-                    onToggle={toggleOne}
-                    fontSize={fontSize}
-                    rowH={rowH}
-                  />
-                </div>
-              )
-            })}
-          </div>
+      <div className="relative flex-1 min-h-0">
+        <div
+          ref={parentRef}
+          onScroll={recomputeStick}
+          className="h-full overflow-y-auto"
+        >
+          {empty ? (
+            <div className="flex h-full items-center justify-center text-muted/70 text-[0.85rem]">
+              {total === 0
+                ? loading
+                  ? "Waiting for events…"
+                  : "No stream events"
+                : "No events match this filter."}
+            </div>
+          ) : (
+            <div
+              style={{
+                height: virt.getTotalSize(),
+                position: "relative",
+                width: "100%",
+              }}
+            >
+              {virt.getVirtualItems().map((vi) => {
+                const f = filtered[vi.index]
+                return (
+                  <div
+                    key={f.seq}
+                    data-index={vi.index}
+                    ref={virt.measureElement}
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      width: "100%",
+                      transform: `translateY(${vi.start}px)`,
+                    }}
+                  >
+                    <FrameRow
+                      frame={f}
+                      open={open.has(f.seq)}
+                      onToggle={toggleOne}
+                      fontSize={fontSize}
+                      rowH={rowH}
+                    />
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+        {!atBottom && !empty && (
+          <ScrollToBottomButton onClick={scrollToBottom} />
         )}
       </div>
 
