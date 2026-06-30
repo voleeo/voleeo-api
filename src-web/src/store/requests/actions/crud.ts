@@ -160,7 +160,7 @@ export function crudActions(set: SetState, get: GetState) {
 
     duplicateGrpc: async (workspaceId: string, id: string) => {
       const res = await commands.duplicateGrpcRequest(workspaceId, id)
-      if (res.status !== "ok") return
+      if (res.status !== "ok") return null
       set((s) => {
         const grpcRequests = [...s.grpcRequests, res.data]
         return {
@@ -168,6 +168,7 @@ export function crudActions(set: SetState, get: GetState) {
           tree: buildTree(s.folders, s.requests, s.connections, grpcRequests),
         }
       })
+      return res.data
     },
 
     renameGrpc: async (workspaceId: string, id: string, name: string) => {
@@ -197,7 +198,7 @@ export function crudActions(set: SetState, get: GetState) {
 
     duplicateRequest: async (workspaceId: string, id: string) => {
       const res = await commands.duplicateRequest(workspaceId, id)
-      if (res.status !== "ok") return
+      if (res.status !== "ok") return null
       set((s) => {
         const requests = [...s.requests, res.data]
         return {
@@ -205,17 +206,19 @@ export function crudActions(set: SetState, get: GetState) {
           tree: buildTree(s.folders, requests, s.connections, s.grpcRequests),
         }
       })
+      return res.data
     },
 
     duplicateFolder: async (workspaceId: string, id: string) => {
       const res = await commands.duplicateFolder(workspaceId, id)
-      if (res.status !== "ok") return
+      if (res.status !== "ok") return null
       await get().reload()
+      return res.data
     },
 
     duplicateConnection: async (workspaceId: string, id: string) => {
       const res = await commands.duplicateWsConnection(workspaceId, id)
-      if (res.status !== "ok") return
+      if (res.status !== "ok") return null
       set((s) => {
         const connections = [...s.connections, res.data]
         return {
@@ -223,6 +226,7 @@ export function crudActions(set: SetState, get: GetState) {
           tree: buildTree(s.folders, s.requests, connections, s.grpcRequests),
         }
       })
+      return res.data
     },
 
     renameRequest: async (workspaceId: string, id: string, name: string) => {
