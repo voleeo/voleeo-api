@@ -43,6 +43,7 @@ export function GrpcResponsePane() {
     refreshKey,
     hasHistory,
     latestUnary,
+    checking,
     onSelectHistory,
     onClearHistory,
   } = useGrpcHistory({
@@ -67,8 +68,8 @@ export function GrpcResponsePane() {
   const showHeader =
     !!response || !!loading || streaming || !!error || hasHistory
 
-  // Nothing to show and no history to browse — a clean shortcuts pane.
   if (!showHeader) {
+    if (checking) return <div className="h-full bg-bg" />
     return (
       <EmptyPaneShortcuts
         rows={[

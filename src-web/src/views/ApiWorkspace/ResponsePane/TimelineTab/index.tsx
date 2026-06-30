@@ -8,7 +8,7 @@ import { useRequestStore } from "@/store/requests"
 import { SentRequestSummary } from "@/views/ApiWorkspace/SentRequestInspector/SentRequestSummary"
 import type { TimelineEvent } from "../../../../../../packages/types/bindings"
 import { ScrollToBottomButton } from "../ScrollToBottomButton"
-import { useStickToBottom } from "../useStickToBottom"
+import { useFollowTail, useStickToBottom } from "../useStickToBottom"
 import {
   buildEntries,
   FILTER_GROUPS,
@@ -60,8 +60,15 @@ export function TimelineTab({
   )
 
   // Virtualized so an SSE response with thousands of per-frame rows stays smooth.
-  const { parentRef, stick, atBottom, recomputeStick, scrollToBottom } =
-    useStickToBottom()
+  const {
+    parentRef,
+    stick,
+    atBottom,
+    pin,
+    recomputeStick,
+    onWheel,
+    scrollToBottom,
+  } = useStickToBottom()
 
   const virt = useVirtualizer({
     count: filtered.length,
@@ -69,6 +76,7 @@ export function TimelineTab({
     estimateSize: () => 24,
     overscan: 20,
   })
+  const totalSize = virt.getTotalSize()
 
   // A filter relayout (and first mount) fires no scroll event — re-derive
   // stick/atBottom so the button shows even at the top of a finished run. New
@@ -80,17 +88,11 @@ export function TimelineTab({
     return () => cancelAnimationFrame(id)
   }, [filter, recomputeStick])
 
-  // While streaming, follow the newest timeline row as rows arrive, but pause the moment the user scrolls up. Mirrors the SSE frame list.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: row count is the trigger, not a read value
-  useEffect(() => {
-    if (!loading || !stick.current) return
-    const el = parentRef.current
-    if (!el) return
-    const id = requestAnimationFrame(() => {
-      el.scrollTop = el.scrollHeight
-    })
-    return () => cancelAnimationFrame(id)
-  }, [filtered.length, loading])
+  // Follow the newest row while streaming — keyed on its elapsed time (changes
+  // every batch even at the cap), never on measurement jitter.
+  const lastAtMs =
+    filtered.length > 0 ? filtered[filtered.length - 1].elapsedMs : -1
+  useFollowTail(pin, stick, lastAtMs, loading)
 
   if (loading && entries.length === 0) {
     return (
@@ -149,6 +151,7 @@ export function TimelineTab({
         <div
           ref={parentRef}
           onScroll={recomputeStick}
+          onWheel={onWheel}
           className="h-full overflow-auto font-mono text-[0.786rem] leading-[1.7]"
         >
           {filtered.length === 0 ? (
@@ -158,7 +161,7 @@ export function TimelineTab({
           ) : (
             <div
               style={{
-                height: virt.getTotalSize(),
+                height: totalSize,
                 position: "relative",
                 width: "100%",
               }}

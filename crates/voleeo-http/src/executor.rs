@@ -13,23 +13,19 @@ use voleeo_core::{
     RequestParameter, SseFrame, StoredCookie, TimelineEvent, VoleeoError,
 };
 
-/// Tag a parsed SSE frame with arrival metadata, log it on the timeline, and
-/// hand it to the live sink. Bumps `seq` so each frame keys uniquely in the UI.
-fn push_sse_frame(
-    sink: &SseSink,
-    events: &mut Vec<TimelineEvent>,
-    seq: &mut u32,
-    started: Instant,
-    raw: RawFrame,
-) {
+/// Tag a parsed SSE frame with arrival metadata and hand it (plus its timeline
+/// row) to the live sink. Bumps `seq` so each frame keys uniquely in the UI.
+/// The row is NOT retained in the executor's `events` Vec — `SseAccum` keeps the
+/// bounded copy the final response uses, so a fast/endless stream can't grow that
+/// Vec one entry per frame.
+fn push_sse_frame(sink: &SseSink, seq: &mut u32, started: Instant, raw: RawFrame) {
     let at_ms = started.elapsed().as_secs_f64() * 1000.0;
-    let label = raw.event.clone().unwrap_or_else(|| "message".into());
+    let label = raw.event.as_deref().unwrap_or("message");
     let timeline = TimelineEvent {
         at_ms,
         kind: "recv".into(),
         text: format!("event: {label} · {} B", raw.data.len()),
     };
-    events.push(timeline.clone());
     let frame = SseFrame {
         seq: *seq,
         event: raw.event,
@@ -542,11 +538,11 @@ impl HttpExecutor {
                     Err(e) => return Err(body_stream_err(&mut events, started, e)),
                 };
                 for raw in decoder.push(&chunk) {
-                    push_sse_frame(&sink, &mut events, &mut seq, started, raw);
+                    push_sse_frame(&sink, &mut seq, started, raw);
                 }
             }
             for raw in decoder.finish() {
-                push_sse_frame(&sink, &mut events, &mut seq, started, raw);
+                push_sse_frame(&sink, &mut seq, started, raw);
             }
             (String::new(), 0u32, true)
         } else {

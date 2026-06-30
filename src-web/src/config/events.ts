@@ -28,8 +28,9 @@ export const EVENTS = {
   wsMessage: "ws:message",
   wsTimeline: "ws:timeline",
 
-  // SSE streaming (one frame per `text/event-stream` event, backend → frontend)
-  sseFrame: "sse:frame",
+  // SSE streaming (backend → frontend).
+  // Frames are coalesced into batches (~30/s) so a fast stream can't flood the IPC channel; payload is { frame, timeline }[].
+  sseFrames: "sse:frames",
   // Setup timeline (config/connect/headers) emitted once when the stream opens.
   sseOpen: "sse:open",
 

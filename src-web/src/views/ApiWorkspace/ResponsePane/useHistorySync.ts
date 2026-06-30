@@ -5,6 +5,8 @@ import { useHttpStore } from "@/store/http"
 import type { HttpResponse } from "../../../../../packages/types/bindings"
 import { commands } from "../../../../../packages/types/bindings"
 
+const SPINNER_DELAY_MS = 150
+
 interface Options {
   activeWorkspaceId: string | null
   activeRequestId: string | null
@@ -18,6 +20,8 @@ export interface HistoryState {
   selectedHistoryId: string | null
   selectedHistoryRecordedAt: string | null
   isLatestHistory: boolean
+  historyLoading: boolean
+  historyChecking: boolean
   handleHistorySelect: (responseId: string, isLatest: boolean) => Promise<void>
   handleHistoryClear: () => void
   showLive: () => void
@@ -39,12 +43,16 @@ export function useHistorySync({
     string | null
   >(null)
   const [isLatestHistory, setIsLatestHistory] = useState(false)
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyChecking, setHistoryChecking] = useState(false)
 
   const resetSelection = useCallback(() => {
     setHistoricalResponse(null)
     setSelectedHistoryId(null)
     setSelectedHistoryRecordedAt(null)
     setIsLatestHistory(false)
+    setHistoryLoading(false)
+    setHistoryChecking(false)
   }, [])
 
   useEffect(() => {
@@ -54,21 +62,41 @@ export function useHistorySync({
     if (useHttpStore.getState().loading[activeRequestId]) return
 
     let cancelled = false
-    commands.responseList(activeWorkspaceId, activeRequestId).then((res) => {
-      if (cancelled || res.status !== "ok" || res.data.length === 0) return
-      const latest = res.data[0]
-      commands
-        .responseGet(activeWorkspaceId, activeRequestId, latest.id)
-        .then((res2) => {
-          if (cancelled || res2.status !== "ok" || !res2.data) return
+    setHistoryChecking(true)
+    const spinnerTimer = setTimeout(() => {
+      if (!cancelled) setHistoryLoading(true)
+    }, SPINNER_DELAY_MS)
+    void (async () => {
+      try {
+        const res = await commands.responseList(
+          activeWorkspaceId,
+          activeRequestId,
+        )
+        if (cancelled || res.status !== "ok" || res.data.length === 0) return
+        const latest = res.data[0]
+        const res2 = await commands.responseGet(
+          activeWorkspaceId,
+          activeRequestId,
+          latest.id,
+        )
+        if (cancelled) return
+        if (res2.status === "ok" && res2.data) {
           setHistoricalResponse(res2.data.response)
           setSelectedHistoryId(latest.id)
           setSelectedHistoryRecordedAt(res2.data.recordedAt)
           setIsLatestHistory(true)
-        })
-    })
+        }
+      } finally {
+        clearTimeout(spinnerTimer)
+        if (!cancelled) {
+          setHistoryLoading(false)
+          setHistoryChecking(false)
+        }
+      }
+    })()
     return () => {
       cancelled = true
+      clearTimeout(spinnerTimer)
     }
   }, [activeRequestId, activeWorkspaceId, resetSelection])
 
@@ -146,16 +174,25 @@ export function useHistorySync({
   const handleHistorySelect = useCallback(
     async (responseId: string, isLatest: boolean) => {
       if (!activeWorkspaceId || !activeRequestId) return
-      const res = await commands.responseGet(
-        activeWorkspaceId,
-        activeRequestId,
-        responseId,
+      const spinnerTimer = setTimeout(
+        () => setHistoryLoading(true),
+        SPINNER_DELAY_MS,
       )
-      if (res.status === "ok" && res.data) {
-        setHistoricalResponse(res.data.response)
-        setSelectedHistoryId(responseId)
-        setSelectedHistoryRecordedAt(res.data.recordedAt)
-        setIsLatestHistory(isLatest)
+      try {
+        const res = await commands.responseGet(
+          activeWorkspaceId,
+          activeRequestId,
+          responseId,
+        )
+        if (res.status === "ok" && res.data) {
+          setHistoricalResponse(res.data.response)
+          setSelectedHistoryId(responseId)
+          setSelectedHistoryRecordedAt(res.data.recordedAt)
+          setIsLatestHistory(isLatest)
+        }
+      } finally {
+        clearTimeout(spinnerTimer)
+        setHistoryLoading(false)
       }
     },
     [activeWorkspaceId, activeRequestId],
@@ -178,6 +215,8 @@ export function useHistorySync({
     selectedHistoryId,
     selectedHistoryRecordedAt,
     isLatestHistory,
+    historyLoading,
+    historyChecking,
     handleHistorySelect,
     handleHistoryClear,
     showLive: resetSelection,

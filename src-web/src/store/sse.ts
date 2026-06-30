@@ -12,10 +12,12 @@ export type { SseFrame }
 const MAX_FRAMES = 2000
 const ENC = new TextEncoder()
 
-function capPush<T>(prev: T[], item: T): T[] {
-  return prev.length >= MAX_FRAMES
-    ? [...prev.slice(prev.length - MAX_FRAMES + 1), item]
-    : [...prev, item]
+// Append a batch in one shot — O(prev + batch) per flush, not per frame, so a
+// fast stream doesn't re-clone a 2000-element array on every event.
+function capPushMany<T>(prev: T[], items: T[]): T[] {
+  if (items.length === 0) return prev
+  const combined = [...prev, ...items]
+  return combined.length > MAX_FRAMES ? combined.slice(-MAX_FRAMES) : combined
 }
 
 /** Response line + headers, captured when the stream opens — lets the header
@@ -35,8 +37,14 @@ interface SseStore {
   // Cumulative bytes of frame data received (not just kept) — the live "size".
   bytes: Record<string, number>
   setOpen: (requestId: string, open: SseOpen, events: TimelineEvent[]) => void
-  appendFrame: (requestId: string, frame: SseFrame, row?: TimelineEvent) => void
+  appendFrames: (requestId: string, batch: SseFrameRow[]) => void
   clear: (requestId: string) => void
+}
+
+/** One coalesced frame and its timeline row, as the backend batches them. */
+export interface SseFrameRow {
+  frame: SseFrame
+  timeline: TimelineEvent
 }
 
 export const useSseStore = create<SseStore>((set) => ({
@@ -54,26 +62,33 @@ export const useSseStore = create<SseStore>((set) => ({
         [requestId]: [...events, ...(s.timeline[requestId] ?? [])],
       },
     })),
-  appendFrame: (requestId, frame, row) =>
+  appendFrames: (requestId, batch) => {
+    if (batch.length === 0) return
     set((s) => {
-      const next: Partial<SseStore> = {
+      let added = 0
+      const frames: SseFrame[] = []
+      const rows: TimelineEvent[] = []
+      for (const b of batch) {
+        frames.push(b.frame)
+        rows.push(b.timeline)
+        added += ENC.encode(b.frame.data).length
+      }
+      return {
         frames: {
           ...s.frames,
-          [requestId]: capPush(s.frames[requestId] ?? [], frame),
+          [requestId]: capPushMany(s.frames[requestId] ?? [], frames),
+        },
+        timeline: {
+          ...s.timeline,
+          [requestId]: capPushMany(s.timeline[requestId] ?? [], rows),
         },
         bytes: {
           ...s.bytes,
-          [requestId]:
-            (s.bytes[requestId] ?? 0) + ENC.encode(frame.data).length,
+          [requestId]: (s.bytes[requestId] ?? 0) + added,
         },
       }
-      if (row)
-        next.timeline = {
-          ...s.timeline,
-          [requestId]: capPush(s.timeline[requestId] ?? [], row),
-        }
-      return next
-    }),
+    })
+  },
   clear: (requestId) =>
     set((s) => {
       if (!s.frames[requestId] && !s.timeline[requestId] && !s.open[requestId])

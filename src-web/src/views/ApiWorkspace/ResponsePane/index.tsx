@@ -13,6 +13,7 @@ import { CookiesTab, collectReceivedRows } from "./CookiesTab"
 import { HeadersTab } from "./HeadersTab"
 import { HistoryPicker } from "./HistoryPicker"
 import type { HtmlView } from "./HtmlBody"
+import { ResponseLoading } from "./ResponseLoading"
 import { ResponseStatusLine } from "./ResponseStatusLine"
 import { ResponseTabBar, type TabId } from "./ResponseTabBar"
 import { SseStreamTab } from "./SseStreamTab"
@@ -23,6 +24,11 @@ import { TimelineTab } from "./TimelineTab"
 import { useHistorySync } from "./useHistorySync"
 
 const NO_FRAMES: never[] = []
+
+const EMPTY_ROWS = [
+  { label: "Send Active Request", combo: SHORTCUTS.SEND_REQUEST },
+  { label: "New Request", combo: SHORTCUTS.NEW_ITEM },
+]
 
 const ERROR_BANNER =
   "rounded-[5px] border border-dashed border-destructive/45 bg-destructive/[0.04] px-3 py-2 font-mono text-[0.75rem] text-fg leading-[1.5] whitespace-pre-wrap break-all"
@@ -46,6 +52,8 @@ export function ResponsePane() {
     selectedHistoryId,
     selectedHistoryRecordedAt,
     isLatestHistory,
+    historyLoading,
+    historyChecking,
     handleHistorySelect,
     handleHistoryClear,
     showLive,
@@ -64,11 +72,9 @@ export function ResponsePane() {
 
   const sseFrames: SseFrame[] = historicalResponse
     ? (historicalResponse.sseFrames ?? NO_FRAMES)
-    : loading
+    : liveFrames.length > 0
       ? liveFrames
-      : liveResponse?.sseFrames?.length
-        ? liveResponse.sseFrames
-        : liveFrames
+      : (liveResponse?.sseFrames ?? NO_FRAMES)
 
   const isSse =
     sseFrames.length > 0 ||
@@ -132,15 +138,10 @@ export function ResponsePane() {
 
   const sseTools = isSse && tab === "body"
 
-  if (activeRequestId && !response && !loading && !error) {
-    return (
-      <EmptyPaneShortcuts
-        rows={[
-          { label: "Send Active Request", combo: SHORTCUTS.SEND_REQUEST },
-          { label: "New Request", combo: SHORTCUTS.NEW_ITEM },
-        ]}
-      />
-    )
+  if (activeRequestId && !response && sseFrames.length === 0) {
+    if (historyLoading) return <ResponseLoading />
+    if (historyChecking) return <div className="h-full" />
+    if (!loading && !error) return <EmptyPaneShortcuts rows={EMPTY_ROWS} />
   }
 
   const headerCount = tabResponse?.headers.length ?? 0
@@ -197,7 +198,9 @@ export function ResponsePane() {
       {sseTools && sseView.searchOpen && <SseFilterPane view={sseView} />}
 
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-        {error ? (
+        {historyLoading ? (
+          <ResponseLoading />
+        ) : error ? (
           <div className="flex-1 overflow-y-auto px-3.5 pt-2.5">
             <div className={ERROR_BANNER}>{error}</div>
           </div>

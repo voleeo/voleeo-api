@@ -87,8 +87,15 @@ export function useTreeActions(
             ? await s.duplicateGrpc(activeWorkspaceId, id)
             : await s.duplicateFolder(activeWorkspaceId, id)
     if (!item) return
-    // Reveal the duplicate (folders re-fetch via reload, so read fresh).
-    revealInTree(item.id, item.folderId, useRequestStore.getState().folders)
+
+    const open = useRequestStore.getState()
+    if (kind === "request") open.setActiveRequest(item.id)
+    else if (kind === "websocket") open.setActiveConnection(item.id)
+    else if (kind === "grpc") open.setActiveGrpc(item.id)
+    else open.setActiveFolder(item.id)
+
+    // Reveal in the tree (folders re-fetch via reload, so read fresh).
+    revealInTree(item.id, item.folderId, open.folders)
   }
 
   function handleRollback(target: RollbackTarget, id: string) {

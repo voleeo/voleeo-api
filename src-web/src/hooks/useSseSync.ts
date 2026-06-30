@@ -1,7 +1,7 @@
 import { listen } from "@tauri-apps/api/event"
 import { useEffect } from "react"
 import { EVENTS } from "@/config/events"
-import { type SseFrame, useSseStore } from "@/store/sse"
+import { type SseFrameRow, useSseStore } from "@/store/sse"
 import type {
   HttpResponseHeader,
   TimelineEvent,
@@ -26,18 +26,15 @@ export function useSseSync() {
         payload.events,
       )
     })
-    const unFrame = listen<{
+    const unFrames = listen<{
       requestId: string
-      frame: SseFrame
-      timeline?: TimelineEvent
-    }>(EVENTS.sseFrame, ({ payload }) => {
-      useSseStore
-        .getState()
-        .appendFrame(payload.requestId, payload.frame, payload.timeline)
+      frames: SseFrameRow[]
+    }>(EVENTS.sseFrames, ({ payload }) => {
+      useSseStore.getState().appendFrames(payload.requestId, payload.frames)
     })
     return () => {
       unOpen.then((f) => f())
-      unFrame.then((f) => f())
+      unFrames.then((f) => f())
     }
   }, [])
 }

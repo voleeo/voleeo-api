@@ -5,7 +5,7 @@ import { Dot } from "@/components/Dot"
 import { cn } from "@/lib/utils"
 import { useInterfaceStore } from "@/store/interface"
 import { ScrollToBottomButton } from "../ScrollToBottomButton"
-import { useStickToBottom } from "../useStickToBottom"
+import { useFollowTail, useStickToBottom } from "../useStickToBottom"
 import { FrameRow } from "./FrameRow"
 import type { SseView } from "./useSseView"
 
@@ -21,32 +21,31 @@ export function SseStreamTab({
   const fontSize = useInterfaceStore((s) => s.editorFontSize)
   const rowH = Math.round(fontSize * 2.7)
 
-  const { parentRef, stick, atBottom, recomputeStick, scrollToBottom } =
-    useStickToBottom()
+  const {
+    parentRef,
+    stick,
+    atBottom,
+    pin,
+    recomputeStick,
+    onWheel,
+    scrollToBottom,
+  } = useStickToBottom()
   const virt = useVirtualizer({
     count: filtered.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => rowH,
     overscan: 16,
-    getItemKey: (i) => filtered[i]?.seq ?? i,
   })
+  const totalSize = virt.getTotalSize()
 
   // Re-measure rows when the editor font size (and thus row height) changes.
   // biome-ignore lint/correctness/useExhaustiveDependencies: re-measure on fontSize change
   useEffect(() => virt.measure(), [fontSize])
 
-  // Follow the bottom as rows enter (new matching frame) or a row's height
-  // changes (expand/collapse) — but only while the user hasn't scrolled up.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: filtered count + open set are the triggers, not read values
-  useEffect(() => {
-    if (!stick.current) return
-    const el = parentRef.current
-    if (!el) return
-    const id = requestAnimationFrame(() => {
-      el.scrollTop = el.scrollHeight
-    })
-    return () => cancelAnimationFrame(id)
-  }, [filtered.length, open])
+  // Re-pin on real content changes — the newest seq (changes every batch even at
+  // the cap) and an expand (open.size) — never on measurement jitter.
+  const lastSeq = filtered.length > 0 ? filtered[filtered.length - 1].seq : -1
+  useFollowTail(pin, stick, `${lastSeq}:${open.size}`)
 
   // A filter/query relayout (and first mount) fires no scroll event — re-derive
   // stick/atBottom. New rows don't need it: live-follow's programmatic scroll
@@ -88,6 +87,7 @@ export function SseStreamTab({
         <div
           ref={parentRef}
           onScroll={recomputeStick}
+          onWheel={onWheel}
           className="h-full overflow-y-auto"
         >
           {empty ? (
@@ -101,7 +101,7 @@ export function SseStreamTab({
           ) : (
             <div
               style={{
-                height: virt.getTotalSize(),
+                height: totalSize,
                 position: "relative",
                 width: "100%",
               }}
@@ -110,7 +110,7 @@ export function SseStreamTab({
                 const f = filtered[vi.index]
                 return (
                   <div
-                    key={f.seq}
+                    key={vi.key}
                     data-index={vi.index}
                     ref={virt.measureElement}
                     style={{

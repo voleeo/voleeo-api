@@ -1,5 +1,22 @@
+import type { SseFrame } from "@/store/sse"
+
 export function jsonPreview(value: unknown, budget = 96): string {
   return build(value, { n: budget })
+}
+
+/** Reconstruct the SSE wire format from parsed frames — drives the raw view and
+ *  the "download as text" action. Comments/heartbeats from the original stream
+ *  aren't kept; the frames are the source of truth. */
+export function rawSse(frames: SseFrame[]): string {
+  const blocks = frames.map((f) => {
+    const lines: string[] = []
+    if (f.event) lines.push(`event: ${f.event}`)
+    if (f.lastEventId) lines.push(`id: ${f.lastEventId}`)
+    if (f.retry != null) lines.push(`retry: ${f.retry}`)
+    for (const d of f.data.split("\n")) lines.push(`data: ${d}`)
+    return lines.join("\n")
+  })
+  return blocks.length ? `${blocks.join("\n\n")}\n` : ""
 }
 
 function build(v: unknown, b: { n: number }): string {

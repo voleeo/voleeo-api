@@ -30,7 +30,6 @@ export function useRequestStatuses(
 
   useEffect(() => {
     if (!workspaceId) return
-    let cancelled = false
 
     if (statusFetchRef.current.wsId !== workspaceId) {
       statusFetchRef.current = { wsId: workspaceId, ids: new Set() }
@@ -53,16 +52,12 @@ export function useRequestStatuses(
           ),
       ),
     ).then((results) => {
-      if (cancelled) return
+      if (statusFetchRef.current.wsId !== workspaceId) return
       const next: Record<string, number> = {}
       for (const r of results) if (r) next[r[0]] = r[1]
       if (Object.keys(next).length > 0)
         setPersistedStatuses((prev) => ({ ...prev, ...next }))
     })
-
-    return () => {
-      cancelled = true
-    }
   }, [workspaceId, tree])
 
   // Listen for newly stored responses and update just that request's status.

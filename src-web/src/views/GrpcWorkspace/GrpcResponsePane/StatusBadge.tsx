@@ -72,18 +72,13 @@ export function StatusBadge({
       </StatusPill>
     )
   if (response) {
-    const ok = response.statusCode === 0
     return (
       <>
-        <StatusPill
-          className={
-            ok
-              ? "border-success text-success"
-              : "border-destructive text-destructive"
-          }
-        >
-          {response.statusCode} {response.statusMessage || (ok ? "OK" : "")}
-        </StatusPill>
+        {response.statusCode !== 0 && (
+          <StatusPill className="border-destructive text-destructive">
+            {`${response.statusCode} ${response.statusMessage}`.trim()}
+          </StatusPill>
+        )}
         <span className="inline-flex items-center font-mono text-[0.75rem] text-muted">
           {formatDuration(response.totalMs ?? 0)}
           <Dot size={13} />
