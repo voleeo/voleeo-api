@@ -501,6 +501,7 @@ fn build_response(
         redirect_warning: None,
         captured_cookies: Vec::new(),
         attached_cookies: Vec::new(),
+        sse_frames: Vec::new(),
     }
 }
 

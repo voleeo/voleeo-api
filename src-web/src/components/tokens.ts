@@ -54,8 +54,10 @@ export function gitChangeColor(change: GitChange): string {
 }
 
 /** Tailwind bg-class for a response-status dot — same three tiers the history
- * picker uses for its status numbers (2xx green, 3xx/4xx amber, 5xx+ red). */
+ * picker uses for its status numbers (2xx green, 3xx/4xx amber, 5xx+ red).
+ * Status 0 means no response arrived (connection error/timeout) → red. */
 export function statusDotClass(status: number): string {
+  if (status < 100) return "bg-destructive"
   if (status < 300) return "bg-success"
   if (status < 500) return "bg-amber-500"
   return "bg-destructive"

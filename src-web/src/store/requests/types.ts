@@ -12,6 +12,8 @@ import type {
 } from "../../../../packages/types/bindings"
 import type { TreeNode } from "./buildTree"
 
+export type Duplicated = { id: string; folderId: string | null } | null
+
 export interface RequestStore {
   folders: ApiFolder[]
   requests: HttpRequest[]
@@ -72,10 +74,10 @@ export interface RequestStore {
     opts?: { folderId?: string; name?: string; target?: string },
   ) => Promise<GrpcRequest | null>
   moveItems: (workspaceId: string, updates: MoveItemUpdate[]) => Promise<void>
-  duplicateRequest: (workspaceId: string, id: string) => Promise<void>
-  duplicateFolder: (workspaceId: string, id: string) => Promise<void>
-  duplicateConnection: (workspaceId: string, id: string) => Promise<void>
-  duplicateGrpc: (workspaceId: string, id: string) => Promise<void>
+  duplicateRequest: (workspaceId: string, id: string) => Promise<Duplicated>
+  duplicateFolder: (workspaceId: string, id: string) => Promise<Duplicated>
+  duplicateConnection: (workspaceId: string, id: string) => Promise<Duplicated>
+  duplicateGrpc: (workspaceId: string, id: string) => Promise<Duplicated>
   renameRequest: (
     workspaceId: string,
     id: string,

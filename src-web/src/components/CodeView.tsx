@@ -9,28 +9,36 @@ import { useMemo } from "react"
 import { useThemeStore } from "@/store/theme"
 import { cmEditorTheme } from "@/views/ApiWorkspace/cmEditorTheme"
 
-type Lang = "json" | "yaml"
+type Lang = "json" | "yaml" | "text"
 
-/** Read-only, syntax-highlighted code viewer. Used for gRPC/JSON bodies, the
- *  OAuth 2.0 token inspector, and the debug modal's raw YAML — CodeMirror gives
- *  native select-and-copy. */
+// Read-only CodeMirror renders a non-editable area, so the browser shows the
+// default arrow cursor; force the text (I-beam) cursor so it reads as selectable.
+const textCursor = EditorView.theme({ ".cm-content": { cursor: "text" } })
+
 export function CodeView({
   value,
   lang = "json",
+  lineNumbers = false,
+  wrap = true,
+  height,
 }: {
   value: string
   lang?: Lang
+  lineNumbers?: boolean
+  wrap?: boolean
+  height?: string
 }) {
   const isDark = useThemeStore((s) => s.activeTheme?.kind !== "light")
   const extensions = useMemo(
     () => [
       isDark ? oneDark : defaultLightThemeOption,
       cmEditorTheme,
-      lang === "yaml" ? yamlLang() : jsonLang(),
-      EditorView.lineWrapping,
+      textCursor,
+      ...(lang === "yaml" ? [yamlLang()] : lang === "json" ? [jsonLang()] : []),
+      ...(wrap ? [EditorView.lineWrapping] : []),
       EditorView.editable.of(false),
     ],
-    [isDark, lang],
+    [isDark, lang, wrap],
   )
   return (
     <CodeMirror
@@ -38,8 +46,10 @@ export function CodeView({
       theme="none"
       editable={false}
       extensions={extensions}
+      height={height}
+      style={height ? { height } : undefined}
       basicSetup={{
-        lineNumbers: false,
+        lineNumbers,
         foldGutter: false,
         highlightActiveLine: false,
         highlightActiveLineGutter: false,

@@ -1,14 +1,57 @@
 use crate::fmt::{fmt_age, fmt_bytes, fmt_dur_ms, http_error_message, push_event, push_event_at};
 use crate::redirect::{compute_redirect_warning, drain_redirect_hops, RedirectHop};
-use crate::{HttpExecutor, DNS_OVERRIDES, MAX_REDIRECTS, POOL_IDLE_TIMEOUT};
+use crate::sse::{RawFrame, SseDecoder};
+use crate::{
+    HttpExecutor, SseEvent, SseSink, DNS_OVERRIDES, MAX_REDIRECTS, POOL_IDLE_TIMEOUT, SSE_SINK,
+};
 use base64::Engine;
 use futures_util::StreamExt;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use voleeo_core::{
     AuthConfig, HttpFailure, HttpRequest, HttpResponse, HttpResponseHeader, HttpTiming,
-    RequestParameter, StoredCookie, VoleeoError,
+    RequestParameter, SseFrame, StoredCookie, TimelineEvent, VoleeoError,
 };
+
+/// Tag a parsed SSE frame with arrival metadata and hand it (plus its timeline
+/// row) to the live sink. Bumps `seq` so each frame keys uniquely in the UI.
+/// The row is NOT retained in the executor's `events` Vec — `SseAccum` keeps the
+/// bounded copy the final response uses, so a fast/endless stream can't grow that
+/// Vec one entry per frame.
+fn push_sse_frame(sink: &SseSink, seq: &mut u32, started: Instant, raw: RawFrame) {
+    let at_ms = started.elapsed().as_secs_f64() * 1000.0;
+    let label = raw.event.as_deref().unwrap_or("message");
+    let timeline = TimelineEvent {
+        at_ms,
+        kind: "recv".into(),
+        text: format!("event: {label} · {} B", raw.data.len()),
+    };
+    let frame = SseFrame {
+        seq: *seq,
+        event: raw.event,
+        data: raw.data,
+        last_event_id: raw.id,
+        retry: raw.retry,
+        at_ms,
+    };
+    sink(SseEvent::Frame { frame, timeline });
+    *seq += 1;
+}
+
+/// Log a body-stream read failure on the timeline and turn it into the error
+/// (taking ownership of `events`); shared by the SSE and buffered read loops.
+fn body_stream_err(
+    events: &mut Vec<TimelineEvent>,
+    started: Instant,
+    e: reqwest::Error,
+) -> VoleeoError {
+    let msg = format!("Body stream failed: {e}");
+    push_event(events, started, "error", msg.clone());
+    VoleeoError::HttpFailed(HttpFailure {
+        message: msg,
+        events: std::mem::take(events),
+    })
+}
 
 pub(crate) fn normalize_url(raw: &str) -> Result<String, VoleeoError> {
     let t = raw.trim();
@@ -468,28 +511,69 @@ impl HttpExecutor {
             }
         }
 
-        let mut body_bytes: Vec<u8> = Vec::new();
+        let is_sse = headers.iter().any(|h| {
+            h.name.eq_ignore_ascii_case("content-type")
+                && h.value.to_ascii_lowercase().contains("text/event-stream")
+        });
+        // SSE streams have no natural EOF, so buffering the body would hang
+        // forever. With a live sink we parse frames and push each as it lands,
+        // leaving the stored body empty — the frames are the content.
+        let sse_sink = SSE_SINK.try_with(Clone::clone).ok().flatten();
         let mut stream = response.bytes_stream();
-        while let Some(chunk) = stream.next().await {
-            let chunk = match chunk {
-                Ok(c) => c,
-                Err(e) => {
-                    let msg = format!("Body stream failed: {e}");
-                    push_event(&mut events, started, "error", msg.clone());
-                    return Err(VoleeoError::HttpFailed(HttpFailure {
-                        message: msg,
-                        events,
-                    }));
+
+        let (body, body_size, body_is_text) = if let (true, Some(sink)) = (is_sse, sse_sink) {
+            // Hand the command the status/headers/timeline up front so a stream
+            // cancelled mid-flight can still be rebuilt into a real response.
+            sink(SseEvent::Open {
+                status: status_code,
+                status_text: status_text.clone(),
+                headers: headers.clone(),
+                events: events.clone(),
+            });
+            let mut decoder = SseDecoder::default();
+            let mut seq: u32 = 0;
+            while let Some(chunk) = stream.next().await {
+                let chunk = match chunk {
+                    Ok(c) => c,
+                    Err(e) => return Err(body_stream_err(&mut events, started, e)),
+                };
+                for raw in decoder.push(&chunk) {
+                    push_sse_frame(&sink, &mut seq, started, raw);
+                }
+            }
+            for raw in decoder.finish() {
+                push_sse_frame(&sink, &mut seq, started, raw);
+            }
+            (String::new(), 0u32, true)
+        } else {
+            let mut body_bytes: Vec<u8> = Vec::new();
+            while let Some(chunk) = stream.next().await {
+                let chunk = match chunk {
+                    Ok(c) => c,
+                    Err(e) => return Err(body_stream_err(&mut events, started, e)),
+                };
+                push_event(
+                    &mut events,
+                    started,
+                    "chunk",
+                    format!("{} chunk received", fmt_bytes(chunk.len())),
+                );
+                body_bytes.extend_from_slice(&chunk);
+            }
+            let body_size = u32::try_from(body_bytes.len()).unwrap_or(u32::MAX);
+            let (body, body_is_text) = if body_bytes.is_empty() {
+                (String::new(), true)
+            } else {
+                match String::from_utf8(body_bytes.clone()) {
+                    Ok(s) => (s, true),
+                    Err(_) => {
+                        let b64 = base64::engine::general_purpose::STANDARD.encode(&body_bytes);
+                        (b64, false)
+                    }
                 }
             };
-            push_event(
-                &mut events,
-                started,
-                "chunk",
-                format!("{} chunk received", fmt_bytes(chunk.len())),
-            );
-            body_bytes.extend_from_slice(&chunk);
-        }
+            (body, body_size, body_is_text)
+        };
 
         let t_total_ms = now_ms();
         let download_ms = (t_total_ms - t_headers_ms).max(0.0);
@@ -498,25 +582,16 @@ impl HttpExecutor {
             &mut events,
             t_total_ms,
             "done",
-            format!(
-                "Connection complete · {} downloaded in {}",
-                fmt_bytes(body_bytes.len()),
-                fmt_dur_ms(download_ms),
-            ),
+            if is_sse {
+                format!("Stream ended in {}", fmt_dur_ms(download_ms))
+            } else {
+                format!(
+                    "Connection complete · {} downloaded in {}",
+                    fmt_bytes(body_size as usize),
+                    fmt_dur_ms(download_ms),
+                )
+            },
         );
-
-        let body_size = u32::try_from(body_bytes.len()).unwrap_or(u32::MAX);
-        let (body, body_is_text) = if body_bytes.is_empty() {
-            (String::new(), true)
-        } else {
-            match String::from_utf8(body_bytes.clone()) {
-                Ok(s) => (s, true),
-                Err(_) => {
-                    let b64 = base64::engine::general_purpose::STANDARD.encode(&body_bytes);
-                    (b64, false)
-                }
-            }
-        };
 
         let redirect_warning = compute_redirect_warning(request, &host, &redirect_hops);
 
@@ -544,6 +619,9 @@ impl HttpExecutor {
             redirect_warning,
             captured_cookies,
             attached_cookies,
+            // Frames are accumulated by the command's sink so a cancelled stream
+            // still keeps them; the executor leaves this empty.
+            sse_frames: Vec::new(),
         })
     }
 }

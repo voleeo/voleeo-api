@@ -30,7 +30,6 @@ export function useRequestStatuses(
 
   useEffect(() => {
     if (!workspaceId) return
-    let cancelled = false
 
     if (statusFetchRef.current.wsId !== workspaceId) {
       statusFetchRef.current = { wsId: workspaceId, ids: new Set() }
@@ -53,16 +52,12 @@ export function useRequestStatuses(
           ),
       ),
     ).then((results) => {
-      if (cancelled) return
+      if (statusFetchRef.current.wsId !== workspaceId) return
       const next: Record<string, number> = {}
       for (const r of results) if (r) next[r[0]] = r[1]
       if (Object.keys(next).length > 0)
         setPersistedStatuses((prev) => ({ ...prev, ...next }))
     })
-
-    return () => {
-      cancelled = true
-    }
   }, [workspaceId, tree])
 
   // Listen for newly stored responses and update just that request's status.
@@ -83,8 +78,26 @@ export function useRequestStatuses(
         }))
       })
     }
+
+    // History cleared for a request → drop its last-status dot.
+    const onCleared = ({
+      payload,
+    }: {
+      payload: { workspaceId: string; requestId: string }
+    }) => {
+      if (unmounted || payload.workspaceId !== workspaceId) return
+      statusFetchRef.current.ids.delete(payload.requestId)
+      setPersistedStatuses((prev) => {
+        if (!(payload.requestId in prev)) return prev
+        const next = { ...prev }
+        delete next[payload.requestId]
+        return next
+      })
+    }
+
     let u1: (() => void) | null = null
     let u2: (() => void) | null = null
+    let u3: (() => void) | null = null
     listen<{ workspaceId: string; requestId: string }>(
       EVENTS.responseStored,
       handler,
@@ -99,10 +112,18 @@ export function useRequestStatuses(
       if (unmounted) fn()
       else u2 = fn
     })
+    listen<{ workspaceId: string; requestId: string }>(
+      EVENTS.responseCleared,
+      onCleared,
+    ).then((fn) => {
+      if (unmounted) fn()
+      else u3 = fn
+    })
     return () => {
       unmounted = true
       u1?.()
       u2?.()
+      u3?.()
     }
   }, [workspaceId])
 

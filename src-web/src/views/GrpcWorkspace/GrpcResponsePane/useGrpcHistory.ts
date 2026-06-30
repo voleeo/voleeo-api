@@ -30,6 +30,7 @@ export function useGrpcHistory({
   const [histUnary, setHistUnary] = useState<GrpcResponse | null>(null)
   const [histSession, setHistSession] = useState<StoredGrpcSession | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [checked, setChecked] = useState(false)
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: id resets history view
   useEffect(() => {
@@ -53,12 +54,17 @@ export function useGrpcHistory({
   const [latestUnary, setLatestUnary] = useState<GrpcResponse | null>(null)
   // biome-ignore lint/correctness/useExhaustiveDependencies: refreshKey re-checks after each send
   useEffect(() => {
-    if (!workspaceId || !id) return
+    if (!workspaceId || !id) {
+      setChecked(true)
+      return
+    }
     let alive = true
     if (streaming) {
       setLatestUnary(null)
       void commands.grpcListSessions(workspaceId, id).then((r) => {
-        if (alive) setHasHistory(r.status === "ok" && r.data.length > 0)
+        if (!alive) return
+        setHasHistory(r.status === "ok" && r.data.length > 0)
+        setChecked(true)
       })
       return () => {
         alive = false
@@ -79,6 +85,7 @@ export function useGrpcHistory({
       } else {
         setLatestUnary(null)
       }
+      setChecked(true)
     })
     return () => {
       alive = false
@@ -123,6 +130,7 @@ export function useGrpcHistory({
     refreshKey,
     hasHistory,
     latestUnary,
+    checking: !checked,
     onSelectHistory,
     onClearHistory,
   }

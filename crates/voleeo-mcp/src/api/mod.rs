@@ -32,6 +32,7 @@ mod grpc;
 mod redact;
 mod request;
 mod response;
+mod sse;
 mod tools;
 mod websocket;
 mod workspace;
@@ -112,6 +113,9 @@ impl ApiBackend {
             "folder.delete" => self.folder_delete(&args).await,
             "response.list" => self.response_list(&args).await,
             "response.get" => self.response_get(&args).await,
+            "sse.tail" => self.sse_tail(&args).await,
+            "sse.summary" => self.sse_summary(&args).await,
+            "sse.assemble" => self.sse_assemble(&args).await,
             "env.list" => self.env_list(&args).await,
             "env.create" => self.env_create(&args).await,
             "env.set_variable" => self.env_set_variable(&args).await,
@@ -282,6 +286,90 @@ mod tests {
         let list: Vec<Value> = serde_json::from_str(&listed.content[0].text).unwrap();
         assert_eq!(list.len(), 1);
         assert_eq!(list[0]["name"], "My API");
+    }
+
+    #[tokio::test]
+    async fn sse_tools_read_stored_frames() {
+        use voleeo_core::{HttpResponse, HttpTiming, SseFrame};
+        let dir = tempfile::tempdir().unwrap();
+        let b = make_backend(&dir);
+        let (ws, req) = ("ws1", "req1");
+        // seq 2 is a "ping"; the rest are "message" with a `delta` token.
+        let frames: Vec<SseFrame> = (0..5)
+            .map(|i| SseFrame {
+                seq: i,
+                event: Some(if i == 2 { "ping" } else { "message" }.into()),
+                data: format!("{{\"delta\":\"t{i}\"}}"),
+                last_event_id: None,
+                retry: None,
+                at_ms: i as f64 * 100.0,
+            })
+            .collect();
+        let response = HttpResponse {
+            request_id: req.into(),
+            status: 200,
+            status_text: "OK".into(),
+            headers: vec![],
+            body: String::new(),
+            body_size: 30,
+            body_is_text: true,
+            body_windowed: false,
+            body_line_count: 0,
+            response_id: String::new(),
+            timing: HttpTiming {
+                dns_ms: 0.0,
+                connect_ms: 0.0,
+                tls_ms: 0.0,
+                first_byte_ms: 0.0,
+                download_ms: 0.0,
+                total_ms: 400.0,
+            },
+            events: vec![],
+            redirect_warning: None,
+            captured_cookies: vec![],
+            attached_cookies: vec![],
+            sse_frames: frames,
+        };
+        b.responses.append(ws, req, response, 20).unwrap();
+        let base = || args(&[("workspaceId", ws.into()), ("requestId", req.into())]);
+
+        let s = b.call_tool("sse.summary", base()).await;
+        assert!(s.is_error.is_none(), "{}", s.content[0].text);
+        let summary: Value = serde_json::from_str(&s.content[0].text).unwrap();
+        assert_eq!(summary["stored"], 5);
+        assert_eq!(summary["totalReceived"], 5); // last seq 4 + 1
+        assert_eq!(summary["events"]["message"], 4);
+        assert_eq!(summary["events"]["ping"], 1);
+
+        let t = b
+            .call_tool(
+                "sse.tail",
+                args(&[
+                    ("workspaceId", ws.into()),
+                    ("requestId", req.into()),
+                    ("limit", 2.into()),
+                ]),
+            )
+            .await;
+        let tail: Value = serde_json::from_str(&t.content[0].text).unwrap();
+        assert_eq!(tail["frames"].as_array().unwrap().len(), 2);
+        assert_eq!(tail["frames"][1]["seq"], 4);
+
+        // Assemble the `delta` field of message frames only → ping (seq 2) skipped.
+        let a = b
+            .call_tool(
+                "sse.assemble",
+                args(&[
+                    ("workspaceId", ws.into()),
+                    ("requestId", req.into()),
+                    ("field", "delta".into()),
+                    ("event", "message".into()),
+                ]),
+            )
+            .await;
+        let asm: Value = serde_json::from_str(&a.content[0].text).unwrap();
+        assert_eq!(asm["assembled"], "t0t1t3t4");
+        assert_eq!(asm["used"], 4);
     }
 
     #[tokio::test]

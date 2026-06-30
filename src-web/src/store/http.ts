@@ -3,6 +3,7 @@ import { create } from "zustand"
 import { errorMessage } from "@/lib/error"
 import type { ResolutionEvent } from "@/lib/template"
 import { useCookiesStore } from "@/store/cookies"
+import { useSseStore } from "@/store/sse"
 import type { SentRequestSnapshot } from "@/views/ApiWorkspace/SentRequestInspector/types"
 import type {
   AuthConfig,
@@ -116,6 +117,8 @@ export const useHttpStore = create<HttpStore>((set) => ({
       loading: { ...s.loading, [requestId]: true },
       errors: { ...s.errors, [requestId]: undefined },
     }))
+
+    useSseStore.getState().clear(requestId)
 
     const resolveEvents = resolutionToTimelineEvents(resolutionEvents ?? [])
     const resolutionNotes = resolveEvents.map((e) => e.text)
@@ -244,6 +247,7 @@ export const useHttpStore = create<HttpStore>((set) => ({
   },
 
   cancelRequest: async (requestId) => {
+    set((s) => ({ loading: { ...s.loading, [requestId]: false } }))
     await commands.cancelRequest(requestId)
   },
 
@@ -254,6 +258,7 @@ export const useHttpStore = create<HttpStore>((set) => ({
     })),
 
   clearResponse: (requestId) => {
+    useSseStore.getState().clear(requestId)
     set((s) => {
       const responses = { ...s.responses }
       delete responses[requestId]

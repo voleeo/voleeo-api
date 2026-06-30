@@ -26,6 +26,7 @@
     "@fontsource-variable/geist": "^5.2.8",
     "@fontsource-variable/geist-mono": "^5.2.8",
     "@fontsource/goldman": "^5.2.8",
+    "@paper-design/shaders-react": "^0.0.76",
     "@phosphor-icons/react": "^2.1.10",
     "@tanstack/react-virtual": "^3.14.2",
     "@tauri-apps/api": "^2.0.0",

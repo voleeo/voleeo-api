@@ -5,7 +5,9 @@ import {
   ArrowLeftIcon,
   ArrowRightIcon,
   ArrowsClockwiseIcon,
+  ArrowsInLineVerticalIcon,
   ArrowsLeftRightIcon,
+  ArrowsOutLineVerticalIcon,
   ArrowUpIcon,
   BookOpenTextIcon,
   CalendarBlankIcon,
@@ -21,6 +23,8 @@ import {
   ColumnsIcon,
   CookieIcon,
   CopyIcon,
+  CrosshairSimpleIcon,
+  DotOutlineIcon,
   DotsSixVerticalIcon,
   DotsThreeVerticalIcon,
   DownloadSimpleIcon,
@@ -82,6 +86,7 @@ interface GlyphProps {
   kind: string
   size?: number
   color?: string
+  weight?: IconProps["weight"]
   style?: CSSProperties
 }
 
@@ -107,6 +112,9 @@ const KIND_MAP: Record<string, Icon> = {
   checks: ChecksIcon,
   chevron: CaretRightIcon,
   "chevron-down": CaretDownIcon,
+  "arrows-in-line-vertical": ArrowsInLineVerticalIcon,
+  "arrows-out-line-vertical": ArrowsOutLineVerticalIcon,
+  "dot-outline": DotOutlineIcon,
   "chevrons-left": CaretDoubleLeftIcon,
   "chevrons-right": CaretDoubleRightIcon,
   arrow: ArrowRightIcon,
@@ -124,6 +132,7 @@ const KIND_MAP: Record<string, Icon> = {
   send: PaperPlaneTiltIcon,
   "send-right": PaperPlaneRightIcon,
   history: ClockCounterClockwiseIcon,
+  "crosshair-simple": CrosshairSimpleIcon,
   clock: ClockIcon,
   table: TableIcon,
   schema: TreeStructureIcon,
@@ -172,10 +181,11 @@ export function Glyph({
   kind,
   size = 16,
   color = "var(--base04)",
+  weight = "light",
   style,
 }: GlyphProps) {
   const IconComponent = KIND_MAP[kind]
-  const props: IconProps = { size, color, weight: "light", style }
+  const props: IconProps = { size, color, weight, style }
   return IconComponent ? (
     <IconComponent {...props} />
   ) : (
