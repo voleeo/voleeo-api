@@ -68,6 +68,15 @@ export const SHORTCUTS = {
     ctrl: true,
     alt: true,
   } satisfies KeyCombo,
+
+  /** Reveal the open request / folder in the tree (scroll + select it). */
+  FOCUS_ACTIVE: { key: "F1", alt: true } satisfies KeyCombo,
+
+  /** Collapse every folder in the request tree. */
+  COLLAPSE_ALL: { key: "-", meta: true } satisfies KeyCombo,
+
+  /** Expand every folder in the request tree. */
+  EXPAND_ALL: { key: "=", meta: true } satisfies KeyCombo,
 } as const
 
 /** Which workspace a shortcut applies to. `shared` works everywhere. */
@@ -107,6 +116,18 @@ export const SHORTCUT_HELP: {
   {
     combo: SHORTCUTS.TOGGLE_TREE,
     description: "Show / hide the sidebar",
+  },
+  {
+    combo: SHORTCUTS.FOCUS_ACTIVE,
+    description: "Reveal the open request in the tree",
+  },
+  {
+    combo: SHORTCUTS.COLLAPSE_ALL,
+    description: "Collapse all folders",
+  },
+  {
+    combo: SHORTCUTS.EXPAND_ALL,
+    description: "Expand all folders",
   },
   {
     combo: SHORTCUTS.SEARCH,
@@ -161,6 +182,7 @@ const KEY_SYMBOLS: Record<string, string> = {
   arrowleft: "←",
   arrowright: "→",
   space: "␣",
+  "=": "+",
 }
 
 function symbolize(key: string): string {
