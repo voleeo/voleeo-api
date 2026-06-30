@@ -6,6 +6,7 @@ import { useHttpStore } from "@/store/http"
 import { useRequestStore } from "@/store/requests"
 import { type SseFrame, useSseStore } from "@/store/sse"
 import { useUiStore } from "@/store/workspace"
+import type { HttpResponse } from "../../../../../packages/types/bindings"
 import { BodyTab } from "./BodyTab"
 import { isHtmlResponse, isSseResponse } from "./bodyLang"
 import { CookiesTab, collectReceivedRows } from "./CookiesTab"
@@ -99,6 +100,33 @@ export function ResponsePane() {
   const streamError =
     response?.events?.find((e) => e.kind === "error")?.text ?? null
 
+  const liveSseResponse: HttpResponse | undefined =
+    loading && !historicalResponse && sseOpen && activeRequestId
+      ? {
+          requestId: activeRequestId,
+          status: sseOpen.status,
+          statusText: sseOpen.statusText,
+          headers: sseOpen.headers,
+          body: "",
+          bodySize: liveBytes,
+          bodyIsText: true,
+          timing: {
+            dnsMs: 0,
+            connectMs: 0,
+            tlsMs: 0,
+            firstByteMs: 0,
+            downloadMs: 0,
+            totalMs: liveTimingMs ?? 0,
+          },
+          events: timelineEvents,
+        }
+      : undefined
+
+  const tabResponse =
+    loading && !historicalResponse
+      ? (liveSseResponse ?? null)
+      : (response ?? null)
+
   const [tab, setTab] = useState<TabId>("body")
   const [htmlView, setHtmlView] = useState<HtmlView>("preview")
 
@@ -115,8 +143,8 @@ export function ResponsePane() {
     )
   }
 
-  const headerCount = response?.headers.length ?? 0
-  const cookieCount = response ? collectReceivedRows(response).length : 0
+  const headerCount = tabResponse?.headers.length ?? 0
+  const cookieCount = tabResponse ? collectReceivedRows(tabResponse).length : 0
   const isHtml = isHtmlResponse(response ?? null)
 
   return (
@@ -198,10 +226,10 @@ export function ResponsePane() {
                 />
               ))}
             {tab === "headers" && (
-              <HeadersTab response={response ?? null} loading={loading} />
+              <HeadersTab response={tabResponse} loading={loading} />
             )}
             {tab === "cookies" && (
-              <CookiesTab response={response ?? null} loading={loading} />
+              <CookiesTab response={tabResponse} loading={loading} />
             )}
             {tab === "timeline" && (
               <TimelineTab events={timelineEvents} loading={loading} />
