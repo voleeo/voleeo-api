@@ -102,13 +102,12 @@ export function ResponsePane() {
     activeRequestId ? (s.bytes[activeRequestId] ?? 0) : 0,
   )
   const liveHeader = isLive ? sseOpen : undefined
-  const timelineEvents =
-    isLive && liveTimeline?.length
-      ? liveTimeline
-      : (response?.events ?? NO_EVENTS)
+  const timelineEvents = isLive
+    ? (liveTimeline ?? NO_EVENTS)
+    : (response?.events ?? NO_EVENTS)
 
   const streamError =
-    response?.events?.find((e) => e.kind === "error")?.text ?? null
+    timelineEvents.find((e) => e.kind === "error")?.text ?? null
 
   // Memoized so Headers/Cookies/StatusLine keep a stable reference across the ~30 renders/s a fast stream produces.
   const liveSseResponse: HttpResponse | undefined = useMemo(
