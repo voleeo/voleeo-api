@@ -8,7 +8,7 @@ export function WelcomeTitleBar() {
   if (isLinux && customTitleBar) {
     return (
       <div
-        className="relative bg-bg"
+        className="relative"
         style={{ height: "var(--topbar-height)" }}
         data-tauri-drag-region=""
       >
@@ -20,7 +20,6 @@ export function WelcomeTitleBar() {
   if (!isMac || !customTitleBar) return null
   return (
     <div
-      className="bg-bg"
       style={{
         height: "var(--topbar-height)",
         paddingLeft: "var(--traffic-lights-width)",

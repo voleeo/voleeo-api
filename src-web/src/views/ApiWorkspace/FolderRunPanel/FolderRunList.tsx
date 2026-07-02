@@ -1,8 +1,10 @@
 import { useMemo } from "react"
 import { Checkbox } from "@/components/ui/checkbox"
+import { useResponseSummaries } from "@/hooks/useResponseSummaries"
 import { useFolderRunStore } from "@/store/folderRun"
 import { useHttpStore } from "@/store/http"
 import type { HttpRequest } from "@/store/requests"
+import { useUiStore } from "@/store/workspace"
 import { FolderRunRow } from "./FolderRunRow"
 import type { FolderPathSegment } from "./useStoredSend"
 
@@ -17,14 +19,25 @@ export function FolderRunList({
   const reqStatus = useFolderRunStore((s) => s.reqStatus)
   const toggleIncluded = useFolderRunStore((s) => s.toggleIncluded)
   const setAll = useFolderRunStore((s) => s.setAll)
+  const workspaceId = useUiStore((s) => s.activeWorkspaceId)
 
   const ids = useMemo(() => ordered.map((r) => r.id), [ordered])
-  const maxTotalMs = useHttpStore((s) =>
+
+  const summaries = useResponseSummaries(workspaceId, ids)
+
+  const liveMax = useHttpStore((s) =>
     ordered.reduce(
       (m, r) => Math.max(m, s.responses[r.id]?.timing.totalMs ?? 0),
       0,
     ),
   )
+  const maxTotalMs = useMemo(() => {
+    const stored = Object.values(summaries).reduce(
+      (m, x) => Math.max(m, x.totalMs),
+      0,
+    )
+    return Math.max(liveMax, stored)
+  }, [liveMax, summaries])
 
   const checkedCount = ordered.filter((r) => included[r.id] !== false).length
   const allChecked = checkedCount === ordered.length && ordered.length > 0
@@ -52,6 +65,7 @@ export function FolderRunList({
             included={included[request.id] !== false}
             runState={reqStatus[request.id]}
             maxTotalMs={maxTotalMs}
+            lastSummary={summaries[request.id] ?? null}
             folderPath={
               request.folderId ? folderPaths.get(request.folderId) : undefined
             }

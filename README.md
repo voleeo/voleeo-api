@@ -28,6 +28,9 @@ HTTP, gRPC, WebSocket, and GraphQL — built for the AI era.
 Voleeo runs natively on your machine — no browser CORS limits, no payload caps, no 30-second timeouts. 
 Zero telemetry, no account, no cloud lock-in: your workspaces and secrets live on disk and stay there.
 
+- 🐛 [Report a bug](https://github.com/voleeo/voleeo-app/issues/new?template=bug_report.md)
+- 💡 [Request a feature](https://github.com/voleeo/voleeo-app/issues/new?template=feature_request.md)
+
 ### ⚡ Every protocol, one window
 
 - Send requests over HTTP/HTTPS, gRPC, WebSocket, and GraphQL — one app, one UI.

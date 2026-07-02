@@ -230,6 +230,47 @@ impl ResponseStore {
             .join(format!("req_{request_id}.yaml")))
     }
 
+    /// Sidecar index of summaries kept in sync with the ring-buffer file, so
+    /// `list` (which drives the history icon + dropdown) never has to parse the
+    /// heavy entries — an SSE response inlines thousands of frames and timeline
+    /// rows, making a full parse of the 20-entry file take a noticeable beat.
+    fn index_path(&self, workspace_id: &str, request_id: &str) -> Result<PathBuf, VoleeoError> {
+        crate::validate_id(workspace_id)?;
+        crate::validate_id(request_id)?;
+        Ok(self
+            .responses_local_dir
+            .join(workspace_id)
+            .join(format!("req_{request_id}.index.yaml")))
+    }
+
+    fn summarize(items: &[StoredHttpResponse]) -> Vec<StoredHttpResponseSummary> {
+        items
+            .iter()
+            .map(|r| StoredHttpResponseSummary {
+                id: r.id.clone(),
+                request_id: r.request_id.clone(),
+                recorded_at: r.recorded_at.clone(),
+                status: r.response.status,
+                status_text: r.response.status_text.clone(),
+                body_size: r.response.body_size,
+                total_ms: r.response.timing.total_ms,
+            })
+            .collect()
+    }
+
+    fn write_index(
+        &self,
+        workspace_id: &str,
+        request_id: &str,
+        items: &[StoredHttpResponse],
+    ) -> Result<(), VoleeoError> {
+        let summaries = Self::summarize(items);
+        let path = self.index_path(workspace_id, request_id)?;
+        let content =
+            serde_yaml::to_string(&summaries).map_err(|e| VoleeoError::Storage(e.to_string()))?;
+        std::fs::write(&path, content).map_err(|e| VoleeoError::Storage(e.to_string()))
+    }
+
     fn read_all(
         &self,
         workspace_id: &str,
@@ -255,7 +296,13 @@ impl ResponseStore {
         let path = self.file_path(workspace_id, request_id)?;
         let content =
             serde_yaml::to_string(items).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-        std::fs::write(&path, content).map_err(|e| VoleeoError::Storage(e.to_string()))
+        std::fs::write(&path, content).map_err(|e| VoleeoError::Storage(e.to_string()))?;
+        // Best-effort summary index, kept in lockstep (write_all is the only
+        // mutation path). It's a derived cache `list` backfills on miss, so a
+        // failed write must NOT fail the append. The two writes aren't atomic, so
+        // a crash between them leaves the index stale until the next append.
+        let _ = self.write_index(workspace_id, request_id, items);
+        Ok(())
     }
 
     /// Prepend `response` to the history ring buffer, trimming to `limit` entries.
@@ -307,19 +354,21 @@ impl ResponseStore {
         workspace_id: &str,
         request_id: &str,
     ) -> Result<Vec<StoredHttpResponseSummary>, VoleeoError> {
+        // Fast path: the sidecar index, if present and parseable.
+        let idx = self.index_path(workspace_id, request_id)?;
+        if let Ok(content) = std::fs::read_to_string(&idx) {
+            if let Ok(summaries) = serde_yaml::from_str::<Vec<StoredHttpResponseSummary>>(&content)
+            {
+                return Ok(summaries);
+            }
+        }
+        // No index yet (history predating it) → parse the full file once and
+        // backfill the index so the next `list` takes the fast path.
         let items = self.read_all(workspace_id, request_id)?;
-        Ok(items
-            .into_iter()
-            .map(|r| StoredHttpResponseSummary {
-                id: r.id,
-                request_id: r.request_id,
-                recorded_at: r.recorded_at,
-                status: r.response.status,
-                status_text: r.response.status_text,
-                body_size: r.response.body_size,
-                total_ms: r.response.timing.total_ms,
-            })
-            .collect())
+        if !items.is_empty() {
+            let _ = self.write_index(workspace_id, request_id, &items);
+        }
+        Ok(Self::summarize(&items))
     }
 
     pub fn get(
@@ -332,12 +381,24 @@ impl ResponseStore {
         Ok(items.into_iter().find(|r| r.id == response_id))
     }
 
+    /// The most recent stored response (files are newest-first).
+    pub fn latest(
+        &self,
+        workspace_id: &str,
+        request_id: &str,
+    ) -> Result<Option<StoredHttpResponse>, VoleeoError> {
+        Ok(self.read_all(workspace_id, request_id)?.into_iter().next())
+    }
+
     pub fn clear(&self, workspace_id: &str, request_id: &str) -> Result<(), VoleeoError> {
         let entries = self.read_all(workspace_id, request_id)?;
         self.remove_body_files(workspace_id, &entries);
         let path = self.file_path(workspace_id, request_id)?;
         if path.exists() {
             std::fs::remove_file(&path).map_err(|e| VoleeoError::Storage(e.to_string()))?;
+        }
+        if let Ok(idx) = self.index_path(workspace_id, request_id) {
+            let _ = std::fs::remove_file(idx);
         }
         Ok(())
     }
@@ -381,6 +442,7 @@ mod tests {
             redirect_warning: None,
             captured_cookies: vec![],
             attached_cookies: vec![],
+            sse_frames: vec![],
         }
     }
 
@@ -421,6 +483,34 @@ mod tests {
         store.clear("ws", "req").unwrap();
         let list = store.list("ws", "req").unwrap();
         assert_eq!(list.len(), 0);
+    }
+
+    #[test]
+    fn list_served_from_index_without_touching_heavy_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = ResponseStore::new(dir.path()).unwrap();
+        store.append("ws", "req", dummy_response("req"), 5).unwrap();
+        store.append("ws", "req", dummy_response("req"), 5).unwrap();
+
+        // Delete the ring-buffer file; `list` must still answer from the index —
+        // proving it never parses the heavy entries.
+        std::fs::remove_file(store.file_path("ws", "req").unwrap()).unwrap();
+        let list = store.list("ws", "req").unwrap();
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[0].status, 200);
+    }
+
+    #[test]
+    fn list_backfills_index_for_history_predating_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = ResponseStore::new(dir.path()).unwrap();
+        store.append("ws", "req", dummy_response("req"), 5).unwrap();
+        // Simulate an old store: index missing, only the heavy file present.
+        std::fs::remove_file(store.index_path("ws", "req").unwrap()).unwrap();
+
+        assert_eq!(store.list("ws", "req").unwrap().len(), 1);
+        // The fallback wrote the index, so it's there for next time.
+        assert!(store.index_path("ws", "req").unwrap().exists());
     }
 
     fn windowed_store() -> (tempfile::TempDir, ResponseStore, String) {
