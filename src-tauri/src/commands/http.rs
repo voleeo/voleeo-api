@@ -206,6 +206,8 @@ pub async fn send_request(
             status_text,
             headers,
             events,
+            captured_cookies,
+            attached_cookies,
         } => {
             let _ = frame_app.emit(
                 "sse:open",
@@ -219,6 +221,8 @@ pub async fn send_request(
             );
             if let Ok(mut a) = sink_accum.lock() {
                 a.open(status, status_text, headers, events);
+                // Preserve Set-Cookie/sent cookies through a cancel/interrupt rebuild.
+                a.set_cookies(captured_cookies, attached_cookies);
             }
             // Measure the first batch's window from stream open, not sink build.
             if let Ok(mut b) = sink_batch.lock() {

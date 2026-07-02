@@ -46,6 +46,9 @@ function resetWorkspaceStores() {
   import("../git")
     .then(({ useGitStore }) => useGitStore.getState().reset())
     .catch(() => {})
+  import("../sse")
+    .then(({ useSseStore }) => useSseStore.getState().reset())
+    .catch(() => {})
 }
 
 /**

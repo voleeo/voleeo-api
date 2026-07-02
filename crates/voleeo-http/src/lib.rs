@@ -27,6 +27,8 @@ pub enum SseEvent {
         status_text: String,
         headers: Vec<HttpResponseHeader>,
         events: Vec<TimelineEvent>,
+        captured_cookies: Vec<StoredCookie>,
+        attached_cookies: Vec<StoredCookie>,
     },
     Frame {
         frame: SseFrame,
@@ -478,6 +480,32 @@ mod tests {
         assert_eq!(got[0].data, "{\"n\":1}");
         assert_eq!(got[0].seq, 0);
         assert_eq!(got[1].seq, 1);
+    }
+
+    #[tokio::test]
+    async fn send_without_sink_parses_sse_frames_and_terminates() {
+        // A text/event-stream with no live sink (plain `send`, e.g. MCP) must still
+        // parse frames into the response and NOT loop forever buffering the body.
+        let body = "data: {\"n\":1}\n\ndata: {\"n\":2}\n\n";
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        )
+        .into_bytes();
+        let port = spawn_server(response).await;
+        let ex = HttpExecutor::new().unwrap();
+        let req = bare_request(&format!("http://127.0.0.1:{port}/"), "GET");
+        let resp = ex.send(&req, Vec::new(), Vec::new()).await.unwrap();
+
+        assert_eq!(resp.status, 200);
+        assert_eq!(resp.body, "", "SSE body isn't buffered into the body field");
+        assert_eq!(resp.sse_frames.len(), 2, "frames parsed without a sink");
+        assert_eq!(resp.sse_frames[0].data, "{\"n\":1}");
+        assert_eq!(resp.sse_frames[0].seq, 0);
+        assert_eq!(resp.sse_frames[1].seq, 1);
+        // 7 data bytes per frame → cumulative size, not the empty body.
+        assert_eq!(resp.body_size, 14);
     }
 
     #[tokio::test]

@@ -1,5 +1,6 @@
 import { Dot } from "@/components/Dot"
 import { HistoryTag, StatusPill } from "@/components/ResponseHeader"
+import { statusTextClass } from "@/components/tokens"
 import { Spinner } from "@/components/ui/spinner"
 import { cn } from "@/lib/utils"
 import type { SseOpen } from "@/store/sse"
@@ -7,23 +8,13 @@ import type { HttpResponse } from "../../../../../packages/types/bindings"
 import { formatBytes, formatDuration } from "./format"
 import { RedirectWarningBadge } from "./RedirectWarningBadge"
 
-function statusColor(status: number): { className: string; textClass: string } {
-  if (status < 300)
-    return { className: "border-success bg-surface", textClass: "text-success" }
-  if (status < 400)
-    return {
-      className: "border-amber-500/80 bg-surface",
-      textClass: "text-amber-500",
-    }
-  if (status < 500)
-    return {
-      className: "border-amber-500/60 bg-surface",
-      textClass: "text-amber-500",
-    }
-  return {
-    className: "border-destructive bg-surface",
-    textClass: "text-destructive",
-  }
+// Border mirrors statusTextClass's tiers (components/tokens.ts) — one source
+// for the status→color mapping, incl. status 0 (no response) → red.
+function statusBorderClass(status: number): string {
+  if (status < 100) return "border-destructive"
+  if (status < 300) return "border-success"
+  if (status < 500) return "border-warn/70"
+  return "border-destructive"
 }
 
 function StatusAndStats({
@@ -37,10 +28,15 @@ function StatusAndStats({
   durationMs: number
   bytes: number
 }) {
-  const c = statusColor(status)
   return (
     <>
-      <StatusPill className={cn(c.className, c.textClass)}>
+      <StatusPill
+        className={cn(
+          "bg-surface",
+          statusBorderClass(status),
+          statusTextClass(status),
+        )}
+      >
         {status} {statusText || "—"}
       </StatusPill>
       <div className="flex items-center font-mono text-[0.75rem] text-muted min-w-0">

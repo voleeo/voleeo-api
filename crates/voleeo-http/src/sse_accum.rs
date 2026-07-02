@@ -1,5 +1,7 @@
 use std::collections::VecDeque;
-use voleeo_core::{HttpResponse, HttpResponseHeader, HttpTiming, SseFrame, TimelineEvent};
+use voleeo_core::{
+    HttpResponse, HttpResponseHeader, HttpTiming, SseFrame, StoredCookie, TimelineEvent,
+};
 
 /// Most kept SSE frames / per-frame timeline rows per run — caps live memory and
 /// history-YAML size so an endless stream can't grow unboundedly.
@@ -21,9 +23,17 @@ pub struct SseAccum {
     /// Cumulative frame-data bytes received — kept even as old frames are capped,
     /// so the response "size" reflects the whole stream, not just what's retained.
     bytes: u32,
+    /// Cookies captured/sent during the stream, carried so a cancelled/interrupted
+    /// rebuild preserves them like a naturally-finished response does.
+    captured_cookies: Vec<StoredCookie>,
+    attached_cookies: Vec<StoredCookie>,
 }
 
 impl SseAccum {
+    /// Frame/row cap — the no-sink SSE read in `executor.rs` stops here so an
+    /// endless stream terminates.
+    pub const FRAME_CAP: usize = FRAME_CAP;
+
     /// Record the response line + headers + connection-setup timeline (once,
     /// before the first frame).
     pub fn open(
@@ -50,6 +60,14 @@ impl SseAccum {
         if self.frames.len() > FRAME_CAP {
             self.frames.pop_front();
         }
+    }
+
+    /// Store the cookies captured/sent for the stream, so a cancelled or
+    /// interrupted rebuild keeps them (a natural finish reads them off the
+    /// executor's `HttpResponse`).
+    pub fn set_cookies(&mut self, captured: Vec<StoredCookie>, attached: Vec<StoredCookie>) {
+        self.captured_cookies = captured;
+        self.attached_cookies = attached;
     }
 
     /// Did we capture an SSE stream? (False for a plain response whose body was
@@ -133,8 +151,8 @@ impl SseAccum {
             },
             events,
             redirect_warning: None,
-            captured_cookies: Vec::new(),
-            attached_cookies: Vec::new(),
+            captured_cookies: std::mem::take(&mut self.captured_cookies),
+            attached_cookies: std::mem::take(&mut self.attached_cookies),
             sse_frames: self.frames.into_iter().collect(),
         }
     }
@@ -201,6 +219,38 @@ mod tests {
         let last = resp.events.last().unwrap();
         assert_eq!(last.kind, "error");
         assert_eq!(last.text, "Body stream failed");
+    }
+
+    #[test]
+    fn cancelled_response_preserves_captured_cookies() {
+        let mut a = SseAccum::default();
+        a.open(200, "OK".into(), vec![], vec![setup("config")]);
+        let cookie = StoredCookie {
+            id: "c".into(),
+            domain: "example.com".into(),
+            host_only: true,
+            path: "/".into(),
+            name: "session".into(),
+            value: "abc".into(),
+            value_encrypted: false,
+            secure: false,
+            http_only: false,
+            same_site: None,
+            expires: None,
+            created_at: String::new(),
+            updated_at: String::new(),
+        };
+        a.set_cookies(vec![cookie.clone()], vec![cookie.clone()]);
+        let (f, t) = frame(0);
+        a.frame(f, t);
+        let resp = a.into_cancelled_response("req");
+        assert_eq!(resp.captured_cookies.len(), 1, "Set-Cookie survives cancel");
+        assert_eq!(resp.captured_cookies[0].name, "session");
+        assert_eq!(
+            resp.attached_cookies.len(),
+            1,
+            "sent cookie survives cancel"
+        );
     }
 
     #[test]

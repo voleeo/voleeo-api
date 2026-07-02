@@ -28,6 +28,8 @@ export function SseStreamTab({
     pin,
     recomputeStick,
     onWheel,
+    onPointerDown,
+    onKeyDown,
     scrollToBottom,
   } = useStickToBottom()
   const virt = useVirtualizer({
@@ -43,9 +45,10 @@ export function SseStreamTab({
   useEffect(() => virt.measure(), [fontSize])
 
   // Re-pin on real content changes — the newest seq (changes every batch even at
-  // the cap) and an expand (open.size) — never on measurement jitter.
+  // the cap) and an expand (open.size) — never on measurement jitter. Gated on
+  // `loading` so a finished/historical stream never yanks the scroll.
   const lastSeq = filtered.length > 0 ? filtered[filtered.length - 1].seq : -1
-  useFollowTail(pin, stick, `${lastSeq}:${open.size}`)
+  useFollowTail(pin, stick, `${lastSeq}:${open.size}`, loading)
 
   // A filter/query relayout (and first mount) fires no scroll event — re-derive
   // stick/atBottom. New rows don't need it: live-follow's programmatic scroll
@@ -88,6 +91,8 @@ export function SseStreamTab({
           ref={parentRef}
           onScroll={recomputeStick}
           onWheel={onWheel}
+          onPointerDown={onPointerDown}
+          onKeyDown={onKeyDown}
           className="h-full overflow-y-auto"
         >
           {empty ? (

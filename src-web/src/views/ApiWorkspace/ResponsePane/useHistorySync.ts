@@ -1,5 +1,5 @@
 import { emit, listen } from "@tauri-apps/api/event"
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { EVENTS } from "@/config/events"
 import { useHttpStore } from "@/store/http"
 import type { HttpResponse } from "../../../../../packages/types/bindings"
@@ -45,6 +45,9 @@ export function useHistorySync({
   const [isLatestHistory, setIsLatestHistory] = useState(false)
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyChecking, setHistoryChecking] = useState(false)
+  // Guards async resolves against a request/workspace switch mid-fetch.
+  const activeRef = useRef({ ws: activeWorkspaceId, req: activeRequestId })
+  activeRef.current = { ws: activeWorkspaceId, req: activeRequestId }
 
   const resetSelection = useCallback(() => {
     setHistoricalResponse(null)
@@ -184,6 +187,12 @@ export function useHistorySync({
           activeRequestId,
           responseId,
         )
+        if (
+          activeRef.current.ws !== activeWorkspaceId ||
+          activeRef.current.req !== activeRequestId
+        )
+          return
+
         if (res.status === "ok" && res.data) {
           setHistoricalResponse(res.data.response)
           setSelectedHistoryId(responseId)

@@ -39,6 +39,7 @@ interface SseStore {
   setOpen: (requestId: string, open: SseOpen, events: TimelineEvent[]) => void
   appendFrames: (requestId: string, batch: SseFrameRow[]) => void
   clear: (requestId: string) => void
+  reset: () => void
 }
 
 /** One coalesced frame and its timeline row, as the backend batches them. */
@@ -103,4 +104,5 @@ export const useSseStore = create<SseStore>((set) => ({
       delete bytes[requestId]
       return { frames, timeline, open, bytes }
     }),
+  reset: () => set({ frames: {}, timeline: {}, open: {}, bytes: {} }),
 }))

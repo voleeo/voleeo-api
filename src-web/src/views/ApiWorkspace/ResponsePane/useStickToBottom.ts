@@ -50,6 +50,26 @@ export function useStickToBottom() {
     [setFollowing],
   )
 
+  // Scrollbar drags and keyboard scrolls fire no wheel event — detach on the
+  // gestures themselves. scrollTop heuristics stay off: the virtualizer's own
+  // scroll writes would misread as user scrolls. If the user ends up back at
+  // the bottom, recomputeStick (onScroll) re-attaches.
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      const el = e.currentTarget as HTMLElement
+      if (e.nativeEvent.offsetX >= el.clientWidth) setFollowing(false)
+    },
+    [setFollowing],
+  )
+
+  const onKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "PageUp" || e.key === "Home" || e.key === "ArrowUp")
+        setFollowing(false)
+    },
+    [setFollowing],
+  )
+
   const scrollToBottom = useCallback(() => {
     pin()
     setFollowing(true)
@@ -62,6 +82,8 @@ export function useStickToBottom() {
     pin,
     recomputeStick,
     onWheel,
+    onPointerDown,
+    onKeyDown,
     scrollToBottom,
   }
 }

@@ -1,14 +1,12 @@
-import { useEffect, useMemo, useState } from "react"
+import { useMemo } from "react"
 import { Checkbox } from "@/components/ui/checkbox"
+import { useResponseSummaries } from "@/hooks/useResponseSummaries"
 import { useFolderRunStore } from "@/store/folderRun"
 import { useHttpStore } from "@/store/http"
 import type { HttpRequest } from "@/store/requests"
 import { useUiStore } from "@/store/workspace"
-import { commands } from "../../../../../packages/types/bindings"
 import { FolderRunRow } from "./FolderRunRow"
 import type { FolderPathSegment } from "./useStoredSend"
-
-type Summary = { status: number; totalMs: number }
 
 export function FolderRunList({
   ordered,
@@ -25,34 +23,7 @@ export function FolderRunList({
 
   const ids = useMemo(() => ordered.map((r) => r.id), [ordered])
 
-  const [summaries, setSummaries] = useState<Record<string, Summary>>({})
-  useEffect(() => {
-    if (!workspaceId) return
-    let cancelled = false
-    Promise.all(
-      ids.map((id) =>
-        commands.responseList(workspaceId, id).then((res) =>
-          res.status === "ok" && res.data.length > 0
-            ? ([
-                id,
-                {
-                  status: res.data[0].status,
-                  totalMs: res.data[0].totalMs ?? 0,
-                },
-              ] as const)
-            : null,
-        ),
-      ),
-    ).then((results) => {
-      if (cancelled) return
-      const next: Record<string, Summary> = {}
-      for (const r of results) if (r) next[r[0]] = r[1]
-      setSummaries(next)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [workspaceId, ids])
+  const summaries = useResponseSummaries(workspaceId, ids)
 
   const liveMax = useHttpStore((s) =>
     ordered.reduce(

@@ -2,7 +2,8 @@ use crate::fmt::{fmt_age, fmt_bytes, fmt_dur_ms, http_error_message, push_event,
 use crate::redirect::{compute_redirect_warning, drain_redirect_hops, RedirectHop};
 use crate::sse::{RawFrame, SseDecoder};
 use crate::{
-    HttpExecutor, SseEvent, SseSink, DNS_OVERRIDES, MAX_REDIRECTS, POOL_IDLE_TIMEOUT, SSE_SINK,
+    HttpExecutor, SseAccum, SseEvent, SseSink, DNS_OVERRIDES, MAX_REDIRECTS, POOL_IDLE_TIMEOUT,
+    SSE_SINK,
 };
 use base64::Engine;
 use futures_util::StreamExt;
@@ -516,35 +517,91 @@ impl HttpExecutor {
                 && h.value.to_ascii_lowercase().contains("text/event-stream")
         });
         // SSE streams have no natural EOF, so buffering the body would hang
-        // forever. With a live sink we parse frames and push each as it lands,
-        // leaving the stored body empty — the frames are the content.
+        // forever. We parse frames as they land, leaving the stored body empty —
+        // the frames are the content. A live sink (streaming send) is an optional
+        // tap; without one (plain `send`, MCP) we still parse frames into a local
+        // accumulator so the response carries `sse_frames` and terminates at the
+        // frame cap instead of reading forever.
         let sse_sink = SSE_SINK.try_with(Clone::clone).ok().flatten();
         let mut stream = response.bytes_stream();
 
-        let (body, body_size, body_is_text) = if let (true, Some(sink)) = (is_sse, sse_sink) {
-            // Hand the command the status/headers/timeline up front so a stream
-            // cancelled mid-flight can still be rebuilt into a real response.
-            sink(SseEvent::Open {
-                status: status_code,
-                status_text: status_text.clone(),
-                headers: headers.clone(),
-                events: events.clone(),
-            });
-            let mut decoder = SseDecoder::default();
-            let mut seq: u32 = 0;
-            while let Some(chunk) = stream.next().await {
-                let chunk = match chunk {
-                    Ok(c) => c,
-                    Err(e) => return Err(body_stream_err(&mut events, started, e)),
-                };
-                for raw in decoder.push(&chunk) {
+        let (body, body_size, body_is_text, no_sink_frames) = if is_sse {
+            if let Some(sink) = sse_sink {
+                // Hand the command the status/headers/timeline up front so a stream
+                // cancelled mid-flight can still be rebuilt into a real response.
+                sink(SseEvent::Open {
+                    status: status_code,
+                    status_text: status_text.clone(),
+                    headers: headers.clone(),
+                    events: events.clone(),
+                    captured_cookies: captured_cookies.clone(),
+                    attached_cookies: attached_cookies.clone(),
+                });
+                let mut decoder = SseDecoder::default();
+                let mut seq: u32 = 0;
+                while let Some(chunk) = stream.next().await {
+                    let chunk = match chunk {
+                        Ok(c) => c,
+                        Err(e) => return Err(body_stream_err(&mut events, started, e)),
+                    };
+                    for raw in decoder.push(&chunk) {
+                        push_sse_frame(&sink, &mut seq, started, raw);
+                    }
+                }
+                for raw in decoder.finish() {
                     push_sse_frame(&sink, &mut seq, started, raw);
                 }
+                (String::new(), 0u32, true, None)
+            } else {
+                // No live sink (plain `send`, MCP): accumulate frames locally,
+                // capped, so the response carries them and the read terminates
+                // instead of looping on a stream that never EOFs. Cancellation and
+                // timeout still abort via the outer `select!` in `send_scoped`.
+                let mut decoder = SseDecoder::default();
+                let mut frames: Vec<SseFrame> = Vec::new();
+                let mut bytes: u32 = 0;
+                let mut push = |frames: &mut Vec<SseFrame>, raw: RawFrame| {
+                    bytes = bytes.saturating_add(raw.data.len() as u32);
+                    frames.push(SseFrame {
+                        seq: frames.len() as u32,
+                        event: raw.event,
+                        data: raw.data,
+                        last_event_id: raw.id,
+                        retry: raw.retry,
+                        at_ms: started.elapsed().as_secs_f64() * 1000.0,
+                    });
+                };
+                let mut capped = false;
+                'read: while let Some(chunk) = stream.next().await {
+                    let chunk = match chunk {
+                        Ok(c) => c,
+                        Err(e) => return Err(body_stream_err(&mut events, started, e)),
+                    };
+                    for raw in decoder.push(&chunk) {
+                        push(&mut frames, raw);
+                        if frames.len() >= SseAccum::FRAME_CAP {
+                            capped = true;
+                            break 'read;
+                        }
+                    }
+                }
+                if !capped {
+                    for raw in decoder.finish() {
+                        push(&mut frames, raw);
+                    }
+                } else {
+                    push_event(
+                        &mut events,
+                        started,
+                        "info",
+                        format!(
+                            "SSE frame cap reached ({}); stopped reading",
+                            SseAccum::FRAME_CAP
+                        ),
+                    );
+                }
+                (String::new(), bytes, true, Some(frames))
             }
-            for raw in decoder.finish() {
-                push_sse_frame(&sink, &mut seq, started, raw);
-            }
-            (String::new(), 0u32, true)
         } else {
             let mut body_bytes: Vec<u8> = Vec::new();
             while let Some(chunk) = stream.next().await {
@@ -572,7 +629,7 @@ impl HttpExecutor {
                     }
                 }
             };
-            (body, body_size, body_is_text)
+            (body, body_size, body_is_text, None)
         };
 
         let t_total_ms = now_ms();
@@ -595,7 +652,7 @@ impl HttpExecutor {
 
         let redirect_warning = compute_redirect_warning(request, &host, &redirect_hops);
 
-        Ok(HttpResponse {
+        let response = HttpResponse {
             request_id,
             status: status_code,
             status_text,
@@ -619,10 +676,12 @@ impl HttpExecutor {
             redirect_warning,
             captured_cookies,
             attached_cookies,
-            // Frames are accumulated by the command's sink so a cancelled stream
-            // still keeps them; the executor leaves this empty.
-            sse_frames: Vec::new(),
-        })
+            // Streamed sends fill this via the command's `SseAccum`; the no-sink
+            // SSE path sets it below. Empty for plain (non-SSE) bodies.
+            sse_frames: no_sink_frames.unwrap_or_default(),
+        };
+
+        Ok(response)
     }
 }
 

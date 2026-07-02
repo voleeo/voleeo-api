@@ -2,6 +2,7 @@ import type { RefObject } from "react"
 import { createPortal } from "react-dom"
 import { ActiveIndicator } from "@/components/ActiveIndicator"
 import { Glyph } from "@/components/Glyph"
+import { statusTextClass } from "@/components/tokens"
 import { cn } from "@/lib/utils"
 import type { StoredHttpResponseSummary } from "../../../../../packages/types/bindings"
 import { formatDuration } from "./format"
@@ -114,13 +115,7 @@ export function HistoryDropdown({
                 <span
                   className={cn(
                     "font-mono text-[0.714rem] font-bold shrink-0",
-                    isSelected
-                      ? "text-accent"
-                      : item.status < 300
-                        ? "text-success"
-                        : item.status < 500
-                          ? "text-amber-500"
-                          : "text-destructive",
+                    isSelected ? "text-accent" : statusTextClass(item.status),
                   )}
                 >
                   {item.status}

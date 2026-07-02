@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { EmptyPaneShortcuts } from "@/components/EmptyPaneShortcuts"
 import { ResponseHeader } from "@/components/ResponseHeader"
 import { SHORTCUTS } from "@/config/shortcuts"
@@ -24,6 +24,7 @@ import { TimelineTab } from "./TimelineTab"
 import { useHistorySync } from "./useHistorySync"
 
 const NO_FRAMES: never[] = []
+const NO_EVENTS: never[] = []
 
 const EMPTY_ROWS = [
   { label: "Send Active Request", combo: SHORTCUTS.SEND_REQUEST },
@@ -65,6 +66,9 @@ export function ResponsePane() {
   })
 
   const response = historicalResponse ?? liveResponse
+  // Live (streaming) view vs a stored/historical one — every live selector
+  // below keys off this single predicate so the pane can't split-brain.
+  const isLive = loading && !historicalResponse
 
   const liveFrames = useSseStore((s) =>
     activeRequestId ? (s.frames[activeRequestId] ?? NO_FRAMES) : NO_FRAMES,
@@ -79,11 +83,11 @@ export function ResponsePane() {
   const isSse =
     sseFrames.length > 0 ||
     isSseResponse(response ?? null) ||
-    (loading && liveFrames.length > 0)
+    (isLive && liveFrames.length > 0)
   const sseView = useSseView(sseFrames, activeRequestId ?? null)
 
   const liveTimingMs =
-    loading && !historicalResponse && liveFrames.length > 0
+    isLive && liveFrames.length > 0
       ? liveFrames[liveFrames.length - 1].atMs
       : null
   const timingMs = liveTimingMs ?? response?.timing.totalMs ?? null
@@ -97,46 +101,53 @@ export function ResponsePane() {
   const liveBytes = useSseStore((s) =>
     activeRequestId ? (s.bytes[activeRequestId] ?? 0) : 0,
   )
-  const liveHeader = loading && !historicalResponse ? sseOpen : undefined
+  const liveHeader = isLive ? sseOpen : undefined
   const timelineEvents =
-    loading && !historicalResponse && liveTimeline?.length
+    isLive && liveTimeline?.length
       ? liveTimeline
-      : (response?.events ?? [])
+      : (response?.events ?? NO_EVENTS)
 
   const streamError =
     response?.events?.find((e) => e.kind === "error")?.text ?? null
 
-  const liveSseResponse: HttpResponse | undefined =
-    loading && !historicalResponse && sseOpen && activeRequestId
-      ? {
-          requestId: activeRequestId,
-          status: sseOpen.status,
-          statusText: sseOpen.statusText,
-          headers: sseOpen.headers,
-          body: "",
-          bodySize: liveBytes,
-          bodyIsText: true,
-          timing: {
-            dnsMs: 0,
-            connectMs: 0,
-            tlsMs: 0,
-            firstByteMs: 0,
-            downloadMs: 0,
-            totalMs: liveTimingMs ?? 0,
-          },
-          events: timelineEvents,
-        }
-      : undefined
+  // Memoized so Headers/Cookies/StatusLine keep a stable reference across the ~30 renders/s a fast stream produces.
+  const liveSseResponse: HttpResponse | undefined = useMemo(
+    () =>
+      isLive && sseOpen && activeRequestId
+        ? {
+            requestId: activeRequestId,
+            status: sseOpen.status,
+            statusText: sseOpen.statusText,
+            headers: sseOpen.headers,
+            body: "",
+            bodySize: liveBytes,
+            bodyIsText: true,
+            timing: {
+              dnsMs: 0,
+              connectMs: 0,
+              tlsMs: 0,
+              firstByteMs: 0,
+              downloadMs: 0,
+              totalMs: liveTimingMs ?? 0,
+            },
+            events: timelineEvents,
+          }
+        : undefined,
+    [isLive, sseOpen, activeRequestId, liveBytes, liveTimingMs, timelineEvents],
+  )
 
-  const tabResponse =
-    loading && !historicalResponse
-      ? (liveSseResponse ?? null)
-      : (response ?? null)
+  const tabResponse = isLive ? (liveSseResponse ?? null) : (response ?? null)
 
   const [tab, setTab] = useState<TabId>("body")
   const [htmlView, setHtmlView] = useState<HtmlView>("preview")
 
   const sseTools = isSse && tab === "body"
+
+  const headerCount = tabResponse?.headers.length ?? 0
+  const cookieCount = useMemo(
+    () => (tabResponse ? collectReceivedRows(tabResponse).length : 0),
+    [tabResponse],
+  )
 
   if (activeRequestId && !response && sseFrames.length === 0) {
     if (historyLoading) return <ResponseLoading />
@@ -144,8 +155,6 @@ export function ResponsePane() {
     if (!loading && !error) return <EmptyPaneShortcuts rows={EMPTY_ROWS} />
   }
 
-  const headerCount = tabResponse?.headers.length ?? 0
-  const cookieCount = tabResponse ? collectReceivedRows(tabResponse).length : 0
   const isHtml = isHtmlResponse(response ?? null)
 
   return (
@@ -216,10 +225,7 @@ export function ResponsePane() {
                 sseView.raw ? (
                   <SseRawView frames={sseView.filtered} />
                 ) : (
-                  <SseStreamTab
-                    view={sseView}
-                    loading={loading && !historicalResponse}
-                  />
+                  <SseStreamTab view={sseView} loading={isLive} />
                 )
               ) : (
                 <BodyTab

@@ -67,6 +67,8 @@ export function TimelineTab({
     pin,
     recomputeStick,
     onWheel,
+    onPointerDown,
+    onKeyDown,
     scrollToBottom,
   } = useStickToBottom()
 
@@ -152,6 +154,8 @@ export function TimelineTab({
           ref={parentRef}
           onScroll={recomputeStick}
           onWheel={onWheel}
+          onPointerDown={onPointerDown}
+          onKeyDown={onKeyDown}
           className="h-full overflow-auto font-mono text-[0.786rem] leading-[1.7]"
         >
           {filtered.length === 0 ? (

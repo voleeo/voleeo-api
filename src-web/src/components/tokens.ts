@@ -59,8 +59,16 @@ export function gitChangeColor(change: GitChange): string {
 export function statusDotClass(status: number): string {
   if (status < 100) return "bg-destructive"
   if (status < 300) return "bg-success"
-  if (status < 500) return "bg-amber-500"
+  if (status < 500) return "bg-warn"
   return "bg-destructive"
+}
+
+/** Text-color companion to statusDotClass — one source for the status tiers. */
+export function statusTextClass(status: number): string {
+  if (status < 100) return "text-destructive"
+  if (status < 300) return "text-success"
+  if (status < 500) return "text-warn"
+  return "text-destructive"
 }
 
 /** Single-letter badge for a git change (M/A/D/R/U/!). */
