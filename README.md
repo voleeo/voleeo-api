@@ -1,6 +1,8 @@
 <div align="center">
   <img src=".github/assets/voleeo.png" alt="Voleeo logo" width="160" />
 
+<h4 align="center">⭐ Star the repo to show your support 🙏</h4>
+
 [![CI](https://github.com/coffeein-dev/voleeo-api/actions/workflows/ci.yml/badge.svg)](https://github.com/coffeein-dev/voleeo-api/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
