@@ -1269,6 +1269,12 @@ export type HttpResponse_Deserialize = {
 	 *  across hops, deduped by id.
 	 */
 	attachedCookies?: StoredCookie_Deserialize[],
+	/**
+	 *  Parsed frames for a `text/event-stream` response. Empty for normal
+	 *  responses; the body stays empty when this is populated. Persisted with
+	 *  the response so each run keeps its stream in history.
+	 */
+	sseFrames?: SseFrame_Deserialize[],
 };
 
 /**  Result of executing a saved `HttpRequest` in-app (not the raw HTTP `Response` type). */
@@ -1312,6 +1318,12 @@ export type HttpResponse_Serialize = {
 	 *  across hops, deduped by id.
 	 */
 	attachedCookies: StoredCookie_Serialize[],
+	/**
+	 *  Parsed frames for a `text/event-stream` response. Empty for normal
+	 *  responses; the body stays empty when this is populated. Persisted with
+	 *  the response so each run keeps its stream in history.
+	 */
+	sseFrames?: SseFrame_Serialize[],
 };
 
 /**
@@ -1736,6 +1748,46 @@ export type SendOverrides_Serialize = {
 export type SignedAuthParts = {
 	headers: RequestParameter[],
 	query: RequestParameter[],
+};
+
+/**
+ *  One frame parsed from a `text/event-stream` response and pushed to the UI
+ *  live. `seq` is the 0-based arrival order within a send (the React key);
+ *  `data` joins multiple `data:` lines with `\n`. Omitted fields were absent in
+ *  the frame.
+ */
+export type SseFrame = SseFrame_Serialize | SseFrame_Deserialize;
+
+/**
+ *  One frame parsed from a `text/event-stream` response and pushed to the UI
+ *  live. `seq` is the 0-based arrival order within a send (the React key);
+ *  `data` joins multiple `data:` lines with `\n`. Omitted fields were absent in
+ *  the frame.
+ */
+export type SseFrame_Deserialize = {
+	seq: number,
+	event?: string | null,
+	data: string,
+	lastEventId?: string | null,
+	/**  SSE reconnect hint (ms). `u32` keeps it JS-number / specta safe. */
+	retry?: number | null,
+	atMs: number | null,
+};
+
+/**
+ *  One frame parsed from a `text/event-stream` response and pushed to the UI
+ *  live. `seq` is the 0-based arrival order within a send (the React key);
+ *  `data` joins multiple `data:` lines with `\n`. Omitted fields were absent in
+ *  the frame.
+ */
+export type SseFrame_Serialize = {
+	seq: number,
+	event?: string | null,
+	data: string,
+	lastEventId?: string | null,
+	/**  SSE reconnect hint (ms). `u32` keeps it JS-number / specta safe. */
+	retry?: number | null,
+	atMs: number | null,
 };
 
 /**

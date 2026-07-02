@@ -29,7 +29,7 @@ export function WelcomeScreen() {
   }
 
   return (
-    <div className="h-full flex bg-bg">
+    <div className="h-full flex">
       <HomeView onSelect={setMode} />
     </div>
   )

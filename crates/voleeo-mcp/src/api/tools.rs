@@ -1,4 +1,4 @@
-use crate::protocol::{bool_schema, obj_schema, str_schema, ToolDef};
+use crate::protocol::{bool_schema, num_schema, obj_schema, str_schema, ToolDef};
 use serde_json::Value;
 
 /// Optional `reveal` arg shared by read tools that mask secrets by default.
@@ -184,6 +184,51 @@ pub(super) fn definitions() -> Vec<ToolDef> {
                     ("responseId", "Response ID", str_schema()),
                 ],
                 &[],
+            ),
+        },
+        ToolDef {
+            name: "sse.tail".into(),
+            description: "Last N parsed Server-Sent Events frames from a request's stored response (the latest unless `responseId` is given). Each frame is {seq,event,data,atMs}.".into(),
+            input_schema: obj_schema(
+                &[
+                    ("workspaceId", "Workspace ID", str_schema()),
+                    ("requestId", "Request ID", str_schema()),
+                ],
+                &[
+                    ("responseId", "Stored response ID (default: latest)", str_schema()),
+                    ("limit", "Max frames to return (default 50)", num_schema()),
+                    ("event", "Only frames with this event type (e.g. \"message\")", str_schema()),
+                ],
+            ),
+        },
+        ToolDef {
+            name: "sse.summary".into(),
+            description: "Overview of a stored SSE response: status, frame count, total received, byte total, duration, and per-event-type counts — without dumping every frame.".into(),
+            input_schema: obj_schema(
+                &[
+                    ("workspaceId", "Workspace ID", str_schema()),
+                    ("requestId", "Request ID", str_schema()),
+                ],
+                &[(
+                    "responseId",
+                    "Stored response ID (default: latest)",
+                    str_schema(),
+                )],
+            ),
+        },
+        ToolDef {
+            name: "sse.assemble".into(),
+            description: "Concatenate SSE frame data into one string — e.g. reassemble an LLM token stream. With `field`, parse each frame's data as JSON and join that field (e.g. \"delta\"); without it, join raw data with newlines.".into(),
+            input_schema: obj_schema(
+                &[
+                    ("workspaceId", "Workspace ID", str_schema()),
+                    ("requestId", "Request ID", str_schema()),
+                ],
+                &[
+                    ("responseId", "Stored response ID (default: latest)", str_schema()),
+                    ("field", "JSON field to extract from each frame's data (e.g. \"delta\", \"content\")", str_schema()),
+                    ("event", "Only frames with this event type", str_schema()),
+                ],
             ),
         },
         ToolDef {

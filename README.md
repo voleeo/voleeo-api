@@ -1,6 +1,8 @@
 <div align="center">
   <img src=".github/assets/voleeo.png" alt="Voleeo logo" width="160" />
 
+<h4 align="center">⭐ Star the repo to show your support 🙏</h4>
+
 [![CI](https://github.com/coffeein-dev/voleeo-api/actions/workflows/ci.yml/badge.svg)](https://github.com/coffeein-dev/voleeo-api/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
@@ -27,6 +29,9 @@ HTTP, gRPC, WebSocket, and GraphQL — built for the AI era.
 
 Voleeo runs natively on your machine — no browser CORS limits, no payload caps, no 30-second timeouts. 
 Zero telemetry, no account, no cloud lock-in: your workspaces and secrets live on disk and stay there.
+
+- 🐛 [Report a bug](https://github.com/voleeo/voleeo-app/issues/new?template=bug_report.md)
+- 💡 [Request a feature](https://github.com/voleeo/voleeo-app/issues/new?template=feature_request.md)
 
 ### ⚡ Every protocol, one window
 

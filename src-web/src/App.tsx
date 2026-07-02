@@ -6,6 +6,7 @@ import { useDisableNativeAutofill } from "@/hooks/useDisableNativeAutofill"
 import { useGitReveal } from "@/hooks/useGitReveal"
 import { useGrpcSync } from "@/hooks/useGrpcSync"
 import { useMcpSync } from "@/hooks/useMcpSync"
+import { useSseSync } from "@/hooks/useSseSync"
 import { useWsSync } from "@/hooks/useWsSync"
 import { MainLayout } from "@/layout/MainLayout"
 import { StartupParamsSchema } from "@/lib/schemas"
@@ -50,6 +51,7 @@ export default function App() {
   useMcpSync()
   useWsSync()
   useGrpcSync()
+  useSseSync()
   useGitReveal(windowLabel === "main")
   useDisableNativeAutofill()
 
