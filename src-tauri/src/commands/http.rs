@@ -1,13 +1,87 @@
-use tauri::State;
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
+
+use tauri::{AppHandle, Emitter, State};
 use voleeo_core::{
-    AuthConfig, HttpResponse, RequestBody, RequestParameter, StoredCookie, TimelineEvent,
+    AuthConfig, HttpResponse, RequestBody, RequestParameter, SseFrame, StoredCookie, TimelineEvent,
     VoleeoError,
 };
+use voleeo_http::SseAccum;
 
 use crate::commands::cookie::{
     active_jar_id_for_workspace, ingest_captured_cookies, load_active_jar_for_send,
 };
 use crate::state::AppState;
+
+// SSE frames are coalesced into batched `sse:frames` emits — one Tauri event per
+// ~33 ms (or 256 frames) instead of one per frame. A fast stream (LLM token
+// deltas, thousands/s) otherwise floods the IPC channel: the UI can't render that
+// fast, the event backlog grows, and even `cancel_request` — which rides the same
+// channel — can't get through. The accum still records every frame for history.
+const SSE_BATCH_MAX: usize = 256;
+const SSE_FLUSH_MS: u128 = 33;
+
+struct SseBatch {
+    buf: Vec<(SseFrame, TimelineEvent)>,
+    last_flush: Instant,
+}
+
+impl SseBatch {
+    fn new() -> Self {
+        Self {
+            buf: Vec::new(),
+            last_flush: Instant::now(),
+        }
+    }
+}
+
+// Borrowed so a batch serializes straight to the wire — no intermediate
+// `serde_json::Value` tree. `Clone` is required by `emit` and is cheap (the
+// fields are references).
+#[derive(serde::Serialize, Clone)]
+struct SseFrameRow<'a> {
+    frame: &'a SseFrame,
+    timeline: &'a TimelineEvent,
+}
+
+#[derive(serde::Serialize, Clone)]
+struct SseFramesPayload<'a> {
+    #[serde(rename = "requestId")]
+    request_id: &'a str,
+    frames: Vec<SseFrameRow<'a>>,
+}
+
+/// Flush when the batch is full or the time window has passed since the last
+/// emit. Full bounds payload/render cost on a burst; the window keeps a slow
+/// stream's latency near-zero (a sparse frame's `elapsed` already exceeds it).
+fn sse_should_flush(len: usize, elapsed_ms: u128) -> bool {
+    len >= SSE_BATCH_MAX || elapsed_ms >= SSE_FLUSH_MS
+}
+
+/// Emit the buffered frames as one `sse:frames` event, then move them into the
+/// accum. Lock order is batch→accum — the only place both are held at once.
+fn flush_sse_batch(
+    app: &AppHandle,
+    request_id: &str,
+    buf: &mut Vec<(SseFrame, TimelineEvent)>,
+    accum: &Arc<Mutex<SseAccum>>,
+) {
+    if buf.is_empty() {
+        return;
+    }
+    let frames: Vec<SseFrameRow> = buf
+        .iter()
+        .map(|(frame, timeline)| SseFrameRow { frame, timeline })
+        .collect();
+    let _ = app.emit("sse:frames", SseFramesPayload { request_id, frames });
+    if let Ok(mut a) = accum.lock() {
+        for (frame, timeline) in buf.drain(..) {
+            a.frame(frame, timeline);
+        }
+    } else {
+        buf.clear();
+    }
+}
 
 /// Frontend-resolved send-time overrides. Bundled into one struct because
 /// `tauri_specta` caps command arity at 10 args. `cookie_overrides` /
@@ -29,6 +103,7 @@ pub struct SendOverrides {
 #[tauri::command]
 #[specta::specta]
 pub async fn send_request(
+    app: AppHandle,
     state: State<'_, AppState>,
     workspace_id: String,
     request_id: String,
@@ -118,10 +193,122 @@ pub async fn send_request(
     })
     .await
     .map_err(|e| VoleeoError::Storage(e.to_string()))?;
-    let mut resp = state
+
+    let accum: Arc<Mutex<SseAccum>> = Arc::new(Mutex::new(SseAccum::default()));
+    let batch: Arc<Mutex<SseBatch>> = Arc::new(Mutex::new(SseBatch::new()));
+    let frame_app = app.clone();
+    let frame_rid = request_id.clone();
+    let sink_accum = accum.clone();
+    let sink_batch = batch.clone();
+    let sse_sink: voleeo_http::SseSink = Arc::new(move |ev| match ev {
+        voleeo_http::SseEvent::Open {
+            status,
+            status_text,
+            headers,
+            events,
+            captured_cookies,
+            attached_cookies,
+        } => {
+            let _ = frame_app.emit(
+                "sse:open",
+                serde_json::json!({
+                    "requestId": frame_rid,
+                    "status": status,
+                    "statusText": &status_text,
+                    "headers": &headers,
+                    "events": &events,
+                }),
+            );
+            if let Ok(mut a) = sink_accum.lock() {
+                a.open(status, status_text, headers, events);
+                // Preserve Set-Cookie/sent cookies through a cancel/interrupt rebuild.
+                a.set_cookies(captured_cookies, attached_cookies);
+            }
+            // Measure the first batch's window from stream open, not sink build.
+            if let Ok(mut b) = sink_batch.lock() {
+                b.last_flush = Instant::now();
+            }
+        }
+        voleeo_http::SseEvent::Frame { frame, timeline } => {
+            if let Ok(mut b) = sink_batch.lock() {
+                b.buf.push((frame, timeline));
+                if sse_should_flush(b.buf.len(), b.last_flush.elapsed().as_millis()) {
+                    flush_sse_batch(&frame_app, &frame_rid, &mut b.buf, &sink_accum);
+                    b.last_flush = Instant::now();
+                }
+            }
+        }
+    });
+    // The sink only flushes when a frame arrives. A burst that fills less than a
+    // full batch within one window, then a mid-stream quiet gap (the common LLM
+    // "burst then think" shape), would otherwise strand those frames until the
+    // next frame or stream end — the live view freezes for the gap. A periodic
+    // flusher bounds that latency to one window. It no-ops while the sink keeps up
+    // (empty buffer or window not yet elapsed) and for non-SSE sends, and is
+    // stopped before the tail-flush so it can't race the final drain.
+    let (stop_tx, mut stop_rx) = tokio::sync::oneshot::channel::<()>();
+    let tick_batch = batch.clone();
+    let tick_accum = accum.clone();
+    let tick_app = app.clone();
+    let tick_rid = request_id.clone();
+    let ticker = tokio::spawn(async move {
+        let mut iv = tokio::time::interval(std::time::Duration::from_millis(SSE_FLUSH_MS as u64));
+        iv.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            tokio::select! {
+                _ = &mut stop_rx => break,
+                _ = iv.tick() => {
+                    if let Ok(mut b) = tick_batch.lock() {
+                        if !b.buf.is_empty() && b.last_flush.elapsed().as_millis() >= SSE_FLUSH_MS {
+                            flush_sse_batch(&tick_app, &tick_rid, &mut b.buf, &tick_accum);
+                            b.last_flush = Instant::now();
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    let send_result = state
         .executor
-        .send(&req, attach_cookies, dns_overrides)
-        .await?;
+        .send_streamed(&req, attach_cookies, dns_overrides, sse_sink)
+        .await;
+
+    // Stop the ticker and wait for it to exit before draining the tail, so it
+    // can't race the final flush. Frames buffered since the last flush would
+    // otherwise wait for a frame that never comes (stream ended or was cancelled).
+    let _ = stop_tx.send(());
+    let _ = ticker.await;
+    if let Ok(mut b) = batch.lock() {
+        flush_sse_batch(&app, &request_id, &mut b.buf, &accum);
+    }
+    let take_accum = || {
+        accum
+            .lock()
+            .map(|mut g| std::mem::take(&mut *g))
+            .unwrap_or_default()
+    };
+    let mut resp = match send_result {
+        Ok(r) => take_accum().finalize(r),
+        Err(VoleeoError::Cancelled) => {
+            let a = take_accum();
+            if !a.is_sse() {
+                return Err(VoleeoError::Cancelled);
+            }
+            a.into_cancelled_response(&request_id)
+        }
+        Err(e) => {
+            let a = take_accum();
+            if !a.is_sse() {
+                return Err(e);
+            }
+            let message = match &e {
+                VoleeoError::HttpFailed(f) => f.message.clone(),
+                other => other.to_string(),
+            };
+            a.into_interrupted_response(&request_id, message)
+        }
+    };
 
     if !resp.captured_cookies.is_empty() {
         if let Err(e) = ingest_captured_cookies(
@@ -227,4 +414,25 @@ pub async fn sign_auth_headers(
         headers: to_params(headers),
         query: to_params(query),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{sse_should_flush, SSE_BATCH_MAX, SSE_FLUSH_MS};
+
+    #[test]
+    fn flushes_on_full_batch_or_elapsed_window() {
+        assert!(
+            !sse_should_flush(1, 0),
+            "fresh + nearly empty: hold to coalesce"
+        );
+        assert!(
+            sse_should_flush(SSE_BATCH_MAX, 0),
+            "full batch flushes regardless of time"
+        );
+        assert!(
+            sse_should_flush(1, SSE_FLUSH_MS),
+            "window elapsed flushes even a single frame (slow stream stays low-latency)"
+        );
+    }
 }

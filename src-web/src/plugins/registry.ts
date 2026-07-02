@@ -4,6 +4,7 @@ import type {
   Theme,
   VoleeoPlugin,
 } from "@voleeo/plugin-api"
+import { withInheritedData } from "@/views/ApiWorkspace/sendResolution/effectiveRequest"
 import type { BoundRequestAction, BoundTemplateFunction } from "./types"
 
 interface LoadedPlugin {
@@ -71,7 +72,8 @@ class PluginRegistry {
             label: action.label,
             glyph: action.glyph,
             isEnabled: action.isEnabled,
-            onInvoke: (request) => action.onInvoke(ctx, request),
+            onInvoke: (request) =>
+              action.onInvoke(ctx, withInheritedData(request)),
           })
         }
       }

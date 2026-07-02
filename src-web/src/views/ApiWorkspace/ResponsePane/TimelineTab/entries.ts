@@ -1,4 +1,4 @@
-import type { HttpResponse } from "../../../../../../packages/types/bindings"
+import type { TimelineEvent } from "../../../../../../packages/types/bindings"
 
 export type EntryKind =
   | "info"
@@ -49,13 +49,13 @@ function toEntryKind(kind: string): EntryKind {
 }
 
 /**
- * Build display entries from the Rust event log. The executor emits an ordered
- * `events` array (config / send / dns / info / recv / chunk / done) with an
- * `atMs` per row, so the frontend just maps each event into an Entry — no
- * timing reconstruction needed.
+ * Build display entries from the Rust event log — an ordered `events` array
+ * (config / send / dns / info / recv / chunk / done) with an `atMs` per row, so
+ * the frontend just maps each event into an Entry — no timing reconstruction.
+ * Fed either a finished response's events or the live SSE timeline.
  */
-export function buildEntries(response: HttpResponse): Entry[] {
-  return (response.events ?? []).map((e) => ({
+export function buildEntries(events: TimelineEvent[]): Entry[] {
+  return events.map((e) => ({
     elapsedMs: e.atMs ?? 0,
     kind: toEntryKind(e.kind),
     text: e.text,

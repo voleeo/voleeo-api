@@ -7,13 +7,36 @@ mod executor;
 mod fmt;
 mod ntlm;
 mod redirect;
+mod sse;
+mod sse_accum;
+pub use sse_accum::SseAccum;
 
 use redirect::RedirectHop;
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use voleeo_core::{DnsOverride, HttpRequest, HttpResponse, StoredCookie, VoleeoError};
+use voleeo_core::{
+    DnsOverride, HttpRequest, HttpResponse, HttpResponseHeader, SseFrame, StoredCookie,
+    TimelineEvent, VoleeoError,
+};
+
+pub enum SseEvent {
+    Open {
+        status: u16,
+        status_text: String,
+        headers: Vec<HttpResponseHeader>,
+        events: Vec<TimelineEvent>,
+        captured_cookies: Vec<StoredCookie>,
+        attached_cookies: Vec<StoredCookie>,
+    },
+    Frame {
+        frame: SseFrame,
+        timeline: TimelineEvent,
+    },
+}
+
+pub type SseSink = Arc<dyn Fn(SseEvent) + Send + Sync>;
 
 pub(crate) const POOL_IDLE_TIMEOUT: Duration = Duration::from_secs(90);
 pub(crate) const MAX_REDIRECTS: usize = 10;
@@ -35,6 +58,9 @@ tokio::task_local! {
     /// Set by `send_guarded` for AI/MCP-initiated sends; re-evaluated on every
     /// redirect hop because reqwest re-resolves each hop through the resolver.
     pub(crate) static GUARD_INTERNAL: bool;
+    /// Present for `send_streamed`; the body reader pushes each parsed SSE frame
+    /// here instead of buffering. `None` for plain sends.
+    pub(crate) static SSE_SINK: Option<SseSink>;
 }
 
 /// Shared HTTP client: one `reqwest::Client` (and its connection pool) reused
@@ -108,8 +134,29 @@ impl HttpExecutor {
         attach_cookies: Vec<StoredCookie>,
         dns_overrides: Vec<DnsOverride>,
     ) -> Result<HttpResponse, VoleeoError> {
-        self.send_scoped(request, attach_cookies, dns_overrides, false)
+        self.send_scoped(request, attach_cookies, dns_overrides, false, None)
             .await
+    }
+
+    /// Like `send`, but when the response is `text/event-stream` each parsed
+    /// frame is pushed to `sse_sink` live (and the stored body is left empty).
+    /// Non-SSE responses behave exactly like `send`. Cancellation is unchanged —
+    /// `cancel(request.id)` aborts an in-flight stream.
+    pub async fn send_streamed(
+        &self,
+        request: &HttpRequest,
+        attach_cookies: Vec<StoredCookie>,
+        dns_overrides: Vec<DnsOverride>,
+        sse_sink: SseSink,
+    ) -> Result<HttpResponse, VoleeoError> {
+        self.send_scoped(
+            request,
+            attach_cookies,
+            dns_overrides,
+            false,
+            Some(sse_sink),
+        )
+        .await
     }
 
     /// Like `send`, but refuses to connect to link-local / cloud-metadata
@@ -121,7 +168,7 @@ impl HttpExecutor {
         attach_cookies: Vec<StoredCookie>,
         dns_overrides: Vec<DnsOverride>,
     ) -> Result<HttpResponse, VoleeoError> {
-        self.send_scoped(request, attach_cookies, dns_overrides, true)
+        self.send_scoped(request, attach_cookies, dns_overrides, true, None)
             .await
     }
 
@@ -131,6 +178,7 @@ impl HttpExecutor {
         attach_cookies: Vec<StoredCookie>,
         dns_overrides: Vec<DnsOverride>,
         guard_internal: bool,
+        sse_sink: Option<SseSink>,
     ) -> Result<HttpResponse, VoleeoError> {
         let resolved_overrides: Arc<Vec<(String, IpAddr)>> = Arc::new(
             dns_overrides
@@ -163,26 +211,29 @@ impl HttpExecutor {
             }
         }
 
-        let result = GUARD_INTERNAL
+        let result = SSE_SINK
             .scope(
-                guard_internal,
-                REQ_START.scope(
-                    started,
-                    REDIRECT_SINK.scope(
-                        sink_clone,
-                        ATTACH_COOKIES.scope(
-                            attach.clone(),
-                            CAPTURE_SINK.scope(
-                                capture_clone,
-                                ATTACHED_SINK.scope(
-                                    attached_clone,
-                                    DNS_OVERRIDES.scope(resolved_overrides, async {
-                                        tokio::select! {
-                                            biased;
-                                            _ = cancel_rx => Err(VoleeoError::Cancelled),
-                                            r = self.send_with_auth_retry(request, started, sink, &attach, &capture, &attached) => r,
-                                        }
-                                    }),
+                sse_sink,
+                GUARD_INTERNAL.scope(
+                    guard_internal,
+                    REQ_START.scope(
+                        started,
+                        REDIRECT_SINK.scope(
+                            sink_clone,
+                            ATTACH_COOKIES.scope(
+                                attach.clone(),
+                                CAPTURE_SINK.scope(
+                                    capture_clone,
+                                    ATTACHED_SINK.scope(
+                                        attached_clone,
+                                        DNS_OVERRIDES.scope(resolved_overrides, async {
+                                            tokio::select! {
+                                                biased;
+                                                _ = cancel_rx => Err(VoleeoError::Cancelled),
+                                                r = self.send_with_auth_retry(request, started, sink, &attach, &capture, &attached) => r,
+                                            }
+                                        }),
+                                    ),
                                 ),
                             ),
                         ),
@@ -393,6 +444,68 @@ mod tests {
         assert_eq!(resp.status, 200);
         assert_eq!(resp.body, "hello");
         assert!(resp.body_is_text);
+    }
+
+    #[tokio::test]
+    async fn send_streamed_emits_sse_frames_and_empties_body() {
+        let body = "data: {\"n\":1}\n\ndata: {\"n\":2}\n\n";
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        )
+        .into_bytes();
+        let port = spawn_server(response).await;
+        let ex = HttpExecutor::new().unwrap();
+        let req = bare_request(&format!("http://127.0.0.1:{port}/"), "GET");
+
+        let frames = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let opened = std::sync::Arc::new(std::sync::Mutex::new(0u16));
+        let collected = frames.clone();
+        let opened_w = opened.clone();
+        let sink: crate::SseSink = std::sync::Arc::new(move |ev| match ev {
+            crate::SseEvent::Open { status, .. } => *opened_w.lock().unwrap() = status,
+            crate::SseEvent::Frame { frame, .. } => collected.lock().unwrap().push(frame),
+        });
+        let resp = ex
+            .send_streamed(&req, Vec::new(), Vec::new(), sink)
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status, 200);
+        assert_eq!(resp.body, "", "SSE body is streamed, not buffered");
+        assert_eq!(*opened.lock().unwrap(), 200, "Open carries the status");
+        let got = frames.lock().unwrap();
+        assert_eq!(got.len(), 2, "both frames pushed to the sink");
+        assert_eq!(got[0].data, "{\"n\":1}");
+        assert_eq!(got[0].seq, 0);
+        assert_eq!(got[1].seq, 1);
+    }
+
+    #[tokio::test]
+    async fn send_without_sink_parses_sse_frames_and_terminates() {
+        // A text/event-stream with no live sink (plain `send`, e.g. MCP) must still
+        // parse frames into the response and NOT loop forever buffering the body.
+        let body = "data: {\"n\":1}\n\ndata: {\"n\":2}\n\n";
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        )
+        .into_bytes();
+        let port = spawn_server(response).await;
+        let ex = HttpExecutor::new().unwrap();
+        let req = bare_request(&format!("http://127.0.0.1:{port}/"), "GET");
+        let resp = ex.send(&req, Vec::new(), Vec::new()).await.unwrap();
+
+        assert_eq!(resp.status, 200);
+        assert_eq!(resp.body, "", "SSE body isn't buffered into the body field");
+        assert_eq!(resp.sse_frames.len(), 2, "frames parsed without a sink");
+        assert_eq!(resp.sse_frames[0].data, "{\"n\":1}");
+        assert_eq!(resp.sse_frames[0].seq, 0);
+        assert_eq!(resp.sse_frames[1].seq, 1);
+        // 7 data bytes per frame → cumulative size, not the empty body.
+        assert_eq!(resp.body_size, 14);
     }
 
     #[tokio::test]
