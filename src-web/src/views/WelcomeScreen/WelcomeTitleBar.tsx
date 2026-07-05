@@ -1,9 +1,17 @@
+import { getCurrentWindow } from "@tauri-apps/api/window"
+import { useEffect } from "react"
 import { WindowControls } from "@/layout/WindowControls"
 import { isLinux, isMac } from "@/lib/platform"
 import { useChromeStore } from "@/store/chrome"
 
 export function WelcomeTitleBar() {
   const customTitleBar = useChromeStore((s) => s.customTitleBar)
+
+  useEffect(() => {
+    getCurrentWindow()
+      .setTitle("Voleeo")
+      .catch(() => {})
+  }, [])
 
   if (isLinux && customTitleBar) {
     return (

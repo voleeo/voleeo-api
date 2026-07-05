@@ -66,6 +66,8 @@ interface UiStore {
   panelLayout: PanelLayout
   treeVisible: boolean
   graphqlDocsOpen: boolean
+  importOpen: boolean
+  setImportOpen: (open: boolean) => void
   pendingSettingsSection: WorkspaceSettingsSection | null
   pendingSettingsFocusKey: string | null
   setActiveTool: (tool: Tool) => void
@@ -104,6 +106,8 @@ export const useUiStore = create<UiStore>((set, get) => ({
   panelLayout: "columns",
   treeVisible: true,
   graphqlDocsOpen: false,
+  importOpen: false,
+  setImportOpen: (importOpen) => set({ importOpen }),
   pendingSettingsSection: null,
   pendingSettingsFocusKey: null,
   setActiveTool: (tool) => {
