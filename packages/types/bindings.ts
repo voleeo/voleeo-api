@@ -360,10 +360,6 @@ params_location?: OAuth1Location; callback?: string; verifier?: string; timestam
 	settingsGetAutoUpdate: () => typedError<boolean, VoleeoError>(__TAURI_INVOKE("settings_get_auto_update")),
 	settingsSetAutoUpdate: (enabled: boolean) => typedError<null, VoleeoError>(__TAURI_INVOKE("settings_set_auto_update", { enabled })),
 	repositionWindowControls: () => typedError<null, VoleeoError>(__TAURI_INVOKE("reposition_window_controls")),
-	/**
-	 *  Enable/disable the native File menu's workspace-scoped items. The frontend
-	 *  calls this from the main window as the active workspace opens and closes.
-	 */
 	setWorkspaceMenuEnabled: (enabled: boolean) => typedError<null, VoleeoError>(__TAURI_INVOKE("set_workspace_menu_enabled", { enabled })),
 	themeGetActive: () => typedError<string, VoleeoError>(__TAURI_INVOKE("theme_get_active")),
 	themeActivate: (id: string) => typedError<null, VoleeoError>(__TAURI_INVOKE("theme_activate", { id })),
