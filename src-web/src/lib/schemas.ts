@@ -49,6 +49,7 @@ export const InterfaceStorageSchema = z
     fontSize: z.number().positive().optional(),
     editorFontFamily: z.string().optional(),
     editorFontSize: z.number().positive().optional(),
+    wrapResponse: z.boolean().optional(),
   })
   .catch({})
 

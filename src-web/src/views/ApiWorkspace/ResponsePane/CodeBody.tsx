@@ -3,13 +3,14 @@ import { xml as xmlLang } from "@codemirror/lang-xml"
 import { search } from "@codemirror/search"
 import CodeMirror, {
   defaultLightThemeOption,
-  type EditorView,
+  EditorView,
   keymap,
   oneDark,
 } from "@uiw/react-codemirror"
 import { useMemo, useRef, useState } from "react"
 import { Glyph } from "@/components/Glyph"
 import { cn } from "@/lib/utils"
+import { useInterfaceStore } from "@/store/interface"
 import { useThemeStore } from "@/store/theme"
 import { cmEditorTheme } from "../cmEditorTheme"
 import { foldingExtension } from "../cmFolding"
@@ -27,6 +28,8 @@ export function CodeBody({
 }) {
   const activeTheme = useThemeStore((s) => s.activeTheme)
   const isDark = activeTheme?.kind !== "light"
+  const wrap = useInterfaceStore((s) => s.wrapResponse)
+  const setWrap = useInterfaceStore((s) => s.setWrapResponse)
 
   const {
     filterOpen,
@@ -72,8 +75,9 @@ export function CodeBody({
         },
       ]),
       ...(lang === "json" || lang === "xml" ? [foldingExtension()] : []),
+      ...(wrap ? [EditorView.lineWrapping] : []),
     ],
-    [isDark, langExt, lang],
+    [isDark, langExt, lang, wrap],
   )
 
   const canFilter = lang === "json" || lang === "xml"
@@ -146,6 +150,19 @@ export function CodeBody({
       <div className="flex-1 min-h-0 relative overflow-hidden">
         {!filterOpen && !findOpen && (
           <div className="absolute top-1.5 right-4 z-10 flex items-center gap-1">
+            <button
+              type="button"
+              title={wrap ? "Disable line wrap" : "Wrap long lines"}
+              onClick={() => setWrap(!wrap)}
+              className={cn(
+                "p-1 rounded-[3px] border bg-transparent cursor-pointer transition-colors",
+                wrap
+                  ? "border-accent/50 text-accent"
+                  : "border-border text-muted hover:text-fg hover:border-fg/30",
+              )}
+            >
+              <Glyph kind="wrap" size={13} color="currentColor" />
+            </button>
             {canFilter && (
               <button
                 type="button"
