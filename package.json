@@ -13,7 +13,8 @@
     "test": "cd src-web && bun run test",
     "lint": "cd src-web && bun run lint",
     "lint:fix": "cd src-web && bun run lint:fix",
-    "format": "cd src-web && bun run format"
+    "format": "cd src-web && bun run format",
+    "check:sizes": "bun scripts/check-file-sizes.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0",
