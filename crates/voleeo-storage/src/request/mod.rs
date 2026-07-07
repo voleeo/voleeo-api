@@ -29,7 +29,7 @@ fn save_request_if_changed(
     }
     req.updated_at = now_ts();
     let content = serde_yaml::to_string(&req).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-    std::fs::write(path, content).map_err(|e| VoleeoError::Storage(e.to_string()))
+    crate::write_atomic(path, content)
 }
 
 /// Folder counterpart of [`save_request_if_changed`].
@@ -45,7 +45,7 @@ fn save_folder_if_changed(
     folder.updated_at = now_ts();
     let content =
         serde_yaml::to_string(&folder).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-    std::fs::write(path, content).map_err(|e| VoleeoError::Storage(e.to_string()))
+    crate::write_atomic(path, content)
 }
 
 /// Manages `req_*.yaml` and `folder_*.yaml` files for a single workspace.
@@ -109,16 +109,14 @@ impl RequestStore {
             crate::validate_id(&f.id)?;
             let content =
                 serde_yaml::to_string(f).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-            std::fs::write(dir.join(format!("folder_{}.yaml", f.id)), content)
-                .map_err(|e| VoleeoError::Storage(e.to_string()))?;
+            crate::write_atomic(dir.join(format!("folder_{}.yaml", f.id)), content)?;
         }
         for r in requests {
             let dir = self.workspace_dir(&r.workspace_id)?;
             crate::validate_id(&r.id)?;
             let content =
                 serde_yaml::to_string(r).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-            std::fs::write(dir.join(format!("req_{}.yaml", r.id)), content)
-                .map_err(|e| VoleeoError::Storage(e.to_string()))?;
+            crate::write_atomic(dir.join(format!("req_{}.yaml", r.id)), content)?;
         }
         Ok(())
     }

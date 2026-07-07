@@ -23,7 +23,7 @@ fn save_if_changed(
     }
     next.updated_at = now_ts();
     let content = serde_yaml::to_string(&next).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-    std::fs::write(path, content).map_err(|e| VoleeoError::Storage(e.to_string()))
+    crate::write_atomic(path, content)
 }
 
 /// Manages `ws_*.yaml` files at `{app_data_dir}/workspaces/{workspace_id}/`.
@@ -128,8 +128,7 @@ impl WsStore {
         };
         let content =
             serde_yaml::to_string(&conn).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-        std::fs::write(self.ws_path(&workspace_id, &id)?, content)
-            .map_err(|e| VoleeoError::Storage(e.to_string()))?;
+        crate::write_atomic(self.ws_path(&workspace_id, &id)?, content)?;
         Ok(conn)
     }
 
@@ -140,7 +139,7 @@ impl WsStore {
         let path = self.ws_path(&conn.workspace_id, &conn.id)?;
         let content =
             serde_yaml::to_string(conn).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-        std::fs::write(path, content).map_err(|e| VoleeoError::Storage(e.to_string()))
+        crate::write_atomic(path, content)
     }
 
     /// Smallest `ws_` sibling order strictly greater than `after`; midpoint
@@ -176,8 +175,7 @@ impl WsStore {
         };
         let content =
             serde_yaml::to_string(&conn).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-        std::fs::write(self.ws_path(workspace_id, &new)?, content)
-            .map_err(|e| VoleeoError::Storage(e.to_string()))?;
+        crate::write_atomic(self.ws_path(workspace_id, &new)?, content)?;
         Ok(conn)
     }
 

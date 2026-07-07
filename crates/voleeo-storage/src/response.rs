@@ -90,7 +90,7 @@ impl ResponseStore {
             if let Some(dir) = path.parent() {
                 std::fs::create_dir_all(dir).map_err(|e| VoleeoError::Storage(e.to_string()))?;
             }
-            std::fs::write(&path, formatted).map_err(|e| VoleeoError::Storage(e.to_string()))?;
+            crate::write_atomic(&path, formatted)?;
             response.body = String::new();
             response.body_windowed = true;
         }
@@ -154,8 +154,7 @@ impl ResponseStore {
                     std::fs::create_dir_all(dir)
                         .map_err(|e| VoleeoError::Storage(e.to_string()))?;
                 }
-                std::fs::write(&path, &filtered)
-                    .map_err(|e| VoleeoError::Storage(e.to_string()))?;
+                crate::write_atomic(&path, &filtered)?;
                 if let Ok(mut c) = self.cache.lock() {
                     c.invalidate(&key);
                 }
@@ -268,7 +267,7 @@ impl ResponseStore {
         let path = self.index_path(workspace_id, request_id)?;
         let content =
             serde_yaml::to_string(&summaries).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-        std::fs::write(&path, content).map_err(|e| VoleeoError::Storage(e.to_string()))
+        crate::write_atomic(&path, content)
     }
 
     fn read_all(
@@ -296,7 +295,7 @@ impl ResponseStore {
         let path = self.file_path(workspace_id, request_id)?;
         let content =
             serde_yaml::to_string(items).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-        std::fs::write(&path, content).map_err(|e| VoleeoError::Storage(e.to_string()))?;
+        crate::write_atomic(&path, content)?;
         // Best-effort summary index, kept in lockstep (write_all is the only
         // mutation path). It's a derived cache `list` backfills on miss, so a
         // failed write must NOT fail the append. The two writes aren't atomic, so

@@ -94,7 +94,7 @@ impl CookieJarStore {
         let path = self.path(&jar.workspace_id, &jar.id)?;
         let content =
             serde_yaml::to_string(jar).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-        std::fs::write(&path, content).map_err(|e| VoleeoError::Storage(e.to_string()))
+        crate::write_atomic(&path, content)
     }
 
     /// Delete a jar. Refuses to delete the Default jar (the canonical fallback,
