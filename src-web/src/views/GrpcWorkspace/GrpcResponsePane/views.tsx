@@ -38,7 +38,7 @@ export function UnaryBody({
       </p>
     )
   return (
-    <div className="px-2 py-1">
+    <div className="px-2 py-1 selectable-text">
       <CodeView value={prettyJson(message)} lang="json" />
     </div>
   )
@@ -58,7 +58,7 @@ export function HeaderTable({
       </p>
     )
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col selectable-text">
       {rows.map((h, i) => (
         <div
           // biome-ignore lint/suspicious/noArrayIndexKey: header lists can repeat keys
@@ -89,7 +89,7 @@ export function TranscriptList({
       </p>
     )
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col selectable-text">
       {messages.map((m) => (
         <div
           key={m.id}
