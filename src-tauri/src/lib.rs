@@ -1,5 +1,7 @@
 pub mod commands;
 mod mcp_server;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+mod menu;
 pub(crate) mod platform;
 mod secret_store;
 mod state;
@@ -7,63 +9,7 @@ mod state;
 mod window_chrome;
 
 use state::AppState;
-use tauri::{Emitter, Manager};
-
-/// The Voleeo + Edit menu. macOS shows it in the global bar; Windows attaches it
-/// to the window but hides it by default (revealed with Alt — the OS default).
-/// Linux gets no menu. macOS-only predefined items are included only there.
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-fn build_app_menu(app: &tauri::App) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
-    use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
-
-    let settings_item = MenuItemBuilder::with_id("settings", "Settings")
-        .accelerator("CmdOrCtrl+,")
-        .build(app)?;
-    let close_workspace_item =
-        MenuItemBuilder::with_id("close_workspace", "Close Workspace").build(app)?;
-
-    let mut app_menu = SubmenuBuilder::new(app, "Voleeo")
-        .item(&PredefinedMenuItem::about(app, None, None)?)
-        .separator()
-        .item(&settings_item)
-        .item(&close_workspace_item);
-
-    #[cfg(target_os = "macos")]
-    {
-        app_menu = app_menu
-            .separator()
-            .item(&PredefinedMenuItem::services(app, None)?)
-            .separator()
-            .item(&PredefinedMenuItem::hide(app, None)?)
-            .item(&PredefinedMenuItem::hide_others(app, None)?)
-            .item(&PredefinedMenuItem::show_all(app, None)?);
-    }
-
-    let app_menu = app_menu
-        .separator()
-        .item(&PredefinedMenuItem::quit(app, None)?)
-        .build()?;
-
-    let menu = MenuBuilder::new(app).item(&app_menu);
-
-    // Edit menu only on macOS: it owns the standard clipboard shortcuts there.
-    // On Windows the webview already handles copy/paste/undo natively, so a
-    // second set of menu accelerators would just conflict.
-    #[cfg(target_os = "macos")]
-    let menu = menu.item(
-        &SubmenuBuilder::new(app, "Edit")
-            .item(&PredefinedMenuItem::undo(app, None)?)
-            .item(&PredefinedMenuItem::redo(app, None)?)
-            .separator()
-            .item(&PredefinedMenuItem::cut(app, None)?)
-            .item(&PredefinedMenuItem::copy(app, None)?)
-            .item(&PredefinedMenuItem::paste(app, None)?)
-            .item(&PredefinedMenuItem::select_all(app, None)?)
-            .build()?,
-    );
-
-    menu.build()
-}
+use tauri::Manager;
 
 pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
     tauri_specta::Builder::<tauri::Wry>::new().commands(tauri_specta::collect_commands![
@@ -175,6 +121,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::settings::settings_get_auto_update,
         commands::settings::settings_set_auto_update,
         commands::settings::reposition_window_controls,
+        commands::settings::set_workspace_menu_enabled,
         commands::theme::theme_get_active,
         commands::theme::theme_activate,
         commands::theme::theme_get_color_mode,
@@ -265,13 +212,16 @@ pub fn run() {
     builder
         .setup(|app| {
             #[cfg(target_os = "macos")]
-            app.set_menu(build_app_menu(app)?)?;
+            {
+                app.set_menu(menu::build_app_menu(app)?)?;
+                menu::register_role_menus(app.handle());
+            }
 
             // Windows: attach the menu but hide it; Alt reveals it (handled in
             // the webview). Linux keeps no menu.
             #[cfg(target_os = "windows")]
             if let Some(win) = app.get_webview_window("main") {
-                win.set_menu(build_app_menu(app)?)?;
+                win.set_menu(menu::build_app_menu(app)?)?;
                 let _ = win.hide_menu();
             }
 
@@ -297,28 +247,10 @@ pub fn run() {
             Ok(())
         })
         .on_menu_event(|app, event| {
-            if event.id() == "close_workspace" {
-                if let Some(win) = app.get_webview_window("main") {
-                    win.emit("workspace:close", ()).ok();
-                }
-            } else if event.id() == "settings" {
-                if let Some(win) = app.get_webview_window("settings") {
-                    win.show().ok();
-                    win.set_focus().ok();
-                } else {
-                    tauri::WebviewWindowBuilder::new(
-                        app,
-                        "settings",
-                        tauri::WebviewUrl::App("index.html".into()),
-                    )
-                    .title("Settings")
-                    .inner_size(900.0, 600.0)
-                    .min_inner_size(600.0, 400.0)
-                    .resizable(true)
-                    .build()
-                    .ok();
-                }
-            }
+            #[cfg(any(target_os = "macos", target_os = "windows"))]
+            menu::handle_menu_event(app, event);
+            #[cfg(target_os = "linux")]
+            let _ = (app, event);
         })
         .on_window_event(|window, event| {
             // The frontend intercepts the main window's close: with a workspace
@@ -439,6 +371,7 @@ pub fn run() {
             commands::settings::settings_get_auto_update,
             commands::settings::settings_set_auto_update,
             commands::settings::reposition_window_controls,
+            commands::settings::set_workspace_menu_enabled,
             commands::theme::theme_get_active,
             commands::theme::theme_activate,
             commands::theme::theme_get_color_mode,

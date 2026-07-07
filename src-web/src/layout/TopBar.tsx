@@ -84,12 +84,10 @@ export function TopBar() {
         : APP_NAME
 
   useEffect(() => {
-    // Only the macOS-with-native-titlebar case still has an OS title to set.
-    if (customBar) return
     getCurrentWindow()
-      .setTitle(centerLabel)
+      .setTitle(activeWorkspace?.name ?? APP_NAME)
       .catch(() => {})
-  }, [customBar, centerLabel])
+  }, [activeWorkspace])
 
   return (
     <header

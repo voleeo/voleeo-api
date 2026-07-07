@@ -72,11 +72,21 @@ export const SHORTCUTS = {
   /** Reveal the open request / folder in the tree (scroll + select it). */
   FOCUS_ACTIVE: { key: "F1", alt: true } satisfies KeyCombo,
 
-  /** Collapse every folder in the request tree. */
-  COLLAPSE_ALL: { key: "-", meta: true } satisfies KeyCombo,
+  /** Collapse every folder in the request tree. (⌘- is Zoom Out.) */
+  COLLAPSE_ALL: { key: "-", meta: true, shift: true } satisfies KeyCombo,
 
-  /** Expand every folder in the request tree. */
-  EXPAND_ALL: { key: "=", meta: true } satisfies KeyCombo,
+  /** Expand every folder in the request tree. (⌘= is Zoom In.) */
+  EXPAND_ALL: { key: "=", meta: true, shift: true } satisfies KeyCombo,
+
+  /** Increase the interface font size. On macOS the View menu owns these; on
+   *  Windows/Linux (menu hidden) a frontend handler covers them. */
+  ZOOM_IN: { key: "=", meta: true } satisfies KeyCombo,
+
+  /** Decrease the interface font size. */
+  ZOOM_OUT: { key: "-", meta: true } satisfies KeyCombo,
+
+  /** Reset the interface font size to the default. */
+  ZOOM_RESET: { key: "0", meta: true } satisfies KeyCombo,
 } as const
 
 /** Which workspace a shortcut applies to. `shared` works everywhere. */
@@ -160,6 +170,18 @@ export const SHORTCUT_HELP: {
   {
     combo: SHORTCUTS.DEBUG_INFO,
     description: "Show debug info for the selected request/folder",
+  },
+  {
+    combo: SHORTCUTS.ZOOM_IN,
+    description: "Increase interface font size",
+  },
+  {
+    combo: SHORTCUTS.ZOOM_OUT,
+    description: "Decrease interface font size",
+  },
+  {
+    combo: SHORTCUTS.ZOOM_RESET,
+    description: "Reset interface font size",
   },
 ]
 
