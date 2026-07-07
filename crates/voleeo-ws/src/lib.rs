@@ -24,9 +24,14 @@ pub enum WsEvent {
 
 pub type WsEventSink = Arc<dyn Fn(WsEvent) + Send + Sync>;
 
+/// Bounded so `send_message` can't buffer unboundedly when the peer stalls.
+const OUTBOUND_CAP: usize = 1024;
+
 struct LiveConn {
-    outbound: mpsc::UnboundedSender<Message>,
-    reader: JoinHandle<()>,
+    outbound: mpsc::Sender<Message>,
+    // `None` only during the insert-before-spawn window in `connect`; set to the
+    // reader handle immediately after so teardown can never resurrect a dead entry.
+    reader: Option<JoinHandle<()>>,
 }
 
 #[derive(Clone, Default)]
@@ -117,7 +122,7 @@ impl WsManager {
         sink(WsEvent::Status("open"));
 
         let (mut write, mut read) = stream.split();
-        let (tx, mut rx) = mpsc::unbounded_channel::<Message>();
+        let (tx, mut rx) = mpsc::channel::<Message>(OUTBOUND_CAP);
 
         tokio::spawn(async move {
             while let Some(msg) = rx.recv().await {
@@ -129,6 +134,23 @@ impl WsManager {
             let _ = write.send(Message::Close(None)).await;
             let _ = write.close().await;
         });
+
+        // Insert BEFORE spawning the reader so a connection that closes immediately
+        // can't run its teardown-remove before the entry exists (which would
+        // resurrect a dead entry that leaks forever).
+        if let Ok(mut map) = self.conns.lock() {
+            if let Some(prev) = map.insert(
+                conn_id.clone(),
+                LiveConn {
+                    outbound: tx,
+                    reader: None,
+                },
+            ) {
+                if let Some(h) = prev.reader {
+                    h.abort();
+                }
+            }
+        }
 
         let conns = self.conns.clone();
         let conn_id_read = conn_id.clone();
@@ -188,15 +210,13 @@ impl WsManager {
             }
         });
 
+        // Store the handle in the already-inserted entry. If teardown already
+        // removed it (immediate close), the entry is gone — abort the now-orphan
+        // reader (which has finished anyway) and leave the map clean.
         if let Ok(mut map) = self.conns.lock() {
-            if let Some(prev) = map.insert(
-                conn_id,
-                LiveConn {
-                    outbound: tx,
-                    reader,
-                },
-            ) {
-                prev.reader.abort();
+            match map.get_mut(&conn_id) {
+                Some(conn) => conn.reader = Some(reader),
+                None => reader.abort(),
             }
         }
         Ok(())
@@ -226,13 +246,20 @@ impl WsManager {
                 Message::Binary(bytes.into())
             }
         };
-        tx.send(msg).map_err(|_| VoleeoError::WebSocketClosed)
+        tx.try_send(msg).map_err(|e| match e {
+            mpsc::error::TrySendError::Full(_) => {
+                VoleeoError::WebSocket("send buffer full — peer is not draining messages".into())
+            }
+            mpsc::error::TrySendError::Closed(_) => VoleeoError::WebSocketClosed,
+        })
     }
 
     pub fn disconnect(&self, conn_id: &str) {
         if let Ok(mut map) = self.conns.lock() {
             if let Some(conn) = map.remove(conn_id) {
-                conn.reader.abort();
+                if let Some(h) = conn.reader {
+                    h.abort();
+                }
             }
         }
     }

@@ -63,10 +63,26 @@ pub fn decode_key_display(s: &str) -> Result<[u8; 32], VoleeoError> {
 // the workspace directory so they are never included in a sync-dir symlink and
 // can never end up in a Git repository.
 
-fn key_file_path(workspace_id: &str, app_data_dir: &Path) -> PathBuf {
-    app_data_dir
+// Mirrors voleeo_storage::validate_id, which this crate can't depend on
+// without a dependency cycle (storage depends on crypto).
+fn validate_workspace_id(id: &str) -> Result<(), VoleeoError> {
+    let ok = !id.is_empty()
+        && id.len() <= 128
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+    if ok {
+        Ok(())
+    } else {
+        Err(VoleeoError::Crypto(format!("invalid workspace id '{id}'")))
+    }
+}
+
+fn key_file_path(workspace_id: &str, app_data_dir: &Path) -> Result<PathBuf, VoleeoError> {
+    validate_workspace_id(workspace_id)?;
+    Ok(app_data_dir
         .join("keys")
-        .join(format!("{workspace_id}.key"))
+        .join(format!("{workspace_id}.key")))
 }
 
 fn keyring_entry(workspace_id: &str) -> keyring_core::Result<keyring_core::Entry> {
@@ -78,20 +94,35 @@ fn save_key_to_file(
     key: &[u8; 32],
     app_data_dir: &Path,
 ) -> Result<(), VoleeoError> {
-    let path = key_file_path(workspace_id, app_data_dir);
+    let path = key_file_path(workspace_id, app_data_dir)?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| VoleeoError::Storage(e.to_string()))?;
     }
-    std::fs::write(&path, key).map_err(|e| VoleeoError::Storage(e.to_string()))?;
+    // Create at 0600 so the key is never observable at wider permissions; the
+    // follow-up chmod tightens pre-existing files and must not fail silently.
     #[cfg(unix)]
     {
-        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+        use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut f = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&path)
+            .map_err(|e| VoleeoError::Storage(e.to_string()))?;
+        f.write_all(key)
+            .map_err(|e| VoleeoError::Storage(e.to_string()))?;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
+            .map_err(|e| VoleeoError::Storage(e.to_string()))?;
     }
+    #[cfg(not(unix))]
+    std::fs::write(&path, key).map_err(|e| VoleeoError::Storage(e.to_string()))?;
     Ok(())
 }
 
 fn load_key_file(workspace_id: &str, app_data_dir: &Path) -> Result<[u8; 32], VoleeoError> {
-    let path = key_file_path(workspace_id, app_data_dir);
+    let path = key_file_path(workspace_id, app_data_dir)?;
     let bytes = std::fs::read(&path).map_err(|_| {
         VoleeoError::Crypto(format!(
             "workspace key not found for workspace '{workspace_id}' — \
@@ -109,7 +140,9 @@ fn load_key_file(workspace_id: &str, app_data_dir: &Path) -> Result<[u8; 32], Vo
 }
 
 fn delete_key_file(workspace_id: &str, app_data_dir: &Path) {
-    let _ = std::fs::remove_file(key_file_path(workspace_id, app_data_dir));
+    if let Ok(path) = key_file_path(workspace_id, app_data_dir) {
+        let _ = std::fs::remove_file(path);
+    }
 }
 
 /// Store the key in the OS keychain AND always write a 0600 keyfile backup.
@@ -236,6 +269,26 @@ mod tests {
         let key = generate_key();
         save_key("ws1", &key, dir.path()).unwrap();
         assert_eq!(load_key_from_file("ws1", dir.path()).unwrap(), key);
+    }
+
+    #[test]
+    fn traversal_workspace_id_is_rejected() {
+        let dir = tmp();
+        assert!(save_key("../evil", &generate_key(), dir.path()).is_err());
+        assert!(load_key_from_file("../evil", dir.path()).is_err());
+        assert!(load_key_from_file("a/b", dir.path()).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn key_file_is_created_0600() {
+        let dir = tmp();
+        save_key("ws1", &generate_key(), dir.path()).unwrap();
+        let mode = std::fs::metadata(dir.path().join("keys/ws1.key"))
+            .unwrap()
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o600);
     }
 
     #[test]

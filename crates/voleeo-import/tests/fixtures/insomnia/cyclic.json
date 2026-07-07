@@ -1,0 +1,11 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "resources": [
+    { "_id": "wrk_1", "_type": "workspace", "parentId": null, "name": "Cyclic" },
+    { "_id": "g1", "_type": "request_group", "parentId": "wrk_1", "name": "G1" },
+    { "_id": "g2", "_type": "request_group", "parentId": "g1", "name": "G2" },
+    { "_id": "g1", "_type": "request_group", "parentId": "g2", "name": "G1 loop" },
+    { "_id": "r1", "_type": "request", "parentId": "g2", "name": "R1", "method": "GET", "url": "https://x/y" }
+  ]
+}

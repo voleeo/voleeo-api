@@ -61,14 +61,21 @@ pub fn parse_insomnia(content: &str) -> Result<ImportedCollection, ImportError> 
         variables,
         environments,
         root_auth: ImportedAuth::None,
-        items: build_children(resources, root_id, false),
+        items: build_children(resources, root_id, false, &mut HashSet::new()),
         warnings,
     })
 }
 
 /// Children of `parent_id`, ordered by `metaSortKey`. `inherit` is true when an
 /// ancestor request_group carries auth, so authless requests resolve to Inherit.
-fn build_children(resources: &[Value], parent_id: &str, inherit: bool) -> Vec<ImportedItem> {
+/// `seen` guards against a `parentId` cycle in a crafted export (mirrors
+/// `util::RefResolver`) — a repeated group id stops the walk.
+fn build_children<'a>(
+    resources: &'a [Value],
+    parent_id: &str,
+    inherit: bool,
+    seen: &mut HashSet<&'a str>,
+) -> Vec<ImportedItem> {
     let mut kids: Vec<&Value> = resources
         .iter()
         .filter(|r| parent_of(r) == parent_id && matches!(type_of(r), "request_group" | "request"))
@@ -82,6 +89,10 @@ fn build_children(resources: &[Value], parent_id: &str, inherit: bool) -> Vec<Im
     let mut out = Vec::new();
     for r in kids {
         if type_of(r) == "request_group" {
+            // A parentId cycle would revisit this group id — stop instead of recursing forever.
+            if !seen.insert(id_of(r)) {
+                continue;
+            }
             let group_auth = r
                 .get("authentication")
                 .map(to_auth)
@@ -103,7 +114,7 @@ fn build_children(resources: &[Value], parent_id: &str, inherit: bool) -> Vec<Im
                 },
                 headers: headers_of(r),
                 variables: env_data(r.get("environment")),
-                items: build_children(resources, id_of(r), inherit || has_auth),
+                items: build_children(resources, id_of(r), inherit || has_auth, seen),
             }));
         } else {
             out.push(ImportedItem::Request(build_request(r, inherit)));

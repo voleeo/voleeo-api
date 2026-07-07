@@ -5,6 +5,7 @@ use voleeo_import::{
 };
 
 const EXPORT: &str = include_str!("fixtures/insomnia/export.json");
+const CYCLIC: &str = include_str!("fixtures/insomnia/cyclic.json");
 
 fn sample() -> voleeo_import::ImportedCollection {
     parse(ImportFormat::Insomnia, EXPORT).unwrap()
@@ -127,6 +128,14 @@ fn warns_about_filter_and_imports_sub_environment() {
        "url":"https://x/y","headers":[{"name":"X","value":"a|b"}],"authentication":{}}]}"#;
     let col2 = parse(ImportFormat::Insomnia, clean).unwrap();
     assert!(!col2.warnings.iter().any(|w| w.contains("filters")));
+}
+
+#[test]
+fn cyclic_parent_ids_terminate() {
+    // A crafted export with a parentId cycle (duplicate group id looping back)
+    // must import without unbounded recursion / stack overflow.
+    let col = parse(ImportFormat::Insomnia, CYCLIC).unwrap();
+    assert!(!col.items.is_empty());
 }
 
 fn all_requests(col: &voleeo_import::ImportedCollection) -> Vec<voleeo_import::ImportedRequest> {
