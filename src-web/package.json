@@ -52,7 +52,7 @@
     "cm6-graphql": "^0.2.1",
     "cmdk": "^1.1.1",
     "graphql": "^16.14.2",
-    "js-beautify": "^1.15.4",
+    "js-beautify": "^2.0.3",
     "jsonpath-plus": "^10.4.0",
     "lucide-react": "^1.8.0",
     "react": "^19.1.0",
