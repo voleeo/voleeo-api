@@ -12,14 +12,13 @@ import { useKeydown } from "@/hooks/useKeydown"
 import { useUpdateStore } from "@/store/update"
 import { useUiStore } from "@/store/workspace"
 import { openExportWindow } from "./exportWindow"
-import { ImportRequestsModal } from "./ImportRequestsModal"
 import { McpModal } from "./McpBridge/McpModal"
 import { McpStatusItem } from "./McpBridge/McpStatusItem"
 import { openSettingsWindow } from "./settingsWindow"
 
 export function PreferencesButton() {
   const [showMcp, setShowMcp] = useState(false)
-  const [showImport, setShowImport] = useState(false)
+  const setShowImport = useUiStore((s) => s.setImportOpen)
   const activeTool = useUiStore((s) => s.activeTool)
   const panelLayout = useUiStore((s) => s.panelLayout)
   const togglePanelLayout = useUiStore((s) => s.togglePanelLayout)
@@ -90,9 +89,6 @@ export function PreferencesButton() {
       </DropdownMenu>
 
       {showMcp && <McpModal onClose={() => setShowMcp(false)} />}
-      {showImport && (
-        <ImportRequestsModal onClose={() => setShowImport(false)} />
-      )}
     </>
   )
 }

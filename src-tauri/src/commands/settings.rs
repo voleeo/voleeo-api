@@ -105,6 +105,19 @@ pub async fn reposition_window_controls(window: tauri::Window) -> Result<(), Vol
 
 #[tauri::command]
 #[specta::specta]
+pub async fn set_workspace_menu_enabled(
+    app: tauri::AppHandle,
+    enabled: bool,
+) -> Result<(), VoleeoError> {
+    #[cfg(target_os = "macos")]
+    crate::menu::set_workspace_items_enabled(&app, enabled);
+    #[cfg(not(target_os = "macos"))]
+    let _ = (app, enabled);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
 pub async fn settings_regenerate_mcp_token(
     state: State<'_, AppState>,
 ) -> Result<String, VoleeoError> {
