@@ -13,6 +13,7 @@ import { useAuthEditor } from "@/views/ApiWorkspace/AuthTab/useAuthEditor"
 import { computeInheritedHeaders } from "@/views/ApiWorkspace/HeadersTab/computeInheritedHeaders"
 import { EnvironmentsModal } from "@/views/EnvironmentsModal"
 import { useWsCommits } from "./useWsCommits"
+import { useWsConnectionLifecycle } from "./useWsConnectionLifecycle"
 import { useWsPathParamDraft } from "./useWsPathParamDraft"
 import { useWsVarClickHandler } from "./useWsVarClickHandler"
 import { WsKindSelect, type WsMessageUiKind } from "./WsKindSelect"
@@ -35,14 +36,7 @@ export function WsPane() {
     useWebsocketStore((s) =>
       connection ? s.status[connection.id] : undefined,
     ) ?? "closed"
-  const { connect, disconnect, hydrate } = useWebsocketStore(
-    useShallow((s) => ({
-      connect: s.connect,
-      disconnect: s.disconnect,
-      hydrate: s.hydrate,
-    })),
-  )
-  const sendMessage = useWebsocketStore((s) => s.sendMessage)
+  const hydrate = useWebsocketStore((s) => s.hydrate)
 
   // Tab memory keyed per connection. Component is remounted on id switch.
   const initialTab =
@@ -60,7 +54,6 @@ export function WsPane() {
   const urlDraft = urlOverride ?? connection?.url ?? ""
   const setUrlDraft = setUrlOverride
   const [envModalVar, setEnvModalVar] = useState<string | null>(null)
-  const onToggleRef = useRef<() => void>(() => {})
 
   const {
     pathParamValues,
@@ -78,20 +71,18 @@ export function WsPane() {
     value: string
   }> | null>(null)
 
-  const live = status === "open" || status === "connecting"
-
-  const handleUrlSend = useCallback(() => {
-    if (!live) onToggleRef.current()
-  }, [live])
-
   const handleVarClick = useWsVarClickHandler(
     connection?.folderId ?? null,
     setEnvModalVar,
   )
 
-  const sendShortcutRef = useRef<() => void>(() => {})
-  const fireSend = useCallback(() => sendShortcutRef.current(), [])
-  useKeydown(SHORTCUTS.SEND_REQUEST, fireSend)
+  const handleParamCountChange = useCallback(
+    (enabled: number, total: number) =>
+      setParamCounts((p) =>
+        p?.enabled === enabled && p?.total === total ? p : { enabled, total },
+      ),
+    [setParamCounts],
+  )
 
   const connectionId = connection?.id
   useEffect(() => {
@@ -127,31 +118,20 @@ export function WsPane() {
     commitRef: authCommitRef,
   })
 
+  const { live, handleUrlSend, handleSendMessage, onToggle, fireSend } =
+    useWsConnectionLifecycle({
+      workspaceId,
+      connection,
+      status,
+      messageDraft,
+      urlDraft,
+      commitUrl,
+      headersCommitRef,
+      authCommitRef,
+    })
+  useKeydown(SHORTCUTS.SEND_REQUEST, fireSend)
+
   if (!connection) return null
-
-  function handleSendMessage() {
-    if (!connection || status !== "open" || !messageDraft.trim()) return
-    void sendMessage(workspaceId, connection.id, "text", messageDraft)
-  }
-
-  async function onToggle() {
-    if (!connection) return
-    if (live) {
-      void disconnect(workspaceId, connection.id)
-      return
-    }
-
-    commitUrl(urlDraft)
-    await Promise.all([headersCommitRef.current(), authCommitRef.current()])
-    void connect(workspaceId, connection.id)
-  }
-  onToggleRef.current = () => {
-    void onToggle()
-  }
-  sendShortcutRef.current = () => {
-    if (status === "open") handleSendMessage()
-    else handleUrlSend()
-  }
 
   return (
     <FolderScopeProvider folderId={connection.folderId ?? null}>
@@ -220,13 +200,7 @@ export function WsPane() {
             onPathParamValuesChange={setPathParamValues}
             onPathParamEnabledChange={setPathParamEnabled}
             onManualPathParamNamesChange={setManualPathParamNames}
-            onParamCountChange={(enabled, total) =>
-              setParamCounts((p) =>
-                p?.enabled === enabled && p?.total === total
-                  ? p
-                  : { enabled, total },
-              )
-            }
+            onParamCountChange={handleParamCountChange}
             pendingQueryParams={pendingQueryParams}
             onPendingQueryParamsConsumed={() => setPendingQueryParams(null)}
             commitParams={commitParams}

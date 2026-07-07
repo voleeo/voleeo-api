@@ -1,16 +1,8 @@
 import { type Ref, useCallback, useRef } from "react"
-import { createPortal } from "react-dom"
-import { EnableEncryptionDialog } from "@/components/EnableEncryptionDialog"
-import {
-  type RequestFnName,
-  RequestFunctionModal,
-} from "@/components/RequestFunctionModal"
-import { ResponseFunctionModal } from "@/components/ResponseFunctionModal"
-import { TemplateFunctionModal } from "@/components/TemplateFunctionModal"
 import { toHtml } from "@/lib/template"
 import { cn } from "@/lib/utils"
 import type { ConstantSuggestion } from "./Autocomplete"
-import { Autocomplete } from "./Autocomplete"
+import { TemplateInputModals } from "./TemplateInputModals"
 import { useAutocomplete } from "./useAutocomplete"
 import { useEditorSync } from "./useEditorSync"
 import { useFuncModal } from "./useFuncModal"
@@ -205,62 +197,23 @@ export function TemplateInput({
         onClick={handleClick}
       />
 
-      {acOpen &&
-        anchorRect &&
-        acItems.length > 0 &&
-        createPortal(
-          <Autocomplete
-            items={acItems}
-            selectedIndex={acIdx}
-            anchorRect={anchorRect}
-            query={acQuery}
-            onSelect={selectItem}
-            onClose={closeAutocomplete}
-          />,
-          document.body,
-        )}
-
-      {showEncryptionDialog &&
-        activeWorkspaceId &&
-        createPortal(
-          <EnableEncryptionDialog
-            workspaceId={activeWorkspaceId}
-            onEnabled={onEncryptionEnabled}
-            onCancel={onEncryptionCancelled}
-          />,
-          document.body,
-        )}
-
-      {funcModal &&
-        createPortal(
-          funcModal.fnName === "response.body" ||
-            funcModal.fnName === "response.header" ? (
-            <ResponseFunctionModal
-              fnName={funcModal.fnName}
-              initialArgs={funcModal.initialArgs}
-              onInsert={handleFuncModalInsert}
-              onClose={() => setFuncModal(null)}
-            />
-          ) : funcModal.fnName.startsWith("request.") ? (
-            <RequestFunctionModal
-              fnName={funcModal.fnName as RequestFnName}
-              initialArgs={funcModal.initialArgs}
-              onInsert={handleFuncModalInsert}
-              onClose={() => setFuncModal(null)}
-            />
-          ) : (
-            <TemplateFunctionModal
-              fn={
-                fns.find((f) => f.name === funcModal.fnName) ??
-                ({ name: funcModal.fnName, onRender: () => "" } as never)
-              }
-              initialArgs={funcModal.initialArgs}
-              onInsert={handleFuncModalInsert}
-              onClose={() => setFuncModal(null)}
-            />
-          ),
-          document.body,
-        )}
+      <TemplateInputModals
+        acOpen={acOpen}
+        acItems={acItems}
+        acIdx={acIdx}
+        acQuery={acQuery}
+        anchorRect={anchorRect}
+        selectItem={selectItem}
+        closeAutocomplete={closeAutocomplete}
+        showEncryptionDialog={showEncryptionDialog}
+        activeWorkspaceId={activeWorkspaceId}
+        onEncryptionEnabled={onEncryptionEnabled}
+        onEncryptionCancelled={onEncryptionCancelled}
+        funcModal={funcModal}
+        setFuncModal={setFuncModal}
+        fns={fns}
+        handleFuncModalInsert={handleFuncModalInsert}
+      />
     </>
   )
 }

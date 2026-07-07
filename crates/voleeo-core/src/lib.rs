@@ -4,7 +4,6 @@ pub mod cookies;
 pub mod error;
 pub mod git;
 pub mod net;
-pub mod traits;
 pub mod types;
 
 pub use auth::{

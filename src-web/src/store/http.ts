@@ -1,8 +1,6 @@
 import { create } from "zustand"
 
-import { errorMessage } from "@/lib/error"
 import type { ResolutionEvent } from "@/lib/template"
-import { useCookiesStore } from "@/store/cookies"
 import { useSseStore } from "@/store/sse"
 import type { SentRequestSnapshot } from "@/views/ApiWorkspace/SentRequestInspector/types"
 import type {
@@ -11,61 +9,13 @@ import type {
   RequestBody,
   RequestParameter,
   StoredCookie_Deserialize,
-  TimelineEvent,
 } from "../../../packages/types/bindings"
 import { commands } from "../../../packages/types/bindings"
+import { resolutionToTimelineEvents, sendRequestCommand } from "./httpCommands"
+import { applySendRequestResult } from "./httpResponseHandling"
 
-/** Pre-flight resolution observations rendered as `atMs: 0` Timeline events. */
-function resolutionToTimelineEvents(
-  resolutions: ResolutionEvent[],
-): TimelineEvent[] {
-  return resolutions.map((r) => ({
-    atMs: 0,
-    kind: "resolve",
-    text: `${r.label}: ${r.source} → ${JSON.stringify(r.result)}`,
-  }))
-}
-
-export interface SendRequestOptions {
-  urlOverride?: string | null
-  bodyOverride?: RequestBody | null
-  headersOverride?: RequestParameter[] | null
-  calledFrom?: string | null
-  resolutionNotes?: string[] | null
-  environmentId?: string | null
-  cookieOverrides?: StoredCookie_Deserialize[] | null
-  authOverride?: AuthConfig | null
-}
-
-export function sendRequestCommand(
-  workspaceId: string,
-  requestId: string,
-  opts: SendRequestOptions = {},
-) {
-  return commands.sendRequest(workspaceId, requestId, {
-    url: opts.urlOverride ?? null,
-    body: opts.bodyOverride ?? null,
-    headers: opts.headersOverride ?? null,
-    calledFrom: opts.calledFrom ?? null,
-    resolutionNotes: opts.resolutionNotes ?? null,
-    environmentId: opts.environmentId ?? null,
-    cookieOverrides: opts.cookieOverrides ?? null,
-    authOverride: opts.authOverride ?? null,
-  })
-}
-
-/** Sign a resolved dynamic scheme (SigV4, OAuth 1.0); returns the header and/or
- *  query params it adds (OAuth 1.0 can place its params in either). Empty for
- *  static/no/disabled auth. Sole entry-point to `commands.signAuthHeaders`. */
-export async function signAuthHeaders(
-  auth: AuthConfig,
-  method: string,
-  url: string,
-  body: RequestBody | null,
-): Promise<{ headers: RequestParameter[]; query: RequestParameter[] }> {
-  const res = await commands.signAuthHeaders(auth, method, url, body)
-  return res.status === "ok" ? res.data : { headers: [], query: [] }
-}
+export type { SendRequestOptions } from "./httpCommands"
+export { sendRequestCommand, signAuthHeaders } from "./httpCommands"
 
 interface HttpStore {
   responses: Record<string, HttpResponse>
@@ -147,103 +97,7 @@ export const useHttpStore = create<HttpStore>((set) => ({
       return
     }
 
-    if (res.status === "ok") {
-      const captured = res.data.capturedCookies ?? []
-      // Resolution events were prepended by Rust — don't re-merge here.
-      const merged: HttpResponse = { ...res.data }
-      if (captured.length > 0) {
-        const cookiesState = useCookiesStore.getState()
-        const jar = cookiesState.jars.find(
-          (j) => j.id === cookiesState.activeJarId,
-        )
-        const jarName = jar?.name ?? "active jar"
-        merged.events = [
-          ...(merged.events ?? []),
-          {
-            atMs: 0,
-            kind: "resolve",
-            text: `${captured.length} cookie${captured.length === 1 ? "" : "s"} captured into ${jarName}`,
-          },
-        ]
-        // Fire-and-forget refresh so an open Cookies modal sees new entries.
-        if (cookiesState.loadedWorkspaceId === workspaceId) {
-          void cookiesState.reload()
-        }
-      }
-      set((s) => ({
-        loading: { ...s.loading, [requestId]: false },
-        responses: { ...s.responses, [requestId]: merged },
-        errors: { ...s.errors, [requestId]: undefined },
-      }))
-      return
-    }
-
-    if (res.error.kind === "cancelled") {
-      const shell: HttpResponse = {
-        requestId,
-        status: 0,
-        statusText: "",
-        headers: [],
-        body: "",
-        bodySize: 0,
-        bodyIsText: true,
-        timing: {
-          dnsMs: 0,
-          connectMs: 0,
-          tlsMs: 0,
-          firstByteMs: 0,
-          downloadMs: 0,
-          totalMs: 0,
-        },
-        events: [
-          ...resolveEvents,
-          { atMs: 0, kind: "info", text: "Request cancelled" },
-        ],
-      }
-      set((s) => ({
-        loading: { ...s.loading, [requestId]: false },
-        responses: { ...s.responses, [requestId]: shell },
-        errors: { ...s.errors, [requestId]: undefined },
-      }))
-      return
-    }
-
-    const errMsg = errorMessage(res.error)
-    const shellResponse: HttpResponse | undefined =
-      res.error.kind === "http_failed"
-        ? {
-            requestId,
-            status: 0,
-            statusText: "",
-            headers: [],
-            body: "",
-            bodySize: 0,
-            bodyIsText: true,
-            timing: {
-              dnsMs: 0,
-              connectMs: 0,
-              tlsMs: 0,
-              firstByteMs: 0,
-              downloadMs: 0,
-              totalMs: 0,
-            },
-            events: [...resolveEvents, ...res.error.data.events],
-          }
-        : undefined
-
-    set((s) => {
-      const nextResponses = { ...s.responses }
-      if (shellResponse) {
-        nextResponses[requestId] = shellResponse
-      } else {
-        delete nextResponses[requestId]
-      }
-      return {
-        loading: { ...s.loading, [requestId]: false },
-        responses: nextResponses,
-        errors: { ...s.errors, [requestId]: errMsg },
-      }
-    })
+    applySendRequestResult(set, workspaceId, requestId, res, resolveEvents)
   },
 
   cancelRequest: async (requestId) => {

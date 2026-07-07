@@ -4,15 +4,9 @@ import type {
   RequestBody,
   RequestParameter,
 } from "../../../../../packages/types/bindings"
+import { authCompare, authEntries, authSummary } from "../authEntries"
 import { blob, type Field, listField } from "../engine"
-import {
-  authCompare,
-  authEntries,
-  authSummary,
-  paramEqual,
-  paramId,
-  paramValue,
-} from "../helpers"
+import { paramEqual, paramId, paramValue } from "../helpers"
 
 const BODY_KIND_LABEL: Record<RequestBody["kind"], string> = {
   none: "No body",
