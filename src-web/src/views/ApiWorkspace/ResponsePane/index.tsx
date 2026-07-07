@@ -7,7 +7,7 @@ import { useRequestStore } from "@/store/requests"
 import { type SseFrame, useSseStore } from "@/store/sse"
 import { useUiStore } from "@/store/workspace"
 import type { HttpResponse } from "../../../../../packages/types/bindings"
-import { BodyTab } from "./BodyTab"
+import { analyzeBody, BodyTab } from "./BodyTab"
 import { isHtmlResponse, isSseResponse } from "./bodyLang"
 import { CookiesTab, collectReceivedRows } from "./CookiesTab"
 import { HeadersTab } from "./HeadersTab"
@@ -21,6 +21,7 @@ import { SseFilterPane } from "./SseStreamTab/SseFilterPane"
 import { SseRawView } from "./SseStreamTab/SseRawView"
 import { useSseView } from "./SseStreamTab/useSseView"
 import { TimelineTab } from "./TimelineTab"
+import { useCodeTools } from "./useCodeTools"
 import { useHistorySync } from "./useHistorySync"
 
 const NO_FRAMES: never[] = []
@@ -139,6 +140,8 @@ export function ResponsePane() {
 
   const [tab, setTab] = useState<TabId>("body")
   const [htmlView, setHtmlView] = useState<HtmlView>("preview")
+  const codeTools = useCodeTools()
+  const bodyInfo = useMemo(() => analyzeBody(response ?? null), [response])
 
   const sseTools = isSse && tab === "body"
 
@@ -155,6 +158,15 @@ export function ResponsePane() {
   }
 
   const isHtml = isHtmlResponse(response ?? null)
+  // The find/filter buttons apply only when the body renders as CodeBody.
+  const isCodeBody =
+    !!response &&
+    !isSse &&
+    response.bodyIsText &&
+    !response.bodyWindowed &&
+    !isHtml &&
+    !bodyInfo.isBinary
+  const canFilter = bodyInfo.lang === "json" || bodyInfo.lang === "xml"
 
   return (
     <div className="@container h-full min-h-0 flex flex-col">
@@ -201,6 +213,9 @@ export function ResponsePane() {
         setHtmlView={setHtmlView}
         sseTools={sseTools}
         sseView={sseView}
+        showCodeTools={tab === "body" && isCodeBody}
+        canFilter={canFilter}
+        codeTools={codeTools}
       />
 
       {sseTools && sseView.searchOpen && <SseFilterPane view={sseView} />}
@@ -231,6 +246,8 @@ export function ResponsePane() {
                   response={response ?? null}
                   loading={loading}
                   htmlView={htmlView}
+                  body={bodyInfo}
+                  tools={codeTools}
                 />
               ))}
             {tab === "headers" && (
