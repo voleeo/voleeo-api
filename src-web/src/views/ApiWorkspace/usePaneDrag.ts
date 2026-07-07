@@ -7,7 +7,7 @@ import { commands } from "../../../../packages/types/bindings"
 // Pixel minimums for each pane
 const TREE_MIN = 160
 const REQUEST_MIN = 380
-const RESPONSE_MIN = 340
+const RESPONSE_MIN = 380
 const ROW_TREE_MIN = 160
 const ROW_RIGHT_MIN = 400
 const ROW_REQUEST_MIN = 180

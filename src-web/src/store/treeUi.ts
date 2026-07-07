@@ -23,43 +23,21 @@ function saveClosed(workspaceId: string, ids: string[]) {
 interface TreeUiStore {
   workspaceId: string | null
   closedFolderIds: string[]
-  /**
-   * Id of a row to put into inline-rename mode as soon as the tree sees it.
-   * Set by creation handlers (NewItemButton) so freshly-created folders /
-   * requests / connections enter rename mode without the tree component
-   * having to be reachable as a ref. Cleared once the tree consumes it.
-   */
   pendingRenameId: string | null
-  /**
-   * The tree row the user most recently clicked or arrow-navigated to.
-   * Shared with the TopBar so Cmd+N can target the focused folder
-   * (or the focused request's parent folder) instead of the workspace root.
-   * Cleared on workspace switch.
-   */
   focusedNodeId: string | null
-  /**
-   * Multi-select set. The focused row is always included (the focus is the
-   * "head" of the selection). Cmd/Ctrl+click toggles individual ids;
-   * Shift+click or Shift+Arrow extends a range from the anchor.
-   */
   selectedIds: string[]
-  /**
-   * Anchor for range-extending operations (Shift+Arrow, Shift+click). Set on
-   * any plain click and on the first Shift-extension; range is always
-   * `anchor → focused`.
-   */
   selectionAnchorId: string | null
   initForWorkspace: (workspaceId: string) => void
   isFolderOpen: (id: string) => boolean
   toggleFolder: (id: string) => void
   ensureFoldersOpen: (ids: string[]) => void
+  collapseAll: (folderIds: string[]) => void
+  expandAll: () => void
   setFocusedNodeId: (id: string | null) => void
   setSelection: (ids: string[], anchorId?: string | null) => void
   toggleSelected: (id: string) => void
   clearSelection: () => void
-  /** Queue a row for inline-rename mode (consumed by the tree once mounted). */
   requestRename: (id: string) => void
-  /** Tree calls this after starting rename to acknowledge the request. */
   consumePendingRename: () => void
   focusNewItem: (id: string) => void
 }
@@ -104,6 +82,18 @@ export const useTreeUiStore = create<TreeUiStore>((set, get) => ({
     if (workspaceId) saveClosed(workspaceId, next)
   },
 
+  collapseAll: (folderIds) => {
+    set({ closedFolderIds: folderIds })
+    const { workspaceId } = get()
+    if (workspaceId) saveClosed(workspaceId, folderIds)
+  },
+
+  expandAll: () => {
+    set({ closedFolderIds: [] })
+    const { workspaceId } = get()
+    if (workspaceId) saveClosed(workspaceId, [])
+  },
+
   setFocusedNodeId: (id) => set({ focusedNodeId: id }),
 
   setSelection: (ids, anchorId) =>
@@ -118,8 +108,6 @@ export const useTreeUiStore = create<TreeUiStore>((set, get) => ({
       const next = s.selectedIds.includes(id)
         ? s.selectedIds.filter((x) => x !== id)
         : [...s.selectedIds, id]
-      // Cmd-click both moves focus and re-anchors so a subsequent
-      // Shift-extend grows from this row.
       return { selectedIds: next, focusedNodeId: id, selectionAnchorId: id }
     }),
 

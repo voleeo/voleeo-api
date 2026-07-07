@@ -1,3 +1,4 @@
+import { ActiveIndicator } from "@/components/ActiveIndicator"
 import { C_GRPC } from "@/components/tokens"
 import { cn } from "@/lib/utils"
 import { useGrpcStore } from "@/store/grpc"
@@ -21,6 +22,7 @@ export function GrpcRow({
   const status = useGrpcStore((s) => s.status[id])
   const activeGrpcId = useRequestStore((s) => s.activeGrpcId)
   const dotClass = status ? STATUS_DOT[status] : undefined
+  const live = status === "streaming" || status === "connecting"
 
   return (
     <LeafRow
@@ -40,10 +42,14 @@ export function GrpcRow({
         </span>
       }
       statusDot={
-        dotClass && (
-          <span
-            className={cn("ml-auto w-2 h-2 rounded-full shrink-0", dotClass)}
-          />
+        live ? (
+          <ActiveIndicator className="ml-auto" />
+        ) : (
+          dotClass && (
+            <span
+              className={cn("ml-auto w-2 h-2 rounded-full shrink-0", dotClass)}
+            />
+          )
         )
       }
     />

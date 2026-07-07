@@ -4,6 +4,9 @@ import { EVENTS } from "@/config/events"
 import { SHORTCUTS } from "@/config/shortcuts"
 import { useKeydown } from "@/hooks/useKeydown"
 import { CommandPalette } from "@/layout/CommandPalette"
+import { ImportRequestsModal } from "@/layout/ImportRequestsModal"
+import { runMenuAction } from "@/layout/menuActions"
+import { ShaderBackground } from "@/layout/ShaderBackground"
 import { Toast } from "@/layout/Toast"
 import { ToolViewport } from "@/layout/ToolViewport"
 import { TopBar } from "@/layout/TopBar"
@@ -21,6 +24,8 @@ import { openSettingsWindow } from "./settingsWindow"
 
 export function MainLayout() {
   const activeTool = useUiStore((s) => s.activeTool)
+  const importOpen = useUiStore((s) => s.importOpen)
+  const setImportOpen = useUiStore((s) => s.setImportOpen)
 
   useEffect(() => {
     // Skip background checks when the user turned auto-update off; they can
@@ -47,8 +52,13 @@ export function MainLayout() {
   const openSettings = useCallback(() => void openSettingsWindow(), [])
   useKeydown(SHORTCUTS.SETTINGS, openSettings, !isMac)
 
+  useKeydown(SHORTCUTS.ZOOM_IN, () => runMenuAction("zoom_in"), !isMac)
+  useKeydown(SHORTCUTS.ZOOM_OUT, () => runMenuAction("zoom_out"), !isMac)
+  useKeydown(SHORTCUTS.ZOOM_RESET, () => runMenuAction("zoom_reset"), !isMac)
+
   return (
     <div className="flex flex-col h-screen">
+      <ShaderBackground />
       {activeTool === "welcome" ? <WelcomeTitleBar /> : <TopBar />}
       <div className="flex-1 min-h-0 overflow-hidden">
         <ToolViewport activeTool={activeTool} />
@@ -56,6 +66,9 @@ export function MainLayout() {
       <CommandPalette />
       <UpdateBanner />
       <Toast />
+      {importOpen && activeTool !== "welcome" && (
+        <ImportRequestsModal onClose={() => setImportOpen(false)} />
+      )}
     </div>
   )
 }

@@ -2,6 +2,7 @@ import React from "react"
 import ReactDOM from "react-dom/client"
 import App from "@/App"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import { initMenuActions } from "@/layout/menuActions"
 import { initWindowsAltMenu } from "@/layout/windowsMenu"
 import { loadBundledPlugins } from "@/plugins/load"
 import { initWorkspaceListeners } from "@/store/workspace"
@@ -14,6 +15,7 @@ void (async () => {
   await loadBundledPlugins()
   initWorkspaceListeners()
   initWindowsAltMenu()
+  initMenuActions()
 
   const rootEl = document.getElementById("root")
   if (!rootEl) throw new Error("root element not found")

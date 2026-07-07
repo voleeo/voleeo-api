@@ -68,6 +68,25 @@ export const SHORTCUTS = {
     ctrl: true,
     alt: true,
   } satisfies KeyCombo,
+
+  /** Reveal the open request / folder in the tree (scroll + select it). */
+  FOCUS_ACTIVE: { key: "F1", alt: true } satisfies KeyCombo,
+
+  /** Collapse every folder in the request tree. (⌘- is Zoom Out.) */
+  COLLAPSE_ALL: { key: "-", meta: true, shift: true } satisfies KeyCombo,
+
+  /** Expand every folder in the request tree. (⌘= is Zoom In.) */
+  EXPAND_ALL: { key: "=", meta: true, shift: true } satisfies KeyCombo,
+
+  /** Increase the interface font size. On macOS the View menu owns these; on
+   *  Windows/Linux (menu hidden) a frontend handler covers them. */
+  ZOOM_IN: { key: "=", meta: true } satisfies KeyCombo,
+
+  /** Decrease the interface font size. */
+  ZOOM_OUT: { key: "-", meta: true } satisfies KeyCombo,
+
+  /** Reset the interface font size to the default. */
+  ZOOM_RESET: { key: "0", meta: true } satisfies KeyCombo,
 } as const
 
 /** Which workspace a shortcut applies to. `shared` works everywhere. */
@@ -109,6 +128,18 @@ export const SHORTCUT_HELP: {
     description: "Show / hide the sidebar",
   },
   {
+    combo: SHORTCUTS.FOCUS_ACTIVE,
+    description: "Reveal the open request in the tree",
+  },
+  {
+    combo: SHORTCUTS.COLLAPSE_ALL,
+    description: "Collapse all folders",
+  },
+  {
+    combo: SHORTCUTS.EXPAND_ALL,
+    description: "Expand all folders",
+  },
+  {
     combo: SHORTCUTS.SEARCH,
     description: "Search requests in the current workspace",
   },
@@ -140,6 +171,18 @@ export const SHORTCUT_HELP: {
     combo: SHORTCUTS.DEBUG_INFO,
     description: "Show debug info for the selected request/folder",
   },
+  {
+    combo: SHORTCUTS.ZOOM_IN,
+    description: "Increase interface font size",
+  },
+  {
+    combo: SHORTCUTS.ZOOM_OUT,
+    description: "Decrease interface font size",
+  },
+  {
+    combo: SHORTCUTS.ZOOM_RESET,
+    description: "Reset interface font size",
+  },
 ]
 
 /**
@@ -161,6 +204,7 @@ const KEY_SYMBOLS: Record<string, string> = {
   arrowleft: "←",
   arrowright: "→",
   space: "␣",
+  "=": "+",
 }
 
 function symbolize(key: string): string {

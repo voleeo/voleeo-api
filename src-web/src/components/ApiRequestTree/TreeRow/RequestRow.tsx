@@ -1,7 +1,9 @@
 import { useContext } from "react"
+import { ActiveIndicator } from "@/components/ActiveIndicator"
 import { Ctx } from "@/components/ApiRequestTree/types"
 import { C_GQL, methodColor, statusDotClass } from "@/components/tokens"
 import { cn } from "@/lib/utils"
+import { useHttpStore } from "@/store/http"
 import type { TreeNode } from "@/store/requests"
 import { LeafRow } from "./LeafRow"
 import { abbrev, type RowProps } from "./shared"
@@ -15,6 +17,7 @@ export function RequestRow({
   const { lastStatuses } = useContext(Ctx)
   const { request } = node
   const lastStatus = lastStatuses[request.id] ?? null
+  const loading = useHttpStore((s) => Boolean(s.loading[request.id]))
   const isGraphql = request.body?.kind === "graphql"
 
   return (
@@ -35,13 +38,17 @@ export function RequestRow({
         </span>
       }
       statusDot={
-        lastStatus !== null && (
-          <span
-            className={cn(
-              "ml-auto w-2 h-2 rounded-full shrink-0",
-              statusDotClass(lastStatus),
-            )}
-          />
+        loading ? (
+          <ActiveIndicator className="ml-auto" />
+        ) : (
+          lastStatus !== null && (
+            <span
+              className={cn(
+                "ml-auto w-2 h-2 rounded-full shrink-0",
+                statusDotClass(lastStatus),
+              )}
+            />
+          )
         )
       }
     />

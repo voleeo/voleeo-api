@@ -5,6 +5,7 @@ import { useGitStore } from "@/store/git"
 import { changedPathsUnderFolder } from "@/store/gitChangeMap"
 import { useRequestStore } from "@/store/requests"
 import type { CtxMenuState, RollbackTarget } from "./RequestContextMenu"
+import { revealInTree } from "./revealInTree"
 import { entityName, entityPath, type NodeKind } from "./treeActionsShared"
 import { useTreeCreateActions } from "./useTreeCreateActions"
 import { useTreeDeleteActions } from "./useTreeDeleteActions"
@@ -73,15 +74,28 @@ export function useTreeActions(
     treeRef.current?.startRename(id)
   }
 
-  function handleDuplicate(kind: NodeKind, id: string) {
+  async function handleDuplicate(kind: NodeKind, id: string) {
     setCtxMenu(null)
     if (!activeWorkspaceId) return
     const s = useRequestStore.getState()
-    if (kind === "request") void s.duplicateRequest(activeWorkspaceId, id)
-    else if (kind === "websocket")
-      void s.duplicateConnection(activeWorkspaceId, id)
-    else if (kind === "grpc") void s.duplicateGrpc(activeWorkspaceId, id)
-    else void s.duplicateFolder(activeWorkspaceId, id)
+    const item =
+      kind === "request"
+        ? await s.duplicateRequest(activeWorkspaceId, id)
+        : kind === "websocket"
+          ? await s.duplicateConnection(activeWorkspaceId, id)
+          : kind === "grpc"
+            ? await s.duplicateGrpc(activeWorkspaceId, id)
+            : await s.duplicateFolder(activeWorkspaceId, id)
+    if (!item) return
+
+    const open = useRequestStore.getState()
+    if (kind === "request") open.setActiveRequest(item.id)
+    else if (kind === "websocket") open.setActiveConnection(item.id)
+    else if (kind === "grpc") open.setActiveGrpc(item.id)
+    else open.setActiveFolder(item.id)
+
+    // Reveal in the tree (folders re-fetch via reload, so read fresh).
+    revealInTree(item.id, item.folderId, open.folders)
   }
 
   function handleRollback(target: RollbackTarget, id: string) {

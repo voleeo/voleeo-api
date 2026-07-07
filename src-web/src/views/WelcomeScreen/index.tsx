@@ -8,11 +8,20 @@ type Mode = "home" | "api" | "import"
 
 export function WelcomeScreen() {
   const loadWorkspaces = useUiStore((s) => s.loadWorkspaces)
+  const importOpen = useUiStore((s) => s.importOpen)
+  const setImportOpen = useUiStore((s) => s.setImportOpen)
   const [mode, setMode] = useState<Mode>("home")
 
   useEffect(() => {
     loadWorkspaces()
   }, [loadWorkspaces])
+
+  useEffect(() => {
+    if (importOpen) {
+      setMode("import")
+      setImportOpen(false)
+    }
+  }, [importOpen, setImportOpen])
 
   const goHome = useCallback(() => {
     setMode("home")
@@ -29,7 +38,7 @@ export function WelcomeScreen() {
   }
 
   return (
-    <div className="h-full flex bg-bg">
+    <div className="h-full flex">
       <HomeView onSelect={setMode} />
     </div>
   )

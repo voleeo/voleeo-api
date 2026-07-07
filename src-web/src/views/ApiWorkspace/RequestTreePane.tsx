@@ -3,7 +3,7 @@ import { useShallow } from "zustand/react/shallow"
 import type { ApiRequestTreeHandle } from "@/components/ApiRequestTree"
 import { ApiRequestTree } from "@/components/ApiRequestTree"
 import { getAncestorFolderIds } from "@/components/ApiRequestTree/treeUtils"
-import { Glyph } from "@/components/Glyph"
+import { SearchField } from "@/components/SearchField"
 import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog"
 import { SHORTCUTS } from "@/config/shortcuts"
 import { useKeydown } from "@/hooks/useKeydown"
@@ -13,6 +13,12 @@ import { useUiStore } from "@/store/workspace"
 import { DeleteDialogs } from "./DeleteDialogs"
 import { FilteredResults } from "./FilteredResults"
 import { RequestContextMenu } from "./RequestContextMenu"
+import {
+  collapseAll,
+  expandAll,
+  focusActive,
+  RunningFooter,
+} from "./RunningFooter"
 import { useTreeActions } from "./useTreeActions"
 
 export function RequestTreePane() {
@@ -54,10 +60,20 @@ export function RequestTreePane() {
   }, [searchVisible])
 
   useKeydown(SHORTCUTS.SEARCH, revealSearch)
+  useKeydown(SHORTCUTS.FOCUS_ACTIVE, focusActive)
+  useKeydown(SHORTCUTS.COLLAPSE_ALL, collapseAll)
+  useKeydown(SHORTCUTS.EXPAND_ALL, expandAll)
 
   useEffect(() => {
     if (activeWorkspaceId) load(activeWorkspaceId)
   }, [activeWorkspaceId, load])
+
+  // Switching workspaces clears the search — the prior query (and its results) are meaningless in the new tree.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset only on workspace change
+  useEffect(() => {
+    setQuery("")
+    setSearchVisible(false)
+  }, [activeWorkspaceId])
 
   const filteredRequests = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -105,29 +121,14 @@ export function RequestTreePane() {
     >
       {searchVisible && (
         <div className="px-2 py-1.5 border-b border-border shrink-0">
-          <div className="flex items-center gap-1.5 px-2 py-[5px] rounded-[4px] bg-subtle">
-            <Glyph kind="search" size={12} color="var(--base04)" />
-            <input
-              ref={searchInputRef}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onBlur={handleSearchBlur}
-              placeholder="Search"
-              autoComplete="off"
-              spellCheck={false}
-              className="flex-1 bg-transparent border-none outline-none font-mono text-[0.857rem] text-fg placeholder:text-muted"
-            />
-            <button
-              type="button"
-              onClick={() => {
-                setQuery("")
-                setSearchVisible(false)
-              }}
-              className="flex items-center justify-center w-4 h-4 rounded-[2px] border-0 bg-transparent outline-none cursor-pointer opacity-60 hover:opacity-100 transition-opacity"
-            >
-              <Glyph kind="x" size={10} color="var(--base04)" />
-            </button>
-          </div>
+          <SearchField
+            value={query}
+            onChange={setQuery}
+            inputRef={searchInputRef}
+            onBlur={handleSearchBlur}
+            onClear={() => setSearchVisible(false)}
+            alwaysShowClear
+          />
         </div>
       )}
 
@@ -153,6 +154,8 @@ export function RequestTreePane() {
           />
         )}
       </div>
+
+      <RunningFooter />
 
       {actions.ctxMenu && (
         <RequestContextMenu

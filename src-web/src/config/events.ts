@@ -7,6 +7,7 @@ export const EVENTS = {
   // Response history
   responseStored: "response:stored",
   mcpResponseStored: "mcp:response:stored",
+  responseCleared: "response:cleared",
 
   // Git
   gitEntitiesReload: "git:entities-reload",
@@ -27,6 +28,12 @@ export const EVENTS = {
   wsMessage: "ws:message",
   wsTimeline: "ws:timeline",
 
+  // SSE streaming (backend → frontend).
+  // Frames are coalesced into batches (~30/s) so a fast stream can't flood the IPC channel; payload is { frame, timeline }[].
+  sseFrames: "sse:frames",
+  // Setup timeline (config/connect/headers) emitted once when the stream opens.
+  sseOpen: "sse:open",
+
   // MCP-driven cache invalidation
   mcpRequestsChanged: "mcp:requests:changed",
   mcpEnvsChanged: "mcp:envs:changed",
@@ -34,6 +41,9 @@ export const EVENTS = {
   mcpConnectionsChanged: "mcp:connections:changed",
   mcpGrpcChanged: "mcp:grpc:changed",
   mcpEnabledChanged: "mcp:enabled:changed",
+
+  // Native menu → frontend dispatcher (menuActions.ts). Payload is the item id.
+  menuAction: "menu:action",
 
   // Misc
   exportToast: "export:toast",

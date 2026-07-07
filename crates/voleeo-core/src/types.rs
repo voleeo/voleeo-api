@@ -247,6 +247,25 @@ pub struct TimelineEvent {
     pub text: String,
 }
 
+/// One frame parsed from a `text/event-stream` response and pushed to the UI
+/// live. `seq` is the 0-based arrival order within a send (the React key);
+/// `data` joins multiple `data:` lines with `\n`. Omitted fields were absent in
+/// the frame.
+#[derive(Type, Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SseFrame {
+    pub seq: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub event: Option<String>,
+    pub data: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_event_id: Option<String>,
+    /// SSE reconnect hint (ms). `u32` keeps it JS-number / specta safe.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retry: Option<u32>,
+    pub at_ms: f64,
+}
+
 /// Phase timings (ms). DNS/TCP/TLS aren't available from the client → 0.0.
 /// `first_byte_ms` = start→headers; `download_ms` = headers→body read.
 #[derive(Type, Serialize, Deserialize, Debug, Clone)]
@@ -312,6 +331,11 @@ pub struct HttpResponse {
     /// across hops, deduped by id.
     #[serde(default)]
     pub attached_cookies: Vec<StoredCookie>,
+    /// Parsed frames for a `text/event-stream` response. Empty for normal
+    /// responses; the body stays empty when this is populated. Persisted with
+    /// the response so each run keeps its stream in history.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sse_frames: Vec<SseFrame>,
 }
 
 /// A WebSocket message payload encoding. `Text` carries UTF-8; `Binary`

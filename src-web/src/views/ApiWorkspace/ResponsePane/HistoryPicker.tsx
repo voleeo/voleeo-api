@@ -1,25 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { createPortal } from "react-dom"
-import { Glyph } from "@/components/Glyph"
-import { cn } from "@/lib/utils"
+import { IconToggle } from "@/components/IconToggle"
 import type { StoredHttpResponseSummary } from "../../../../../packages/types/bindings"
 import { commands } from "../../../../../packages/types/bindings"
-import { formatDuration } from "./format"
-
-function formatRelative(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime()
-  if (diff < 60_000) return "just now"
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`
-  return `${Math.floor(diff / 86_400_000)}d ago`
-}
+import { HistoryDropdown } from "./HistoryDropdown"
 
 interface Props {
   workspaceId: string
   requestId: string
   selectedId: string | null
   refreshKey: number
+  loading: boolean
   onSelect: (responseId: string, isLatest: boolean) => void
+  onShowLive: () => void
   onClear: () => void
 }
 
@@ -28,7 +20,9 @@ export function HistoryPicker({
   requestId,
   selectedId,
   refreshKey,
+  loading,
   onSelect,
+  onShowLive,
   onClear,
 }: Props) {
   const [open, setOpen] = useState(false)
@@ -84,7 +78,7 @@ export function HistoryPicker({
 
   const handleToggle = useCallback(() => {
     if (!open && buttonRef.current) {
-      // Capture position before opening so portal can place itself correctly.
+      // Capture position before opening so the portal can place itself.
       const rect = buttonRef.current.getBoundingClientRect()
       setDropdownPos({
         top: rect.bottom + 4,
@@ -103,142 +97,33 @@ export function HistoryPicker({
     onClear()
   }, [workspaceId, requestId, onClear])
 
-  // Hide button entirely when there is no history.
-  if (items.length === 0) return null
-
-  // Fall back to the latest item when there's no explicit selection so the
-  // live response (which is always items[0]) appears pre-selected.
-  const effectiveSelectedId = selectedId ?? items[0]?.id
+  // Hide entirely when there's nothing to show (no history and not streaming).
+  if (items.length === 0 && !loading) return null
 
   return (
     <>
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={handleToggle}
+      <IconToggle
+        buttonRef={buttonRef}
+        glyph="history"
         title="Response history"
-        className={cn(
-          "flex items-center gap-1 px-1.5 py-1 rounded-[3px] cursor-pointer border-none transition-colors",
-          open
-            ? "text-accent bg-accent/10"
-            : "text-muted hover:text-fg bg-transparent",
-        )}
-      >
-        <Glyph kind="history" size={13} color="currentColor" />
-      </button>
-
-      {open &&
-        dropdownPos &&
-        createPortal(
-          <div
-            ref={dropdownRef}
-            style={{
-              position: "fixed",
-              top: dropdownPos.top,
-              right: dropdownPos.right,
-            }}
-            className="z-[9999] w-64 bg-bg border border-border rounded-[5px] shadow-lg flex flex-col max-h-[28rem]"
-          >
-            <ul className="flex-1 overflow-y-auto py-1 min-h-0">
-              {items.map((item, idx) => {
-                const isSelected = item.id === effectiveSelectedId
-                const isLatest = idx === 0
-                return (
-                  <li key={item.id}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onSelect(item.id, isLatest)
-                        setOpen(false)
-                      }}
-                      className={cn(
-                        "w-full flex items-center gap-2 px-3 py-2 text-left cursor-pointer border-none transition-colors",
-                        isSelected
-                          ? "bg-accent/10 text-accent"
-                          : "bg-transparent hover:bg-surface",
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          "font-mono text-[0.714rem] font-bold shrink-0",
-                          isSelected
-                            ? "text-accent"
-                            : item.status < 300
-                              ? "text-success"
-                              : item.status < 500
-                                ? "text-amber-500"
-                                : "text-destructive",
-                        )}
-                      >
-                        {item.status}
-                      </span>
-                      <Glyph
-                        kind="arrow"
-                        size={9}
-                        color={isSelected ? "var(--base0D)" : "var(--base04)"}
-                      />
-                      <span
-                        className={cn(
-                          "font-mono text-[0.75rem] shrink-0",
-                          isSelected ? "text-accent" : "text-muted",
-                        )}
-                      >
-                        {formatDuration(item.totalMs ?? 0)}
-                      </span>
-                      <span
-                        className={cn(
-                          "text-[0.75rem] shrink-0 ml-auto",
-                          isSelected ? "text-accent/70" : "text-muted/60",
-                        )}
-                      >
-                        {formatRelative(item.recordedAt)}
-                      </span>
-                      {isSelected && (
-                        <Glyph kind="check" size={10} color="currentColor" />
-                      )}
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
-
-            <div className="border-t border-border py-1 shrink-0">
-              {confirmClear ? (
-                <div className="px-3 py-2">
-                  <p className="text-[0.75rem] text-fg mb-2 leading-snug">
-                    Clear all response history?
-                  </p>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={handleClear}
-                      className="flex-1 px-2 py-1 rounded-[3px] bg-destructive/15 text-destructive text-[0.75rem] font-medium cursor-pointer border-none hover:bg-destructive/25 transition-colors"
-                    >
-                      Delete
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setConfirmClear(false)}
-                      className="flex-1 px-2 py-1 rounded-[3px] bg-surface text-muted text-[0.75rem] cursor-pointer border-none hover:text-fg transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setConfirmClear(true)}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-left cursor-pointer border-none bg-transparent text-destructive/70 hover:text-destructive hover:bg-destructive/5 transition-colors"
-                >
-                  <Glyph kind="trash" size={11} color="currentColor" />
-                  <span className="text-[0.75rem]">Clear History</span>
-                </button>
-              )}
-            </div>
-          </div>,
-          document.body,
-        )}
+        active={open}
+        onClick={handleToggle}
+      />
+      {open && dropdownPos && (
+        <HistoryDropdown
+          pos={dropdownPos}
+          dropdownRef={dropdownRef}
+          items={items}
+          loading={loading}
+          selectedId={selectedId}
+          confirmClear={confirmClear}
+          setConfirmClear={setConfirmClear}
+          onSelect={onSelect}
+          onShowLive={onShowLive}
+          onClear={handleClear}
+          close={() => setOpen(false)}
+        />
+      )}
     </>
   )
 }

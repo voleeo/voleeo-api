@@ -1,4 +1,5 @@
 import { Fragment, memo } from "react"
+import { ActiveIndicator } from "@/components/ActiveIndicator"
 import { abbrev } from "@/components/ApiRequestTree/TreeRow"
 import { Glyph } from "@/components/Glyph"
 import { C_GQL, methodColor } from "@/components/tokens"
@@ -8,6 +9,7 @@ import type { ReqRunStatus } from "@/store/folderRun"
 import { useHttpStore } from "@/store/http"
 import type { HttpRequest } from "@/store/requests"
 import { useRequestStore } from "@/store/requests"
+import { useSseStore } from "@/store/sse"
 import { formatDuration } from "../ResponsePane/format"
 import { revealInTree } from "../revealInTree"
 import type { FolderPathSegment } from "./useStoredSend"
@@ -20,10 +22,7 @@ function statusColor(status: number): string {
 }
 
 function RunStateDot({ state }: { state: ReqRunStatus | undefined }) {
-  if (state === "running")
-    return (
-      <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0 animate-pulse" />
-    )
+  if (state === "running") return <ActiveIndicator />
   if (state === "skipped")
     return <span className="w-1.5 h-1.5 rounded-full bg-muted/40 shrink-0" />
   return null
@@ -34,6 +33,7 @@ interface Props {
   included: boolean
   runState: ReqRunStatus | undefined
   maxTotalMs: number
+  lastSummary: { status: number; totalMs: number } | null
   folderPath: FolderPathSegment[] | undefined
   onToggle: (id: string) => void
 }
@@ -43,11 +43,18 @@ function FolderRunRowImpl({
   included,
   runState,
   maxTotalMs,
+  lastSummary,
   folderPath,
   onToggle,
 }: Props) {
   const response = useHttpStore((s) => s.responses[request.id])
   const error = useHttpStore((s) => s.errors[request.id])
+  const loading = useHttpStore((s) => Boolean(s.loading[request.id]))
+  const sseStatus = useSseStore((s) => s.open[request.id]?.status)
+  const sseLastMs = useSseStore((s) => {
+    const f = s.frames[request.id]
+    return f?.length ? f[f.length - 1].atMs : undefined
+  })
   const setActiveFolder = useRequestStore((s) => s.setActiveFolder)
   const setActiveRequest = useRequestStore((s) => s.setActiveRequest)
 
@@ -66,8 +73,13 @@ function FolderRunRowImpl({
   }
 
   const isGraphql = request.body?.kind === "graphql"
-  const totalMs = response?.timing.totalMs ?? null
-  const status = response?.status ?? null
+  const liveSse = loading && sseStatus != null
+  const status = liveSse
+    ? sseStatus
+    : (response?.status ?? lastSummary?.status ?? null)
+  const totalMs = liveSse
+    ? (sseLastMs ?? 0)
+    : (response?.timing.totalMs ?? lastSummary?.totalMs ?? null)
   const barPct =
     totalMs != null && maxTotalMs > 0
       ? Math.max(2, (totalMs / maxTotalMs) * 100)

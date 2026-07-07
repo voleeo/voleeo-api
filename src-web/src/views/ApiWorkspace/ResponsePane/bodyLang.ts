@@ -18,3 +18,8 @@ export function isHtmlResponse(response: HttpResponse | null): boolean {
   if (!response?.bodyIsText) return false
   return responseContentType(response)?.includes("text/html") ?? false
 }
+
+/** True when the response is an SSE stream — rendered as live frames. */
+export function isSseResponse(response: HttpResponse | null): boolean {
+  return responseContentType(response)?.includes("text/event-stream") ?? false
+}
