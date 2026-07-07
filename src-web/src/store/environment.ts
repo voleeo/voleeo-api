@@ -67,7 +67,18 @@ export const useEnvironmentStore = create<EnvironmentStore>((set) => ({
     if (!workspaceId) return
     const result = await commands.envList(workspaceId)
     if (result.status === "ok") {
-      set((s) => ({ environments: result.data, activeEnvId: s.activeEnvId }))
+      const environments = result.data
+      set((s) => ({
+        environments,
+        // Re-validate: the active env may have been deleted remotely.
+        activeEnvId:
+          s.activeEnvId &&
+          environments.some(
+            (e) => e.id === s.activeEnvId && e.kind !== "global",
+          )
+            ? s.activeEnvId
+            : null,
+      }))
     }
   },
 

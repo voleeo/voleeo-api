@@ -6,8 +6,14 @@ import type { McpClient } from "./McpClients"
 const JSON_TOKEN =
   /("(?:\\u[0-9a-fA-F]{4}|\\[^u]|[^\\"])*"(?:\s*:)?|true|false|null|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/g
 
+// Escapes & < > before token-wrapping — quotes are left intact so JSON_TOKEN
+// (which matches on `"`) still finds string tokens in the raw JSON.
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+}
+
 function highlightJson(raw: string): string {
-  return raw.replace(JSON_TOKEN, (m) => {
+  return escapeHtml(raw).replace(JSON_TOKEN, (m) => {
     if (m.startsWith('"')) {
       const isKey = m.endsWith(":")
       const color = isKey ? "var(--base0D)" : "var(--base0B)"

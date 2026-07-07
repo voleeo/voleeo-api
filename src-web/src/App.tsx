@@ -56,8 +56,12 @@ export default function App() {
   useDisableNativeAutofill()
 
   useEffect(() => {
-    initialize()
+    let cleanup: (() => void) | undefined
+    initialize().then((fn) => {
+      cleanup = fn
+    })
     if (windowLabel === "main") initChrome()
+    return () => cleanup?.()
   }, [initialize, initChrome])
 
   useEffect(() => {

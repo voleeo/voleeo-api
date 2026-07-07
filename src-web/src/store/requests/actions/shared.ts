@@ -1,4 +1,6 @@
 import type { StoreApi } from "zustand"
+import { errorMessage } from "@/lib/error"
+import { useToastStore } from "@/store/toast"
 import { commands } from "../../../../../packages/types/bindings"
 import type { RequestStore } from "../types"
 
@@ -24,4 +26,18 @@ export async function fetchEntities(workspaceId: string) {
     connections: connectionsRes.status === "ok" ? connectionsRes.data : [],
     grpcRequests: grpcRes.status === "ok" ? grpcRes.data : [],
   }
+}
+
+/** After an optimistic mutation, check the backend result: on failure, toast
+ *  and resync from disk so the UI doesn't silently diverge from what's saved. */
+export async function syncOnFailure(
+  get: GetState,
+  result: { status: "ok" | "error"; error?: unknown },
+  action: string,
+) {
+  if (result.status === "ok") return
+  useToastStore
+    .getState()
+    .show(`Failed to ${action}: ${errorMessage(result.error)}`, 4000, "error")
+  await get().reload()
 }
