@@ -113,7 +113,7 @@ function FrameRowImpl({
       </button>
 
       {open && (
-        <div className="pl-9 pr-[18px] pt-1 pb-4">
+        <div className="pl-3.5 pr-[18px] pt-1 pb-4">
           <div className="relative rounded-[10px] border border-border overflow-hidden bg-bg">
             <CopyButton text={raw} className="absolute top-1.5 right-2 z-10" />
             <div className="px-3.5 py-3 overflow-x-auto">

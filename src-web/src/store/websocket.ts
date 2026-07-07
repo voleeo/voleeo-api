@@ -1,4 +1,5 @@
 import { create } from "zustand"
+import { capPush } from "@/lib/boundedArray"
 import { useEnvironmentStore } from "@/store/environment"
 import { useRequestStore } from "@/store/requests"
 import { useUiStore } from "@/store/workspace"
@@ -95,7 +96,7 @@ export const useWebsocketStore = create<WebsocketStore>((set, get) => ({
       return {
         transcripts: {
           ...s.transcripts,
-          [connectionId]: [...current, message],
+          [connectionId]: capPush(current, message),
         },
       }
     }),
@@ -104,7 +105,10 @@ export const useWebsocketStore = create<WebsocketStore>((set, get) => ({
     set((s) => {
       const current = s.timelines[connectionId] ?? []
       return {
-        timelines: { ...s.timelines, [connectionId]: [...current, event] },
+        timelines: {
+          ...s.timelines,
+          [connectionId]: capPush(current, event),
+        },
       }
     }),
 

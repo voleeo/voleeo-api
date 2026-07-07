@@ -124,6 +124,10 @@ impl GrpcManager {
             .await
             .map_err(|e| VoleeoError::Grpc(format!("service not ready: {e}")))?;
 
+        // Emit "streaming" BEFORE spawning the reader so the connecting→streaming
+        // transition always precedes any Message/done/error the reader pushes.
+        sink(GrpcEvent::Status("streaming"));
+
         let (outbound, reader) = streaming::spawn(
             spec.kind,
             client,
@@ -149,7 +153,6 @@ impl GrpcManager {
                 prev.reader.abort();
             }
         }
-        sink(GrpcEvent::Status("streaming"));
         Ok(())
     }
 

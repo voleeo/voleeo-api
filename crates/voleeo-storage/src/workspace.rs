@@ -90,8 +90,7 @@ impl WorkspaceStore {
             .map_err(|e| VoleeoError::Storage(e.to_string()))?;
         let content =
             serde_yaml::to_string(&ws).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-        std::fs::write(self.file_path(&id)?, content)
-            .map_err(|e| VoleeoError::Storage(e.to_string()))?;
+        crate::write_atomic(self.file_path(&id)?, content)?;
         Ok(ws)
     }
 
@@ -99,8 +98,7 @@ impl WorkspaceStore {
         std::fs::create_dir_all(self.workspace_dir(&ws.id)?)
             .map_err(|e| VoleeoError::Storage(e.to_string()))?;
         let content = serde_yaml::to_string(ws).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-        std::fs::write(self.file_path(&ws.id)?, content)
-            .map_err(|e| VoleeoError::Storage(e.to_string()))
+        crate::write_atomic(self.file_path(&ws.id)?, content)
     }
 
     pub fn update_headers(

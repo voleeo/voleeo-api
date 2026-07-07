@@ -1,7 +1,4 @@
 import { useCallback, useLayoutEffect, useRef } from "react"
-import { createPortal } from "react-dom"
-import { EnableEncryptionDialog } from "@/components/EnableEncryptionDialog"
-import { TemplateFunctionModal } from "@/components/TemplateFunctionModal"
 import { useTemplateInputData } from "@/components/TemplateInput/useTemplateInputData"
 import {
   ensureTrailingTextNode,
@@ -10,8 +7,9 @@ import {
 } from "@/lib/caret"
 import type { CommandImportResult } from "@/lib/commandImport"
 import { cn } from "@/lib/utils"
+import { UrlInputModals } from "./UrlInputModals"
 import { toHtml } from "./urlTokenizer"
-import { Autocomplete, useUrlAutocomplete } from "./useUrlAutocomplete"
+import { useUrlAutocomplete } from "./useUrlAutocomplete"
 import { useUrlFuncModal } from "./useUrlFuncModal"
 import { useUrlInputHandlers } from "./useUrlInputHandlers"
 import { useUrlMouseHandlers } from "./useUrlMouseHandlers"
@@ -208,45 +206,22 @@ export function UrlInput({
         )}
       />
 
-      {acOpen &&
-        anchorRect &&
-        acItems.length > 0 &&
-        createPortal(
-          <Autocomplete
-            items={acItems}
-            selectedIndex={acIdx}
-            anchorRect={anchorRect}
-            query={acQuery}
-            onSelect={selectUrlItem}
-            onClose={closeAutocomplete}
-          />,
-          document.body,
-        )}
-
-      {showEncryptionDialog &&
-        activeWorkspaceId &&
-        createPortal(
-          <EnableEncryptionDialog
-            workspaceId={activeWorkspaceId}
-            onEnabled={() => setShowEncryptionDialog(false)}
-            onCancel={() => setShowEncryptionDialog(false)}
-          />,
-          document.body,
-        )}
-
-      {funcModal &&
-        createPortal(
-          <TemplateFunctionModal
-            fn={
-              fns.find((f) => f.name === funcModal.fnName) ??
-              ({ name: funcModal.fnName, onRender: () => "" } as never)
-            }
-            initialArgs={funcModal.initialArgs}
-            onInsert={handleFuncModalInsert}
-            onClose={() => setFuncModal(null)}
-          />,
-          document.body,
-        )}
+      <UrlInputModals
+        acOpen={acOpen}
+        acItems={acItems}
+        acIdx={acIdx}
+        acQuery={acQuery}
+        anchorRect={anchorRect}
+        selectUrlItem={selectUrlItem}
+        closeAutocomplete={closeAutocomplete}
+        showEncryptionDialog={showEncryptionDialog}
+        activeWorkspaceId={activeWorkspaceId}
+        setShowEncryptionDialog={setShowEncryptionDialog}
+        funcModal={funcModal}
+        setFuncModal={setFuncModal}
+        fns={fns}
+        handleFuncModalInsert={handleFuncModalInsert}
+      />
     </>
   )
 }

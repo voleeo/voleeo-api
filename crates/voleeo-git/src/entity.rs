@@ -166,7 +166,9 @@ pub fn entity_diff_text(path: &Path, rel: &str) -> Result<String, VoleeoError> {
     let repo = open_repo(path)?;
     let head_tree = repo.head().ok().and_then(|h| h.peel_to_tree().ok());
     let mut opts = DiffOptions::new();
-    opts.pathspec(rel);
+    opts.pathspec(rel)
+        .include_untracked(true)
+        .show_untracked_content(true);
     let diff = repo
         .diff_tree_to_workdir(head_tree.as_ref(), Some(&mut opts))
         .map_err(git_err)?;

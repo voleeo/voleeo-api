@@ -3,6 +3,12 @@ import type {
   RequestBody,
   RequestParameter,
 } from "../../../packages/types/bindings"
+import {
+  deriveAuth,
+  detectBodyKind,
+  SKIP_BOOL_FLAGS,
+  SKIP_VALUE_FLAGS,
+} from "./curlFlags"
 import { shellTokenize } from "./shellTokenize"
 
 export interface ParsedRequest {
@@ -14,56 +20,6 @@ export interface ParsedRequest {
   body: RequestBody | null
   auth: AuthConfig
 }
-
-/** Flags that take a value but whose value we don't care about; we still need
- *  to consume the next token so we don't misinterpret it as the URL. */
-const SKIP_VALUE_FLAGS = new Set([
-  "--cacert",
-  "--cert",
-  "--cert-type",
-  "--connect-timeout",
-  "--cookie",
-  "--cookie-jar",
-  "--key",
-  "--key-type",
-  "--max-time",
-  "--proxy",
-  "--proxy-user",
-  "--referer",
-  "--resolve",
-  "--user-agent",
-  "-A",
-  "-b",
-  "-c",
-  "-e",
-  "-m",
-  "-x",
-])
-
-/** Boolean flags we just discard. */
-const SKIP_BOOL_FLAGS = new Set([
-  "-#",
-  "-I",
-  "-L",
-  "-O",
-  "-S",
-  "-f",
-  "-i",
-  "-k",
-  "-s",
-  "-v",
-  "--compressed",
-  "--fail",
-  "--head",
-  "--include",
-  "--insecure",
-  "--location",
-  "--no-progress-meter",
-  "--progress-bar",
-  "--silent",
-  "--show-error",
-  "--verbose",
-])
 
 function genId(name: string): string {
   return `imp_${name.replace(/[^a-zA-Z0-9]/g, "_")}_${Math.random().toString(36).slice(2, 8)}`
@@ -104,74 +60,6 @@ function safeDecode(s: string): string {
   } catch {
     return s
   }
-}
-
-function detectBodyKind(
-  body: string,
-  headers: RequestParameter[],
-): RequestBody["kind"] {
-  const ct = headers
-    .find((h) => h.name.toLowerCase() === "content-type")
-    ?.value.toLowerCase()
-  if (ct?.includes("json")) return "json"
-  if (ct?.includes("xml")) return "xml"
-  if (ct?.includes("text")) return "text"
-  // Fall back to sniffing the literal.
-  const trimmed = body.trimStart()
-  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-    try {
-      JSON.parse(body)
-      return "json"
-    } catch {
-      // not valid JSON, continue
-    }
-  }
-  if (trimmed.startsWith("<")) return "xml"
-  return "text"
-}
-
-function deriveAuth(
-  headers: RequestParameter[],
-  basicCreds: string | null,
-): { auth: AuthConfig; consumedHeaderIndex: number | null } {
-  if (basicCreds) {
-    const idx = basicCreds.indexOf(":")
-    const username = idx < 0 ? basicCreds : basicCreds.slice(0, idx)
-    const password = idx < 0 ? "" : basicCreds.slice(idx + 1)
-    return {
-      auth: { kind: "basic", username, password },
-      consumedHeaderIndex: null,
-    }
-  }
-  const authIdx = headers.findIndex(
-    (h) => h.name.toLowerCase() === "authorization",
-  )
-  if (authIdx < 0) return { auth: { kind: "none" }, consumedHeaderIndex: null }
-  const raw = headers[authIdx].value
-  const m = raw.match(/^Bearer\s+(.+)$/i)
-  if (m) {
-    return {
-      auth: { kind: "bearer", token: m[1] },
-      consumedHeaderIndex: authIdx,
-    }
-  }
-  const basic = raw.match(/^Basic\s+(.+)$/i)
-  if (basic) {
-    try {
-      // atob is available in browser + modern Node/bun
-      const decoded = atob(basic[1])
-      const idx = decoded.indexOf(":")
-      const username = idx < 0 ? decoded : decoded.slice(0, idx)
-      const password = idx < 0 ? "" : decoded.slice(idx + 1)
-      return {
-        auth: { kind: "basic", username, password },
-        consumedHeaderIndex: authIdx,
-      }
-    } catch {
-      // fall through
-    }
-  }
-  return { auth: { kind: "none" }, consumedHeaderIndex: null }
 }
 
 /** Parse a `curl …` command line into a Voleeo request shape.

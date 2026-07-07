@@ -1,4 +1,3 @@
-import { useMemo } from "react"
 import { Spinner } from "@/components/ui/spinner"
 import { useThemeStore } from "@/store/theme"
 import type { HttpResponse } from "../../../../../packages/types/bindings"
@@ -6,6 +5,7 @@ import type { BodyLang } from "./bodyLang"
 import { isHtmlResponse } from "./bodyLang"
 import { CodeBody } from "./CodeBody"
 import { HtmlBody, type HtmlView } from "./HtmlBody"
+import type { CodeTools } from "./useCodeTools"
 import { VirtualBody } from "./VirtualBody"
 
 function headerValue(
@@ -23,50 +23,52 @@ function detectLang(ct: string | null): BodyLang {
   return "plain"
 }
 
+export interface BodyInfo {
+  rawText: string
+  lang: BodyLang
+  isBinary: boolean
+}
+
+/** Detect language and pretty-print JSON once, so the tab-bar (which decides
+ *  whether to show the find/filter buttons) and `BodyTab` agree without parsing
+ *  twice. Memoize on `response` at the call site. */
+export function analyzeBody(response: HttpResponse | null): BodyInfo {
+  if (!response) return { rawText: "", lang: "plain", isBinary: false }
+  if (!response.bodyIsText)
+    return { rawText: response.body, lang: "plain", isBinary: true }
+  const detectedLang = detectLang(headerValue(response.headers, "content-type"))
+  if (detectedLang === "json") {
+    try {
+      const pretty = JSON.stringify(
+        JSON.parse(response.body) as unknown,
+        null,
+        2,
+      )
+      return { rawText: pretty, lang: "json", isBinary: false }
+    } catch {
+      return { rawText: response.body, lang: "plain", isBinary: false }
+    }
+  }
+  return { rawText: response.body, lang: detectedLang, isBinary: false }
+}
+
 export function BodyTab({
   response,
   loading,
   htmlView,
+  body,
+  tools,
 }: {
   response: HttpResponse | null
   loading: boolean
   htmlView: HtmlView
+  body: BodyInfo
+  tools: CodeTools
 }) {
   const activeTheme = useThemeStore((s) => s.activeTheme)
   const isDark = activeTheme?.kind !== "light"
   const isHtml = isHtmlResponse(response)
-
-  const { rawText, lang, isBinary } = useMemo(() => {
-    if (!response)
-      return { rawText: "", lang: "plain" as BodyLang, isBinary: false }
-    if (!response.bodyIsText) {
-      return {
-        rawText: response.body,
-        lang: "plain" as BodyLang,
-        isBinary: true,
-      }
-    }
-    const detectedLang = detectLang(
-      headerValue(response.headers, "content-type"),
-    )
-    if (detectedLang === "json") {
-      try {
-        const pretty = JSON.stringify(
-          JSON.parse(response.body) as unknown,
-          null,
-          2,
-        )
-        return { rawText: pretty, lang: "json" as BodyLang, isBinary: false }
-      } catch {
-        return {
-          rawText: response.body,
-          lang: "plain" as BodyLang,
-          isBinary: false,
-        }
-      }
-    }
-    return { rawText: response.body, lang: detectedLang, isBinary: false }
-  }, [response])
+  const { rawText, lang, isBinary } = body
 
   if (loading && !response) {
     return (
@@ -108,5 +110,5 @@ export function BodyTab({
     )
   }
 
-  return <CodeBody rawText={rawText} lang={lang} />
+  return <CodeBody rawText={rawText} lang={lang} tools={tools} />
 }

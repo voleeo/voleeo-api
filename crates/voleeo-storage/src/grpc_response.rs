@@ -81,7 +81,7 @@ impl GrpcResponseStore {
         let path = self.file_path(workspace_id, request_id)?;
         let content =
             serde_yaml::to_string(items).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-        std::fs::write(&path, content).map_err(|e| VoleeoError::Storage(e.to_string()))
+        crate::write_atomic(&path, content)
     }
 
     /// Prepend `response` to the history ring, trimming to `limit`. `limit = 0`

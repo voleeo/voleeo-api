@@ -23,13 +23,22 @@ pub(crate) struct SseDecoder {
     data: Vec<String>,
     id: Option<String>,
     retry: Option<u32>,
-    dirty: bool, // a field line landed since the last dispatch
+    dirty: bool,       // a field line landed since the last dispatch
+    bom_checked: bool, // leading UTF-8 BOM stripped (checked once at stream start)
 }
 
 impl SseDecoder {
     /// Feed a chunk; return every frame whose terminating blank line arrived.
     pub fn push(&mut self, chunk: &[u8]) -> Vec<RawFrame> {
         self.buf.extend_from_slice(chunk);
+        // Per the event-stream spec, strip a single leading BOM once at the very
+        // start; otherwise it corrupts the first field name and drops frame one.
+        if !self.bom_checked && self.buf.len() >= 3 {
+            self.bom_checked = true;
+            if self.buf.starts_with(&[0xEF, 0xBB, 0xBF]) {
+                self.buf.drain(..3);
+            }
+        }
         let mut frames = Vec::new();
         // Split on LF; a trailing CR is stripped so CRLF and LF both work. The
         // remainder after the last LF stays buffered for the next chunk.
@@ -159,6 +168,17 @@ mod tests {
         assert_eq!(f.len(), 2);
         assert_eq!(f[0].data, "a");
         assert_eq!(f[1].data, "b");
+    }
+
+    #[test]
+    fn strips_leading_bom_before_first_field() {
+        let mut d = SseDecoder::default();
+        let mut input = vec![0xEF, 0xBB, 0xBF];
+        input.extend_from_slice(b"data: first\n\n");
+        let mut out = d.push(&input);
+        out.extend(d.finish());
+        assert_eq!(out.len(), 1, "BOM must not swallow the first frame");
+        assert_eq!(out[0].data, "first");
     }
 
     #[test]

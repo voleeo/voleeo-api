@@ -6,8 +6,7 @@ import { useHttpStore } from "@/store/http"
 import { useRequestStore } from "@/store/requests"
 import { type SseFrame, useSseStore } from "@/store/sse"
 import { useUiStore } from "@/store/workspace"
-import type { HttpResponse } from "../../../../../packages/types/bindings"
-import { BodyTab } from "./BodyTab"
+import { analyzeBody, BodyTab } from "./BodyTab"
 import { isHtmlResponse, isSseResponse } from "./bodyLang"
 import { CookiesTab, collectReceivedRows } from "./CookiesTab"
 import { HeadersTab } from "./HeadersTab"
@@ -16,11 +15,13 @@ import type { HtmlView } from "./HtmlBody"
 import { ResponseLoading } from "./ResponseLoading"
 import { ResponseStatusLine } from "./ResponseStatusLine"
 import { ResponseTabBar, type TabId } from "./ResponseTabBar"
+import { codeBodyFlags, useLiveSseResponse } from "./responsePaneHelpers"
 import { SseStreamTab } from "./SseStreamTab"
 import { SseFilterPane } from "./SseStreamTab/SseFilterPane"
 import { SseRawView } from "./SseStreamTab/SseRawView"
 import { useSseView } from "./SseStreamTab/useSseView"
 import { TimelineTab } from "./TimelineTab"
+import { useCodeTools } from "./useCodeTools"
 import { useHistorySync } from "./useHistorySync"
 
 const NO_FRAMES: never[] = []
@@ -66,8 +67,6 @@ export function ResponsePane() {
   })
 
   const response = historicalResponse ?? liveResponse
-  // Live (streaming) view vs a stored/historical one — every live selector
-  // below keys off this single predicate so the pane can't split-brain.
   const isLive = loading && !historicalResponse
 
   const liveFrames = useSseStore((s) =>
@@ -109,36 +108,21 @@ export function ResponsePane() {
   const streamError =
     timelineEvents.find((e) => e.kind === "error")?.text ?? null
 
-  // Memoized so Headers/Cookies/StatusLine keep a stable reference across the ~30 renders/s a fast stream produces.
-  const liveSseResponse: HttpResponse | undefined = useMemo(
-    () =>
-      isLive && sseOpen && activeRequestId
-        ? {
-            requestId: activeRequestId,
-            status: sseOpen.status,
-            statusText: sseOpen.statusText,
-            headers: sseOpen.headers,
-            body: "",
-            bodySize: liveBytes,
-            bodyIsText: true,
-            timing: {
-              dnsMs: 0,
-              connectMs: 0,
-              tlsMs: 0,
-              firstByteMs: 0,
-              downloadMs: 0,
-              totalMs: liveTimingMs ?? 0,
-            },
-            events: timelineEvents,
-          }
-        : undefined,
-    [isLive, sseOpen, activeRequestId, liveBytes, liveTimingMs, timelineEvents],
+  const liveSseResponse = useLiveSseResponse(
+    isLive,
+    activeRequestId ?? null,
+    sseOpen,
+    liveBytes,
+    liveTimingMs ?? 0,
+    timelineEvents,
   )
 
   const tabResponse = isLive ? (liveSseResponse ?? null) : (response ?? null)
 
   const [tab, setTab] = useState<TabId>("body")
   const [htmlView, setHtmlView] = useState<HtmlView>("preview")
+  const codeTools = useCodeTools()
+  const bodyInfo = useMemo(() => analyzeBody(response ?? null), [response])
 
   const sseTools = isSse && tab === "body"
 
@@ -155,6 +139,12 @@ export function ResponsePane() {
   }
 
   const isHtml = isHtmlResponse(response ?? null)
+  const { isCodeBody, canFilter } = codeBodyFlags(
+    response ?? null,
+    isSse,
+    isHtml,
+    bodyInfo,
+  )
 
   return (
     <div className="@container h-full min-h-0 flex flex-col">
@@ -201,6 +191,9 @@ export function ResponsePane() {
         setHtmlView={setHtmlView}
         sseTools={sseTools}
         sseView={sseView}
+        showCodeTools={tab === "body" && isCodeBody}
+        canFilter={canFilter}
+        codeTools={codeTools}
       />
 
       {sseTools && sseView.searchOpen && <SseFilterPane view={sseView} />}
@@ -231,6 +224,8 @@ export function ResponsePane() {
                   response={response ?? null}
                   loading={loading}
                   htmlView={htmlView}
+                  body={bodyInfo}
+                  tools={codeTools}
                 />
               ))}
             {tab === "headers" && (

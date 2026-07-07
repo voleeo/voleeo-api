@@ -4,7 +4,7 @@ import { buildPathParams, rowsToParams } from "../paramUtils"
 import { SelectAllToggle } from "../SelectAllToggle"
 import { useMakeEncryptInsertHandler } from "../useMakeEncryptInsertHandler"
 import { useParamDrag } from "../useParamDrag"
-import { PathParamRow } from "./PathParamRow"
+import { PathParamsList } from "./PathParamsList"
 import type { ParamsCommit } from "./paramsCommit"
 import { QueryParamRow } from "./QueryParamRow"
 import { useParamCounts } from "./useParamCounts"
@@ -180,39 +180,26 @@ export function ParamsTab({
   const colStyle = { gridTemplateColumns: "16px 8px 1fr 1fr 24px" }
   return (
     <div className="px-3.5 py-3 flex flex-col">
-      {pathParamDisplayOrder.map((name, i) => (
-        <div
-          key={getStableKey(name)}
-          data-param-section="path"
-          data-param-index={i}
-        >
-          {dropTarget?.section === "path" && dropTarget.index === i && (
-            <DropLine />
-          )}
-          <PathParamRow
-            name={name}
-            value={pathParamValues[name] ?? ""}
-            enabled={pathParamEnabled[name] !== false}
-            existingNames={allPathParams.filter((n) => n !== name)}
-            colStyle={colStyle}
-            isDragging={draggingKey === `path:${i}`}
-            onToggle={() => togglePathParam(name)}
-            onValueChange={(val) => updatePathParamValue(name, val)}
-            onRename={renamePathParam}
-            onRemove={() => removePathParam(name)}
-            valueInputRef={pathParamInputRef(name)}
-            onDragHandlePointerDown={(e) => startDrag(e, "path", i)}
-            shouldFocusKey={pendingKeyFocusName === name}
-            onKeyFocused={() => setPendingKeyFocusName(null)}
-            onVarClick={onVarClick}
-            onEncryptInsert={makeEncryptInsertHandler((val) =>
-              updatePathParamValue(name, val),
-            )}
-          />
-        </div>
-      ))}
-      {dropTarget?.section === "path" &&
-        dropTarget.index === pathParamDisplayOrder.length && <DropLine />}
+      <PathParamsList
+        pathParamDisplayOrder={pathParamDisplayOrder}
+        pathParamValues={pathParamValues}
+        pathParamEnabled={pathParamEnabled}
+        allPathParams={allPathParams}
+        colStyle={colStyle}
+        draggingKey={draggingKey}
+        dropTarget={dropTarget}
+        getStableKey={getStableKey}
+        togglePathParam={togglePathParam}
+        updatePathParamValue={updatePathParamValue}
+        renamePathParam={renamePathParam}
+        removePathParam={removePathParam}
+        pathParamInputRef={pathParamInputRef}
+        startDrag={startDrag}
+        pendingKeyFocusName={pendingKeyFocusName}
+        setPendingKeyFocusName={setPendingKeyFocusName}
+        onVarClick={onVarClick}
+        makeEncryptInsertHandler={makeEncryptInsertHandler}
+      />
 
       {rows.map((row, rowIndex) => {
         const isTrailing =

@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils"
 import { formatDuration } from "./format"
 import type { HtmlView } from "./HtmlBody"
 import type { SseView } from "./SseStreamTab/useSseView"
+import type { CodeTools } from "./useCodeTools"
 
 export type TabId = "body" | "headers" | "cookies" | "timeline"
 
@@ -28,6 +29,9 @@ interface Props {
   setHtmlView: (v: HtmlView) => void
   sseTools: boolean
   sseView: SseView
+  showCodeTools: boolean
+  canFilter: boolean
+  codeTools: CodeTools
 }
 
 export function ResponseTabBar({
@@ -43,6 +47,9 @@ export function ResponseTabBar({
   setHtmlView,
   sseTools,
   sseView,
+  showCodeTools,
+  canFilter,
+  codeTools,
 }: Props) {
   return (
     <div className="pt-1.5 px-3.5 border-b border-border flex">
@@ -131,6 +138,30 @@ export function ResponseTabBar({
             title={sseView.raw ? "Show parsed events" : "Show raw stream"}
             active={sseView.raw}
             onClick={() => sseView.setRaw(!sseView.raw)}
+          />
+        </div>
+      )}
+      {showCodeTools && (
+        <div className="ml-auto flex items-center gap-1 pr-0.5">
+          {canFilter && (
+            <IconToggle
+              glyph="filter"
+              title="Filter (JSONPath / XPath)"
+              active={codeTools.filterOpen}
+              onClick={() =>
+                codeTools.filterOpen
+                  ? codeTools.closeFilter()
+                  : codeTools.openFilter()
+              }
+            />
+          )}
+          <IconToggle
+            glyph="search"
+            title="Find in response"
+            active={codeTools.findOpen}
+            onClick={() =>
+              codeTools.findOpen ? codeTools.closeFind() : codeTools.openFind()
+            }
           />
         </div>
       )}

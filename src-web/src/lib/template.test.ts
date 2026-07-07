@@ -98,7 +98,7 @@ describe("tokenize — mixed text + tokens", () => {
 
 describe("tokenize — malformed / unclosed {{", () => {
   test("unclosed {{ kept as plain text", () => {
-    // The split regex only matches {{...}} so unclosed stays plain.
+    // No closing }} found, so the scan falls through and it stays plain.
     expect(tokenize("{{ unclosed")).toEqual([
       { kind: "plain", text: "{{ unclosed" },
     ])
@@ -185,6 +185,43 @@ describe("serialize(tokenize(x)) === x round-trips", () => {
   }
 })
 
+describe("tokenize/serialize round-trip — arg values with special chars", () => {
+  test('arg value containing a literal `"` round-trips', () => {
+    const tokens = tokenize('{{ fn(k="say \\"hi\\"") }}')
+    expect(tokens).toEqual([
+      { kind: "func", name: "fn", args: { k: 'say "hi"' } },
+    ])
+    expect(serialize(tokens)).toBe('{{ fn(k="say \\"hi\\"") }}')
+    expect(tokenize(serialize(tokens))).toEqual(tokens)
+  })
+
+  test("arg value containing a literal `}}` round-trips", () => {
+    const tokens = tokenize('{{ fn(k="a }} b") }}')
+    expect(tokens).toEqual([
+      { kind: "func", name: "fn", args: { k: "a }} b" } },
+    ])
+    expect(serialize(tokens)).toBe('{{ fn(k="a }} b") }}')
+    expect(tokenize(serialize(tokens))).toEqual(tokens)
+  })
+
+  test("arg value containing a backslash round-trips", () => {
+    const tokens = tokenize('{{ fn(k="a\\\\b") }}')
+    expect(tokens).toEqual([{ kind: "func", name: "fn", args: { k: "a\\b" } }])
+    expect(serialize(tokens)).toBe('{{ fn(k="a\\\\b") }}')
+    expect(tokenize(serialize(tokens))).toEqual(tokens)
+  })
+
+  test("plain text following a `}}`-containing arg is preserved", () => {
+    const input = '{{ fn(k="a }} b") }} rest'
+    const tokens = tokenize(input)
+    expect(tokens).toEqual([
+      { kind: "func", name: "fn", args: { k: "a }} b" } },
+      { kind: "plain", text: " rest" },
+    ])
+    expect(serialize(tokens)).toBe(input)
+  })
+})
+
 // ---------------------------------------------------------------------------
 // parseExpr
 // ---------------------------------------------------------------------------
@@ -229,6 +266,22 @@ describe("parseExpr", () => {
   test("numeric → null", () => {
     expect(parseExpr("42")).toBeNull()
   })
+
+  test('fn(k="say \\"hi\\"") → unescapes the quote in the value', () => {
+    expect(parseExpr('fn(k="say \\"hi\\"")')).toEqual({
+      kind: "func",
+      name: "fn",
+      args: { k: 'say "hi"' },
+    })
+  })
+
+  test('fn(k="a\\\\b") → unescapes the backslash in the value', () => {
+    expect(parseExpr('fn(k="a\\\\b")')).toEqual({
+      kind: "func",
+      name: "fn",
+      args: { k: "a\\b" },
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -248,6 +301,16 @@ describe("serializeFuncToken", () => {
     expect(serializeFuncToken("f", { a: "1", b: "2" })).toBe(
       '{{ f(a="1", b="2") }}',
     )
+  })
+
+  test('escapes `"` in an arg value', () => {
+    expect(serializeFuncToken("fn", { k: 'say "hi"' })).toBe(
+      '{{ fn(k="say \\"hi\\"") }}',
+    )
+  })
+
+  test("escapes `\\` in an arg value", () => {
+    expect(serializeFuncToken("fn", { k: "a\\b" })).toBe('{{ fn(k="a\\\\b") }}')
   })
 })
 
