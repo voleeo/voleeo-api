@@ -3,7 +3,7 @@
 
 use std::collections::HashSet;
 
-use super::is_identifier;
+use super::vars::is_identifier;
 
 /// Extract `:name` path-parameter names from a URL.
 pub(super) fn extract_path_params(url: &str) -> HashSet<String> {
@@ -98,4 +98,38 @@ pub(super) fn base64_encode(input: &[u8]) -> String {
         });
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn path_param_substitution() {
+        assert_eq!(
+            replace_path_param("/api/:name/info", "name", "ditto"),
+            "/api/ditto/info"
+        );
+    }
+
+    #[test]
+    fn base64_basic() {
+        // "man" → "bWFu"
+        assert_eq!(base64_encode(b"man"), "bWFu");
+        // "Ma" → "TWE="
+        assert_eq!(base64_encode(b"Ma"), "TWE=");
+    }
+
+    #[test]
+    fn url_encode_unreserved_chars_pass_through() {
+        let input = "abcABC012-_.~";
+        assert_eq!(url_encode(input), input);
+    }
+
+    #[test]
+    fn url_encode_encodes_space_and_special() {
+        assert_eq!(url_encode(" "), "%20");
+        assert_eq!(url_encode("a&b=c"), "a%26b%3Dc");
+        assert_eq!(url_encode("/"), "%2F");
+    }
 }

@@ -8,9 +8,8 @@ use std::path::Path;
 use voleeo_core::{ApiFolder, AuthConfig, GrpcRequest};
 use voleeo_storage::{EnvironmentStore, RequestStore, WorkspaceStore};
 
-use super::{
-    apply_folder_vars, base64_encode, load_env_vars, merge_inherited_metadata, resolve_str,
-};
+use super::text::base64_encode;
+use super::vars::{apply_folder_vars, load_env_vars, merge_inherited_metadata, resolve_str};
 
 /// Env + folder vars in a gRPC request's scope — for callers that only need
 /// string resolution (target preview, stream payloads).
