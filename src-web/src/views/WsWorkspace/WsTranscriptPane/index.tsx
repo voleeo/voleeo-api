@@ -6,6 +6,11 @@ import {
   ResponseHeader,
   StatusPill,
 } from "@/components/ResponseHeader"
+import {
+  TranscriptToolbar,
+  TranscriptView,
+  useTranscriptView,
+} from "@/components/Transcript"
 import { Spinner } from "@/components/ui/spinner"
 import { SHORTCUTS } from "@/config/shortcuts"
 import { cn } from "@/lib/utils"
@@ -17,7 +22,6 @@ import type {
   WsMessage,
 } from "../../../../../packages/types/bindings"
 import { WsHistoryPicker } from "../WsHistoryPicker"
-import { MessageRow } from "./MessageRow"
 import { statusPill } from "./statusPill"
 import { TimelineList } from "./TimelineList"
 import { useHistoricalSession } from "./useHistoricalSession"
@@ -49,12 +53,16 @@ export function WsTranscriptPane() {
     latest,
   } = useHistoricalSession(workspaceId, id, status, messages.length)
 
-  if (!connection || !id) return null
-
-  const pill = statusPill(status)
   const shown = historical ?? (messages.length === 0 ? latest : null)
   const viewMessages = shown ? (shown.messages ?? NO_MESSAGES) : messages
   const viewTimeline = shown ? (shown.events ?? NO_EVENTS) : timeline
+  const transcript = useTranscriptView(viewMessages, id ?? "")
+  const following =
+    !historical && (status === "open" || status === "connecting")
+
+  if (!connection || !id) return null
+
+  const pill = statusPill(status)
 
   if (
     !historical &&
@@ -135,19 +143,18 @@ export function WsTranscriptPane() {
           active={tab === "timeline"}
           onClick={() => setTab("timeline")}
         />
+        {tab === "transcript" && (
+          <TranscriptToolbar view={transcript} count={viewMessages.length} />
+        )}
       </div>
 
-      <div className="flex-1 min-h-0 overflow-auto">
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         {tab === "transcript" ? (
-          viewMessages.length === 0 ? (
-            <div className="px-3 py-6 text-center font-mono text-[0.714rem] text-muted">
-              No messages yet
-            </div>
-          ) : (
-            viewMessages.map((m) => <MessageRow key={m.id} m={m} />)
-          )
+          <TranscriptView view={transcript} live={following} />
         ) : (
-          <TimelineList events={viewTimeline} />
+          <div className="flex-1 min-h-0 overflow-auto">
+            <TimelineList events={viewTimeline} />
+          </div>
         )}
       </div>
     </div>

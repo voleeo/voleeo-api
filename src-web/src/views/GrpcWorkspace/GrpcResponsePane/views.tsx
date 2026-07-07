@@ -1,7 +1,7 @@
-import { CodeView } from "@/components/CodeView"
 import { cn } from "@/lib/utils"
+import { CodeBody } from "@/views/ApiWorkspace/ResponsePane/CodeBody"
+import type { CodeTools } from "@/views/ApiWorkspace/ResponsePane/useCodeTools"
 import type {
-  GrpcStreamMessage,
   HttpResponseHeader,
   TimelineEvent,
 } from "../../../../../packages/types/bindings"
@@ -21,9 +21,11 @@ export function prettyJson(raw: string): string {
 export function UnaryBody({
   error,
   message,
+  tools,
 }: {
   error?: string
   message?: string
+  tools: CodeTools
 }) {
   if (error)
     return (
@@ -37,11 +39,7 @@ export function UnaryBody({
         Send the request to see the response.
       </p>
     )
-  return (
-    <div className="px-2 py-1 selectable-text">
-      <CodeView value={prettyJson(message)} lang="json" />
-    </div>
-  )
+  return <CodeBody rawText={prettyJson(message)} lang="json" tools={tools} />
 }
 
 export function HeaderTable({
@@ -71,41 +69,6 @@ export function HeaderTable({
           <span className="font-mono text-[0.786rem] text-fg break-words min-w-0">
             {h.value}
           </span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-export function TranscriptList({
-  messages,
-}: {
-  messages: GrpcStreamMessage[]
-}) {
-  if (messages.length === 0)
-    return (
-      <p className="px-3.5 py-3 font-mono text-[0.857rem] text-muted">
-        No messages yet.
-      </p>
-    )
-  return (
-    <div className="flex flex-col selectable-text">
-      {messages.map((m) => (
-        <div
-          key={m.id}
-          className="px-3.5 py-1.5 border-b border-border/50 flex gap-2"
-        >
-          <span
-            className={cn(
-              "font-mono text-[0.72rem] shrink-0",
-              m.direction === "outgoing" ? "text-accent" : "text-success",
-            )}
-          >
-            {m.direction === "outgoing" ? "↑" : "↓"}
-          </span>
-          <pre className="font-mono text-[0.857rem] text-fg whitespace-pre-wrap break-words flex-1 min-w-0">
-            {prettyJson(m.data)}
-          </pre>
         </div>
       ))}
     </div>
