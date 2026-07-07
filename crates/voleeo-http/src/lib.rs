@@ -1,5 +1,6 @@
 mod auth;
 pub use auth::sign_dynamic_auth_url;
+mod auth_retry;
 mod body;
 mod cookie_provider;
 mod dns;
@@ -7,6 +8,7 @@ mod executor;
 mod fmt;
 mod ntlm;
 mod redirect;
+mod send_body;
 mod sse;
 mod sse_accum;
 pub use sse_accum::SseAccum;
@@ -14,6 +16,7 @@ pub use sse_accum::SseAccum;
 use redirect::RedirectHop;
 use std::collections::HashMap;
 use std::net::IpAddr;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use voleeo_core::{
@@ -40,6 +43,10 @@ pub type SseSink = Arc<dyn Fn(SseEvent) + Send + Sync>;
 
 pub(crate) const POOL_IDLE_TIMEOUT: Duration = Duration::from_secs(90);
 pub(crate) const MAX_REDIRECTS: usize = 10;
+
+/// Per-send cancel entry: (send token, cancel sender). The token lets a
+/// completing send remove only its own handle, never a later send's.
+type CancelEntry = (u64, tokio::sync::oneshot::Sender<()>);
 
 tokio::task_local! {
     pub(crate) static REQ_START: Instant;
@@ -72,8 +79,12 @@ pub struct HttpExecutor {
     /// timeout doesn't refresh the connection-reuse heuristic.
     pub(crate) last_seen: Arc<Mutex<HashMap<(String, u16), Instant>>>,
     /// Cancel handles by request id. Raced against `send_inner` in `select!`;
-    /// firing drops the future, aborting the reqwest call.
-    pub(crate) in_flight: Arc<Mutex<HashMap<String, tokio::sync::oneshot::Sender<()>>>>,
+    /// firing drops the future, aborting the reqwest call. Each entry is tagged
+    /// with the send's token so a completing send only removes its *own* handle —
+    /// a later send for the same id (which replaced the entry) survives cleanup.
+    pub(crate) in_flight: Arc<Mutex<HashMap<String, CancelEntry>>>,
+    /// Monotonic send-token source; disambiguates concurrent sends per request id.
+    pub(crate) send_seq: Arc<AtomicU64>,
 }
 
 impl HttpExecutor {
@@ -85,6 +96,23 @@ impl HttpExecutor {
             .redirect(reqwest::redirect::Policy::custom(|attempt| {
                 if attempt.previous().len() >= MAX_REDIRECTS {
                     return attempt.error(format!("too many redirects (max {MAX_REDIRECTS})"));
+                }
+                // Guarded (AI/MCP) sends: a redirect to a literal-IP metadata/
+                // link-local target skips the DNS resolver's guard, so reject it
+                // here directly. Hostname hops are still caught by the resolver.
+                let guarded = GUARD_INTERNAL.try_with(|g| *g).unwrap_or(false);
+                if guarded {
+                    if let Some(ip) = attempt
+                        .url()
+                        .host_str()
+                        .and_then(|h| h.trim_matches(['[', ']']).parse::<IpAddr>().ok())
+                    {
+                        if voleeo_core::is_link_local_or_metadata(ip) {
+                            return attempt.error(format!(
+                                "blocked redirect to internal/link-local address {ip}"
+                            ));
+                        }
+                    }
                 }
                 // Records only when polled inside a `send` scope.
                 let _ = REQ_START.try_with(|started| {
@@ -110,6 +138,7 @@ impl HttpExecutor {
             client,
             last_seen: Arc::new(Mutex::new(HashMap::new())),
             in_flight: Arc::new(Mutex::new(HashMap::new())),
+            send_seq: Arc::new(AtomicU64::new(0)),
         })
     }
 
@@ -117,7 +146,7 @@ impl HttpExecutor {
     /// returns `Err(VoleeoError::Cancelled)`.
     pub fn cancel(&self, request_id: &str) {
         if let Ok(mut map) = self.in_flight.lock() {
-            if let Some(tx) = map.remove(request_id) {
+            if let Some((_, tx)) = map.remove(request_id) {
                 let _ = tx.send(());
             }
         }
@@ -203,10 +232,13 @@ impl HttpExecutor {
         let attached_clone = attached.clone();
 
         // Register cancel channel; abort any stale send for this id (defensive).
+        // Tag with a monotonic token so cleanup below removes only *this* send —
+        // a concurrent send B that replaced our entry keeps its own handle.
         let (cancel_tx, cancel_rx) = tokio::sync::oneshot::channel::<()>();
         let request_id = request.id.clone();
+        let token = self.send_seq.fetch_add(1, Ordering::Relaxed);
         if let Ok(mut map) = self.in_flight.lock() {
-            if let Some(prev) = map.insert(request_id.clone(), cancel_tx) {
+            if let Some((_, prev)) = map.insert(request_id.clone(), (token, cancel_tx)) {
                 let _ = prev.send(());
             }
         }
@@ -242,8 +274,13 @@ impl HttpExecutor {
             )
             .await;
 
+        // Remove only if our token still owns the entry — a later send for the
+        // same id may have replaced it, and dropping *that* handle would silently
+        // disarm its cancel.
         if let Ok(mut map) = self.in_flight.lock() {
-            map.remove(&request_id);
+            if map.get(&request_id).is_some_and(|(t, _)| *t == token) {
+                map.remove(&request_id);
+            }
         }
         result
     }
@@ -435,6 +472,45 @@ mod tests {
         ex.cancel("nonexistent-id");
     }
 
+    /// Send A registers, send B replaces it (aborting A), then A's cleanup runs.
+    /// The token guard must leave B's handle intact so `cancel` still reaches B.
+    #[tokio::test]
+    async fn late_send_cleanup_does_not_orphan_replacement_cancel_handle() {
+        let ex = HttpExecutor::new().unwrap();
+        let id = "shared-id".to_string();
+
+        // A registers with token 0.
+        let (a_tx, mut a_rx) = tokio::sync::oneshot::channel::<()>();
+        let token_a = ex.send_seq.fetch_add(1, Ordering::Relaxed);
+        {
+            let mut map = ex.in_flight.lock().unwrap();
+            map.insert(id.clone(), (token_a, a_tx));
+        }
+
+        // B registers for the same id (token 1), aborting A and replacing the entry.
+        let (b_tx, mut b_rx) = tokio::sync::oneshot::channel::<()>();
+        let token_b = ex.send_seq.fetch_add(1, Ordering::Relaxed);
+        {
+            let mut map = ex.in_flight.lock().unwrap();
+            if let Some((_, prev)) = map.insert(id.clone(), (token_b, b_tx)) {
+                let _ = prev.send(()); // aborts A
+            }
+        }
+        assert!(a_rx.try_recv().is_ok(), "A should have been cancelled by B");
+
+        // A's cleanup runs: its token no longer owns the entry, so it must NOT remove B.
+        {
+            let mut map = ex.in_flight.lock().unwrap();
+            if map.get(&id).is_some_and(|(t, _)| *t == token_a) {
+                map.remove(&id);
+            }
+        }
+
+        // cancel() must still reach B's live handle.
+        ex.cancel(&id);
+        assert!(b_rx.try_recv().is_ok(), "cancel must still reach B");
+    }
+
     #[tokio::test]
     async fn send_returns_status_and_text_body() {
         let port = spawn_server(ok_response("hello")).await;
@@ -577,6 +653,24 @@ mod tests {
         req.id = "my-unique-id".into();
         let resp = ex.send(&req, Vec::new(), Vec::new()).await.unwrap();
         assert_eq!(resp.request_id, "my-unique-id");
+    }
+
+    #[tokio::test]
+    async fn send_guarded_rejects_literal_metadata_ip_preflight() {
+        // A literal-IP metadata target bypasses the DNS resolver's guard, so the
+        // pre-flight check must reject it before any connection is attempted.
+        let ex = HttpExecutor::new().unwrap();
+        let req = bare_request("http://169.254.169.254/latest/meta-data/", "GET");
+        let err = ex
+            .send_guarded(&req, Vec::new(), Vec::new())
+            .await
+            .expect_err("guarded send to link-local literal IP must fail");
+        match err {
+            VoleeoError::Http(m) => {
+                assert!(m.contains("internal/link-local"), "unexpected message: {m}")
+            }
+            other => panic!("expected Http error, got {other:?}"),
+        }
     }
 
     #[tokio::test]
