@@ -7,7 +7,7 @@ import CodeMirror, {
   keymap,
   oneDark,
 } from "@uiw/react-codemirror"
-import { useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import { Glyph } from "@/components/Glyph"
 import { cn } from "@/lib/utils"
 import { useInterfaceStore } from "@/store/interface"
@@ -18,38 +18,38 @@ import type { BodyLang } from "./bodyLang"
 import { FindBar } from "./FindBar"
 import { useBodyFilter } from "./useBodyFilter"
 import { useCmFind } from "./useCmFind"
+import type { CodeTools } from "./useCodeTools"
 
 export function CodeBody({
   rawText,
   lang,
+  tools,
 }: {
   rawText: string
   lang: BodyLang
+  tools: CodeTools
 }) {
   const activeTheme = useThemeStore((s) => s.activeTheme)
   const isDark = activeTheme?.kind !== "light"
   const wrap = useInterfaceStore((s) => s.wrapResponse)
   const setWrap = useInterfaceStore((s) => s.setWrapResponse)
+  const { findOpen, filterOpen, closeFilter } = tools
 
-  const {
-    filterOpen,
-    filterQuery,
-    setFilterQuery,
-    filterInputRef,
-    filterResult,
-    openFilter,
-    closeFilter,
-  } = useBodyFilter({ rawText, lang })
+  const { filterQuery, setFilterQuery, filterInputRef, filterResult } =
+    useBodyFilter({ rawText, lang, open: filterOpen })
 
   const cmViewRef = useRef<EditorView | null>(null)
   const find = useCmFind(cmViewRef)
-  const [findOpen, setFindOpen] = useState(false)
   const openFindRef = useRef<() => void>(() => {})
-  openFindRef.current = () => setFindOpen(true)
+  openFindRef.current = tools.openFind
+
+  // Clear the CM search when the find bar closes (from the bar's X or the tab-bar toggle).
+  useEffect(() => {
+    if (!findOpen) find.clear()
+  }, [findOpen, find.clear])
 
   function closeFind() {
-    find.clear()
-    setFindOpen(false)
+    tools.closeFind()
   }
 
   const langExt = useMemo(() => {
@@ -80,7 +80,6 @@ export function CodeBody({
     [isDark, langExt, lang, wrap],
   )
 
-  const canFilter = lang === "json" || lang === "xml"
   const placeholder =
     lang === "json"
       ? "$.field  ·  $.items[*].name  ·  $..author"
@@ -102,6 +101,7 @@ export function CodeBody({
           />
           <input
             ref={filterInputRef}
+            autoFocus
             value={filterQuery}
             onChange={(e) => setFilterQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Escape" && closeFilter()}
@@ -162,26 +162,6 @@ export function CodeBody({
               )}
             >
               <Glyph kind="wrap" size={13} color="currentColor" />
-            </button>
-            {canFilter && (
-              <button
-                type="button"
-                title={
-                  lang === "json" ? "Filter by JSONPath" : "Filter by XPath"
-                }
-                onClick={openFilter}
-                className="p-1 rounded-[3px] border border-border text-muted hover:text-fg hover:border-fg/30 bg-transparent cursor-pointer transition-colors"
-              >
-                <Glyph kind="filter" size={13} color="currentColor" />
-              </button>
-            )}
-            <button
-              type="button"
-              title="Find in response"
-              onClick={() => setFindOpen(true)}
-              className="p-1 rounded-[3px] border border-border text-muted hover:text-fg hover:border-fg/30 bg-transparent cursor-pointer transition-colors"
-            >
-              <Glyph kind="search" size={13} color="currentColor" />
             </button>
           </div>
         )}

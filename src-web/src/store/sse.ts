@@ -1,4 +1,5 @@
 import { create } from "zustand"
+import { capPushMany } from "@/lib/boundedArray"
 import type {
   HttpResponseHeader,
   SseFrame,
@@ -7,18 +8,7 @@ import type {
 
 export type { SseFrame }
 
-// Cap kept frames so an endless stream can't grow without bound. Matches the
-// backend's SSE_FRAME_CAP so the live view and persisted history agree.
-const MAX_FRAMES = 2000
 const ENC = new TextEncoder()
-
-// Append a batch in one shot — O(prev + batch) per flush, not per frame, so a
-// fast stream doesn't re-clone a 2000-element array on every event.
-function capPushMany<T>(prev: T[], items: T[]): T[] {
-  if (items.length === 0) return prev
-  const combined = [...prev, ...items]
-  return combined.length > MAX_FRAMES ? combined.slice(-MAX_FRAMES) : combined
-}
 
 /** Response line + headers, captured when the stream opens — lets the header
  *  show real status/headers while still streaming, instead of just "Sending…". */

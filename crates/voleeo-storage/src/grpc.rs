@@ -23,7 +23,7 @@ fn save_if_changed(
     }
     next.updated_at = now_ts();
     let content = serde_yaml::to_string(&next).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-    std::fs::write(path, content).map_err(|e| VoleeoError::Storage(e.to_string()))
+    crate::write_atomic(path, content)
 }
 
 /// Fields a gRPC request update can change (everything but identity/timestamps).
@@ -144,8 +144,7 @@ impl GrpcStore {
         };
         let content =
             serde_yaml::to_string(&req).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-        std::fs::write(self.grpc_path(&workspace_id, &id)?, content)
-            .map_err(|e| VoleeoError::Storage(e.to_string()))?;
+        crate::write_atomic(self.grpc_path(&workspace_id, &id)?, content)?;
         Ok(req)
     }
 
@@ -154,7 +153,7 @@ impl GrpcStore {
         let path = self.grpc_path(&req.workspace_id, &req.id)?;
         let content =
             serde_yaml::to_string(req).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-        std::fs::write(path, content).map_err(|e| VoleeoError::Storage(e.to_string()))
+        crate::write_atomic(path, content)
     }
 
     /// Smallest `grpc_` sibling order strictly greater than `after`; midpoint
@@ -189,8 +188,7 @@ impl GrpcStore {
         };
         let content =
             serde_yaml::to_string(&req).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-        std::fs::write(self.grpc_path(workspace_id, &new)?, content)
-            .map_err(|e| VoleeoError::Storage(e.to_string()))?;
+        crate::write_atomic(self.grpc_path(workspace_id, &new)?, content)?;
         Ok(req)
     }
 

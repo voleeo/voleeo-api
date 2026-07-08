@@ -38,6 +38,7 @@ export function shellTokenize(input: string): string[] | null {
       // literal single quote inside an otherwise-single-quoted span.
       inToken = true
       i++
+      let closed = false
       while (i < src.length) {
         if (src[i] === "'") {
           // Lookahead for the `'\''` escape sequence
@@ -47,11 +48,13 @@ export function shellTokenize(input: string): string[] | null {
             continue
           }
           i++
+          closed = true
           break
         }
         current += src[i]
         i++
       }
+      if (!closed) return null // unterminated
       continue
     }
 

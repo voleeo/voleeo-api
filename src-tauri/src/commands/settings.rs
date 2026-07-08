@@ -32,12 +32,7 @@ pub async fn settings_set_mcp_enabled(
         let has_token = state.mcp_token.read().await.is_some();
         if !has_token {
             let token = generate_token();
-            state
-                .secrets
-                .write()
-                .await
-                .set("mcp_token".into(), token.clone())
-                .map_err(|e| VoleeoError::Storage(e.to_string()))?;
+            persist_mcp_token(&state, token.clone()).await?;
             *state.mcp_token.write().await = Some(token);
         }
     }
@@ -122,14 +117,23 @@ pub async fn settings_regenerate_mcp_token(
     state: State<'_, AppState>,
 ) -> Result<String, VoleeoError> {
     let token = generate_token();
-    state
-        .secrets
-        .write()
-        .await
-        .set("mcp_token".into(), token.clone())
-        .map_err(|e| VoleeoError::Storage(e.to_string()))?;
+    persist_mcp_token(&state, token.clone()).await?;
     *state.mcp_token.write().await = Some(token.clone());
     Ok(token)
+}
+
+/// Persist the MCP token, offloading the blocking `persist()` (sync `std::fs`
+/// write) off the async runtime via `blocking_write` inside `spawn_blocking`.
+async fn persist_mcp_token(state: &AppState, token: String) -> Result<(), VoleeoError> {
+    let secrets = state.secrets.clone();
+    tokio::task::spawn_blocking(move || {
+        secrets
+            .blocking_write()
+            .set("mcp_token".into(), token)
+            .map_err(|e| VoleeoError::Storage(e.to_string()))
+    })
+    .await
+    .map_err(|e| VoleeoError::Storage(e.to_string()))?
 }
 
 fn generate_token() -> String {

@@ -1,8 +1,34 @@
 use std::sync::Arc;
 
 use subtle::ConstantTimeEq;
-use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::sync::RwLock;
+
+/// Per-line cap on the bridge socket: a newline-less line would otherwise buffer
+/// unbounded. Requests (tokens, JSON-RPC) are tiny; 16 MiB is a generous ceiling.
+const MAX_LINE_BYTES: u64 = 16 * 1024 * 1024;
+
+/// Like `read_line`, but caps the line at `MAX_LINE_BYTES` so a hostile client
+/// can't exhaust memory with a single unterminated line. `Take` bounds the read;
+/// hitting the limit without a newline yields an error and drops the connection.
+async fn read_line_capped<R: AsyncBufReadExt + Unpin>(
+    reader: &mut R,
+    line: &mut String,
+) -> std::io::Result<usize> {
+    let mut buf = Vec::new();
+    let n = (&mut *reader)
+        .take(MAX_LINE_BYTES)
+        .read_until(b'\n', &mut buf)
+        .await?;
+    if n as u64 >= MAX_LINE_BYTES && buf.last() != Some(&b'\n') {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "line exceeds maximum length",
+        ));
+    }
+    line.push_str(&String::from_utf8_lossy(&buf));
+    Ok(n)
+}
 
 use crate::api::ApiBackend;
 use crate::protocol::{JsonRpcRequest, JsonRpcResponse, ToolResult};
@@ -140,7 +166,7 @@ async fn handle_connection<S>(
     let mut line = String::new();
     let n = match tokio::time::timeout(
         std::time::Duration::from_secs(5),
-        reader.read_line(&mut line),
+        read_line_capped(&mut reader, &mut line),
     )
     .await
     {
@@ -166,9 +192,23 @@ async fn handle_connection<S>(
     let _ = writer.write_all(b"OK\n").await;
 
     // ── JSON-RPC message loop ──────────────────────────────────────────────
+    // Each request is dispatched on its own task so a slow tool call (e.g. a 30s
+    // send) doesn't head-of-line-block later messages on the same connection —
+    // notably cancel_request. Responses carry their own JSON-RPC id, so the
+    // client tolerates out-of-order replies; a channel serializes the writes so
+    // the single writer is never shared across tasks.
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+    let writer_task = tokio::spawn(async move {
+        while let Some(s) = rx.recv().await {
+            if writer.write_all(s.as_bytes()).await.is_err() {
+                break;
+            }
+        }
+    });
+
     loop {
         line.clear();
-        match reader.read_line(&mut line).await {
+        match read_line_capped(&mut reader, &mut line).await {
             Ok(0) | Err(_) => break,
             Ok(_) => {}
         }
@@ -177,18 +217,26 @@ async fn handle_connection<S>(
             continue;
         }
 
-        let is_enabled = *enabled.read().await;
-        if let Some(resp) = dispatch(&backend, trimmed, is_enabled).await {
-            match serde_json::to_string(&resp) {
-                Ok(s) => {
-                    if writer.write_all(format!("{s}\n").as_bytes()).await.is_err() {
-                        break;
+        let raw = trimmed.to_string();
+        let backend = backend.clone();
+        let enabled = enabled.clone();
+        let tx = tx.clone();
+        tokio::spawn(async move {
+            let is_enabled = *enabled.read().await;
+            if let Some(resp) = dispatch(&backend, &raw, is_enabled).await {
+                match serde_json::to_string(&resp) {
+                    Ok(s) => {
+                        let _ = tx.send(format!("{s}\n"));
                     }
+                    Err(e) => eprintln!("[mcp] serialize error: {e}"),
                 }
-                Err(e) => eprintln!("[mcp] serialize error: {e}"),
             }
-        }
+        });
     }
+
+    // Drop our sender so the writer task ends once in-flight dispatches finish.
+    drop(tx);
+    let _ = writer_task.await;
 }
 
 async fn dispatch(backend: &ApiBackend, raw: &str, enabled: bool) -> Option<JsonRpcResponse> {

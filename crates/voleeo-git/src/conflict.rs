@@ -128,13 +128,28 @@ pub fn conflict_diff_text(path: &Path, rel: &str) -> Result<String, VoleeoError>
     Ok(out.into_inner())
 }
 
+/// Reject a caller-supplied conflict path that could escape the repo — an
+/// absolute path or any `..` component (path traversal).
+fn safe_rel(file: &str) -> Result<&Path, VoleeoError> {
+    let rel = Path::new(file);
+    if rel.is_absolute()
+        || rel
+            .components()
+            .any(|c| c == std::path::Component::ParentDir)
+    {
+        return Err(VoleeoError::Git(format!("unsafe conflict path: {file}")));
+    }
+    Ok(rel)
+}
+
 /// Write the resolved file content, then stage it — staging a conflicted path
 /// clears its conflict in the index.
 pub fn resolve(path: &Path, file: &str, merged: &str) -> Result<(), VoleeoError> {
+    let rel = safe_rel(file)?;
     let repo = open_repo(path)?;
-    std::fs::write(path.join(file), merged).map_err(io_err)?;
+    std::fs::write(path.join(rel), merged).map_err(io_err)?;
     let mut index = repo.index().map_err(git_err)?;
-    index.add_path(Path::new(file)).map_err(git_err)?;
+    index.add_path(rel).map_err(git_err)?;
     index.write().map_err(git_err)?;
     Ok(())
 }
@@ -142,13 +157,14 @@ pub fn resolve(path: &Path, file: &str, merged: &str) -> Result<(), VoleeoError>
 /// Resolve a delete/modify conflict by accepting the deletion: remove the file
 /// and drop it from the index (clears the conflict as a removal).
 pub fn resolve_delete(path: &Path, file: &str) -> Result<(), VoleeoError> {
+    let rel = safe_rel(file)?;
     let repo = open_repo(path)?;
-    let abs = path.join(file);
+    let abs = path.join(rel);
     if abs.exists() {
         std::fs::remove_file(&abs).map_err(io_err)?;
     }
     let mut index = repo.index().map_err(git_err)?;
-    index.remove_path(Path::new(file)).map_err(git_err)?;
+    index.remove_path(rel).map_err(git_err)?;
     index.write().map_err(git_err)?;
     Ok(())
 }

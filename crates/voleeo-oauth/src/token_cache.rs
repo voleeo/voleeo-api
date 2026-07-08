@@ -73,7 +73,32 @@ fn write_all(path: &Path, tokens: &[CachedToken]) -> Result<(), VoleeoError> {
         std::fs::create_dir_all(dir).map_err(|e| VoleeoError::Storage(e.to_string()))?;
     }
     let content = serde_yaml::to_string(tokens).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-    std::fs::write(path, content).map_err(|e| VoleeoError::Storage(e.to_string()))
+    write_owner_only(path, content.as_bytes())
+}
+
+/// Write `data`, creating the file 0600 on unix — these tokens are secrets, so it
+/// must never be world-readable like the other secret files in the codebase.
+#[cfg(unix)]
+fn write_owner_only(path: &Path, data: &[u8]) -> Result<(), VoleeoError> {
+    use std::io::Write;
+    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+    let mut f = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(path)
+        .map_err(|e| VoleeoError::Storage(e.to_string()))?;
+    f.write_all(data)
+        .map_err(|e| VoleeoError::Storage(e.to_string()))?;
+    // `mode()` only applies on creation; re-assert 0600 to repair an existing file.
+    let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn write_owner_only(path: &Path, data: &[u8]) -> Result<(), VoleeoError> {
+    std::fs::write(path, data).map_err(|e| VoleeoError::Storage(e.to_string()))
 }
 
 /// Load a token by key, decrypting the secret fields when encrypted.

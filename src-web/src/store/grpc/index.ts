@@ -1,4 +1,5 @@
 import { create } from "zustand"
+import { capPush } from "@/lib/boundedArray"
 import { errorMessage } from "@/lib/error"
 import { commands } from "../../../../packages/types/bindings"
 import { activeEnvId, authOverrideFor } from "./shared"
@@ -52,14 +53,14 @@ export const useGrpcStore = create<GrpcStore>((set, get, api) => {
         const current = s.transcripts[id] ?? []
         if (current.some((m) => m.id === message.id)) return s
         return {
-          transcripts: { ...s.transcripts, [id]: [...current, message] },
+          transcripts: { ...s.transcripts, [id]: capPush(current, message) },
         }
       }),
 
     appendTimeline: (id, event) =>
       set((s) => {
         const current = s.timelines[id] ?? []
-        return { timelines: { ...s.timelines, [id]: [...current, event] } }
+        return { timelines: { ...s.timelines, [id]: capPush(current, event) } }
       }),
 
     loadServices: (workspaceId, id) =>

@@ -63,6 +63,16 @@ fn untracked_then_staged_then_committed() {
 }
 
 #[test]
+fn entity_diff_shows_new_file_as_additions() {
+    let (_d, path) = setup();
+    write(&path, "req_a.yaml", "id: a\nname: A\n");
+
+    let patch = entity_diff_text(&path, "req_a.yaml").unwrap();
+    assert!(patch.contains("+id: a"), "patch was: {patch:?}");
+    assert!(patch.contains("+name: A"), "patch was: {patch:?}");
+}
+
+#[test]
 fn changed_blobs_report_head_and_work() {
     let (_d, path) = setup();
     write(&path, "req_a.yaml", "id: a\nname: A\n");

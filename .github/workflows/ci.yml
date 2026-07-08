@@ -49,6 +49,9 @@ jobs:
       - name: Lint (biome)
         run: cd src-web && bun run lint
 
+      - name: File-size limits (AGENTS.md)
+        run: bun run check:sizes
+
       - name: Frontend tests
         run: cd src-web && bun run test
 

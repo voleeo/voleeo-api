@@ -8,7 +8,7 @@ import type {
 } from "../../../../../packages/types/bindings"
 import { commands } from "../../../../../packages/types/bindings"
 import { buildTree } from "../buildTree"
-import type { GetState, SetState } from "./shared"
+import { type GetState, type SetState, syncOnFailure } from "./shared"
 
 /** Field edits (request/connection/folder) and drag-reorder persistence. */
 export function mutationActions(set: SetState, get: GetState) {
@@ -195,7 +195,8 @@ export function mutationActions(set: SetState, get: GetState) {
           tree: buildTree(folders, requests, connections, grpcRequests),
         }
       })
-      await commands.moveItems(workspaceId, updates)
+      const res = await commands.moveItems(workspaceId, updates)
+      await syncOnFailure(get, res, "move items")
     },
   }
 }

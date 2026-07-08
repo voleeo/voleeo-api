@@ -163,10 +163,15 @@ pub async fn git_set_credentials(
     username: String,
     password: String,
 ) -> Result<(), VoleeoError> {
-    let mut s = state.secrets.write().await;
-    s.set(format!("git_user:{workspace_id}"), username)?;
-    s.set(format!("git_token:{workspace_id}"), password)?;
-    Ok(())
+    // `set` persists via a sync std::fs write, so offload it off the runtime.
+    let secrets = state.secrets.clone();
+    tokio::task::spawn_blocking(move || {
+        let mut s = secrets.blocking_write();
+        s.set(format!("git_user:{workspace_id}"), username)?;
+        s.set(format!("git_token:{workspace_id}"), password)
+    })
+    .await
+    .map_err(|e| VoleeoError::Storage(e.to_string()))?
 }
 
 #[tauri::command]
@@ -175,10 +180,14 @@ pub async fn git_clear_credentials(
     state: State<'_, AppState>,
     workspace_id: String,
 ) -> Result<(), VoleeoError> {
-    let mut s = state.secrets.write().await;
-    s.remove(&format!("git_user:{workspace_id}"))?;
-    s.remove(&format!("git_token:{workspace_id}"))?;
-    Ok(())
+    let secrets = state.secrets.clone();
+    tokio::task::spawn_blocking(move || {
+        let mut s = secrets.blocking_write();
+        s.remove(&format!("git_user:{workspace_id}"))?;
+        s.remove(&format!("git_token:{workspace_id}"))
+    })
+    .await
+    .map_err(|e| VoleeoError::Storage(e.to_string()))?
 }
 
 /// The stored HTTPS username (never the token), so the settings form can show

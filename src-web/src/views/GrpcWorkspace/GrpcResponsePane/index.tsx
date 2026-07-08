@@ -1,16 +1,23 @@
 import { useEffect, useState } from "react"
 import { EmptyPaneShortcuts } from "@/components/EmptyPaneShortcuts"
+import { IconToggle } from "@/components/IconToggle"
 import { TabItem } from "@/components/Primitives"
 import { HistoryTag, ResponseHeader } from "@/components/ResponseHeader"
+import {
+  TranscriptToolbar,
+  TranscriptView,
+  useTranscriptView,
+} from "@/components/Transcript"
 import { SHORTCUTS } from "@/config/shortcuts"
 import { useGrpcStore } from "@/store/grpc"
 import { selectActiveGrpc, useRequestStore } from "@/store/requests"
 import { useUiStore } from "@/store/workspace"
 import { formatDuration } from "@/views/ApiWorkspace/ResponsePane/format"
+import { useCodeTools } from "@/views/ApiWorkspace/ResponsePane/useCodeTools"
 import { GrpcHistoryPicker } from "./GrpcHistoryPicker"
 import { countLabel, StatusBadge } from "./StatusBadge"
 import { useGrpcHistory } from "./useGrpcHistory"
-import { HeaderTable, TimelineList, TranscriptList, UnaryBody } from "./views"
+import { HeaderTable, TimelineList, UnaryBody } from "./views"
 
 type UnaryTab = "response" | "metadata" | "trailers" | "timing"
 type StreamTab = "transcript" | "timeline"
@@ -57,14 +64,18 @@ export function GrpcResponsePane() {
     clearResponse,
   })
 
+  const messages = histSession?.messages ?? liveTranscript
+  const transcript = useTranscriptView(messages, id)
+  const codeTools = useCodeTools()
+
   if (!request) return null
 
   const response = histUnary ?? liveResponse ?? latestUnary
-  const messages = histSession?.messages ?? liveTranscript
   const events = streaming
     ? (histSession?.events ?? liveTimeline)
     : (histUnary?.events ?? response?.events ?? [])
   const viewing = histId !== null
+  const live = !viewing && (status === "streaming" || status === "connecting")
   const showHeader =
     !!response || !!loading || streaming || !!error || hasHistory
 
@@ -124,6 +135,9 @@ export function GrpcResponsePane() {
               active={streamTab === "timeline"}
               onClick={() => setStreamTab("timeline")}
             />
+            {streamTab === "transcript" && (
+              <TranscriptToolbar view={transcript} count={messages.length} />
+            )}
           </>
         ) : (
           <>
@@ -158,28 +172,66 @@ export function GrpcResponsePane() {
               active={unaryTab === "timing"}
               onClick={() => setUnaryTab("timing")}
             />
+            {unaryTab === "response" && response?.message !== undefined && (
+              <div className="ml-auto flex items-center gap-1 pr-0.5">
+                <IconToggle
+                  glyph="filter"
+                  title="Filter (JSONPath)"
+                  active={codeTools.filterOpen}
+                  onClick={() =>
+                    codeTools.filterOpen
+                      ? codeTools.closeFilter()
+                      : codeTools.openFilter()
+                  }
+                />
+                <IconToggle
+                  glyph="search"
+                  title="Find in response"
+                  active={codeTools.findOpen}
+                  onClick={() =>
+                    codeTools.findOpen
+                      ? codeTools.closeFind()
+                      : codeTools.openFind()
+                  }
+                />
+              </div>
+            )}
           </>
         )}
       </div>
 
-      <div className="flex-1 min-h-0 overflow-auto">
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         {streaming ? (
           streamTab === "timeline" ? (
-            <TimelineList events={events} />
+            <div className="flex-1 min-h-0 overflow-auto">
+              <TimelineList events={events} />
+            </div>
           ) : (
-            <TranscriptList messages={messages} />
+            <TranscriptView view={transcript} live={live} />
           )
-        ) : unaryTab === "metadata" ? (
-          <HeaderTable rows={response?.metadata ?? []} empty="No metadata" />
-        ) : unaryTab === "trailers" ? (
-          <HeaderTable rows={response?.trailers ?? []} empty="No trailers" />
-        ) : unaryTab === "timing" ? (
-          <TimelineList events={events} />
-        ) : (
+        ) : unaryTab === "response" ? (
+          // CodeBody fills the flex column and scrolls itself; the others need an overflow wrapper.
           <UnaryBody
             error={viewing ? undefined : error}
             message={response?.message}
+            tools={codeTools}
           />
+        ) : (
+          <div className="flex-1 min-h-0 overflow-auto">
+            {unaryTab === "metadata" ? (
+              <HeaderTable
+                rows={response?.metadata ?? []}
+                empty="No metadata"
+              />
+            ) : unaryTab === "trailers" ? (
+              <HeaderTable
+                rows={response?.trailers ?? []}
+                empty="No trailers"
+              />
+            ) : (
+              <TimelineList events={events} />
+            )}
+          </div>
         )}
       </div>
     </div>

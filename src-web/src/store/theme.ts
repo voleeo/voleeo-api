@@ -40,7 +40,7 @@ type ColorMode = "dark" | "light"
 interface ThemeStore {
   activeTheme: Theme | null
   colorMode: ColorMode
-  initialize: () => Promise<void>
+  initialize: () => Promise<() => void>
   activateTheme: (id: string) => Promise<void>
   setColorMode: (mode: ColorMode) => Promise<void>
 }
@@ -53,7 +53,7 @@ export const useThemeStore = create<ThemeStore>(() => ({
     const allThemes = registry.themes()
     if (allThemes.length === 0) {
       console.error("No themes available — check plugin registry")
-      return
+      return () => {}
     }
 
     const [activeId, rawMode] = await Promise.all([
@@ -72,19 +72,31 @@ export const useThemeStore = create<ThemeStore>(() => ({
     repositionWindowControls()
     useThemeStore.setState({ activeTheme: theme, colorMode })
 
-    listen<{ id: string }>(EVENTS.themeChanged, (event) => {
-      const changed = findTheme(event.payload.id)
-      if (changed) {
-        applyThemeToCss(changed)
-        repositionWindowControls()
-        useThemeStore.setState({ activeTheme: changed })
-      }
-    })
+    const unThemeChanged = await listen<{ id: string }>(
+      EVENTS.themeChanged,
+      (event) => {
+        const changed = findTheme(event.payload.id)
+        if (changed) {
+          applyThemeToCss(changed)
+          repositionWindowControls()
+          useThemeStore.setState({ activeTheme: changed })
+        }
+      },
+    )
 
-    listen<{ mode: string }>(EVENTS.colorModeChanged, (event) => {
-      const mode: ColorMode = event.payload.mode === "light" ? "light" : "dark"
-      useThemeStore.setState({ colorMode: mode })
-    })
+    const unColorModeChanged = await listen<{ mode: string }>(
+      EVENTS.colorModeChanged,
+      (event) => {
+        const mode: ColorMode =
+          event.payload.mode === "light" ? "light" : "dark"
+        useThemeStore.setState({ colorMode: mode })
+      },
+    )
+
+    return () => {
+      unThemeChanged()
+      unColorModeChanged()
+    }
   },
 
   activateTheme: async (id: string) => {

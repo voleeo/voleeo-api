@@ -71,8 +71,7 @@ impl RequestStore {
         };
         let content =
             serde_yaml::to_string(&folder).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-        std::fs::write(self.folder_path(&workspace_id, &id)?, content)
-            .map_err(|e| VoleeoError::Storage(e.to_string()))?;
+        crate::write_atomic(self.folder_path(&workspace_id, &id)?, content)?;
         Ok(folder)
     }
 
@@ -115,8 +114,7 @@ impl RequestStore {
         };
         let content =
             serde_yaml::to_string(&folder).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-        std::fs::write(self.folder_path(&folder.workspace_id, &id)?, content)
-            .map_err(|e| VoleeoError::Storage(e.to_string()))?;
+        crate::write_atomic(self.folder_path(&folder.workspace_id, &id)?, content)?;
         Ok(folder)
     }
 

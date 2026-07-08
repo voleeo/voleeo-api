@@ -3,9 +3,24 @@
 //! loopback (`loopback`). Shared by `src-tauri` (commands + interactive flow)
 //! and `voleeo-mcp` (cached-token reuse + non-interactive grants on send).
 
+use std::collections::HashMap;
 use std::path::Path;
+use std::sync::{Arc, Mutex, OnceLock};
 
 use voleeo_core::{OAuth2Grant, VoleeoError};
+
+/// Per-(workspace, cache-key) locks so two concurrent sends needing the same
+/// token serialize their load→refresh→save instead of racing and clobbering the
+/// cache write. Held across `.await` (tokio mutex) inside `ensure_token`.
+fn key_lock(workspace_id: &str, cache_key: &str) -> Arc<tokio::sync::Mutex<()>> {
+    static LOCKS: OnceLock<Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>> = OnceLock::new();
+    let map = LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut guard = map.lock().unwrap_or_else(|e| e.into_inner());
+    guard
+        .entry(format!("{workspace_id}\u{0}{cache_key}"))
+        .or_default()
+        .clone()
+}
 
 pub mod flow;
 pub mod loopback;
@@ -72,6 +87,9 @@ pub async fn ensure_token(
     config: &OAuth2Config,
 ) -> Result<String, VoleeoError> {
     let key = config.cache_key();
+    let lock = key_lock(workspace_id, &key);
+    let _guard = lock.lock().await;
+
     let cached = load_cached(app_data_dir, workspace_id, &key).await?;
     let now = chrono::Utc::now().timestamp();
     let client = reqwest::Client::new();

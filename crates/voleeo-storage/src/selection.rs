@@ -38,7 +38,7 @@ impl SelectionStore {
     fn write(&self, file: &SelectionsFile) -> Result<(), VoleeoError> {
         let content =
             serde_yaml::to_string(file).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-        std::fs::write(&self.path, content).map_err(|e| VoleeoError::Storage(e.to_string()))
+        crate::write_atomic(&self.path, content)
     }
 
     /// The active cookie jar for a workspace, or `None` when unset.

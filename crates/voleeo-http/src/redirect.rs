@@ -9,33 +9,40 @@ pub(crate) struct RedirectHop {
     pub(crate) at_ms: f64,
 }
 
-/// Called from both the success and error paths so a failed redirect chain
-/// still shows up in the timeline.
+/// Take the hops recorded so far, emitting a timeline row for each and clearing
+/// the shared Vec. Called from both the success and error paths so a failed
+/// redirect chain still shows up — and draining (not just reading) means a
+/// second auth-retry leg sharing this Arc re-reports only *its own* hops.
+/// Returns the drained hops so the caller can compute a warning consistent with
+/// exactly the leg being reported.
 pub(crate) fn drain_redirect_hops(
     redirect_hops: &Arc<Mutex<Vec<RedirectHop>>>,
     events: &mut Vec<TimelineEvent>,
-) {
-    if let Ok(hops) = redirect_hops.lock() {
-        for hop in hops.iter() {
-            push_event_at(
-                events,
-                hop.at_ms,
-                "redirect",
-                format!("{} → {}", hop.status, hop.to),
-            );
-        }
+) -> Vec<RedirectHop> {
+    let hops = match redirect_hops.lock() {
+        Ok(mut guard) => std::mem::take(&mut *guard),
+        Err(_) => return Vec::new(),
+    };
+    for hop in &hops {
+        push_event_at(
+            events,
+            hop.at_ms,
+            "redirect",
+            format!("{} → {}", hop.status, hop.to),
+        );
     }
+    hops
 }
 
 /// Detect request data silently dropped while following redirects: a body lost
 /// to a 301/302/303 method downgrade, or sensitive headers stripped on a
 /// cross-origin hop. Returns `None` when redirects were clean (or absent).
+/// Takes the hops drained for this leg so the warning matches the reported rows.
 pub(crate) fn compute_redirect_warning(
     request: &HttpRequest,
     origin_host: &str,
-    redirect_hops: &Arc<Mutex<Vec<RedirectHop>>>,
+    hops: &[RedirectHop],
 ) -> Option<RedirectInfo> {
-    let hops = redirect_hops.lock().ok()?;
     if hops.is_empty() {
         return None;
     }
@@ -104,22 +111,40 @@ mod tests {
         }
     }
 
-    fn hops(list: &[(u16, &str)]) -> Arc<Mutex<Vec<RedirectHop>>> {
-        let v = list
-            .iter()
+    fn hops(list: &[(u16, &str)]) -> Vec<RedirectHop> {
+        list.iter()
             .map(|(s, t)| RedirectHop {
                 status: *s,
                 to: t.to_string(),
                 at_ms: 0.0,
             })
-            .collect();
-        Arc::new(Mutex::new(v))
+            .collect()
     }
 
     #[test]
     fn no_hops_returns_none() {
         let req = bare_request("https://example.com", "POST");
         assert!(compute_redirect_warning(&req, "example.com", &hops(&[])).is_none());
+    }
+
+    #[test]
+    fn drain_takes_hops_and_clears_the_shared_vec() {
+        let shared = Arc::new(Mutex::new(hops(&[
+            (301, "https://example.com/a"),
+            (302, "https://example.com/b"),
+        ])));
+        let mut events = Vec::new();
+        let taken = drain_redirect_hops(&shared, &mut events);
+        assert_eq!(taken.len(), 2, "drain returns the hops");
+        assert_eq!(events.len(), 2, "each hop emits a timeline row");
+        assert!(
+            shared.lock().unwrap().is_empty(),
+            "shared Vec is cleared so a second leg won't re-report these"
+        );
+        // A second drain (the retry leg) sees an empty Vec, not the first leg's hops.
+        let mut events2 = Vec::new();
+        assert!(drain_redirect_hops(&shared, &mut events2).is_empty());
+        assert!(events2.is_empty());
     }
 
     #[test]

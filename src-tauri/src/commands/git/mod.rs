@@ -41,6 +41,12 @@ where
 }
 
 pub(super) fn path_of(state: &State<'_, AppState>, workspace_id: &str) -> PathBuf {
+    // Reject traversal ids: an invalid id resolves to a path inside the
+    // workspaces root that cannot exist, so git2 fails to open a repo there
+    // rather than operating outside the storage root.
+    if voleeo_storage::validate_id(workspace_id).is_err() {
+        return state.app_data_dir.join("workspaces").join("__invalid__");
+    }
     resolve_workspace_path(&state.app_data_dir, workspace_id)
 }
 

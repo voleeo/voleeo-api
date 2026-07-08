@@ -82,7 +82,7 @@ impl GrpcTranscriptStore {
         std::fs::create_dir_all(&dir).map_err(|e| VoleeoError::Storage(e.to_string()))?;
         let content =
             serde_yaml::to_string(sessions).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-        std::fs::write(path, content).map_err(|e| VoleeoError::Storage(e.to_string()))
+        crate::write_atomic(path, content)
     }
 
     pub fn start_session(

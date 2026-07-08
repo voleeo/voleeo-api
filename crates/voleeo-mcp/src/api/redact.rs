@@ -79,6 +79,24 @@ pub(super) fn redact_url(url: &str) -> String {
     }
 }
 
+/// Redact any URLs embedded in an error message before it reaches the MCP
+/// client — transport errors echo the resolved URL, query secrets included.
+pub(super) fn redact_error(msg: &str) -> String {
+    if !msg.contains("://") {
+        return msg.to_string();
+    }
+    msg.split_whitespace()
+        .map(|w| {
+            if w.contains("://") {
+                redact_url(w)
+            } else {
+                w.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -112,6 +130,14 @@ mod tests {
         let mut old = AuthConfig::None;
         restore_masked(&mut new, &mut old); // no panic, no restore possible
         assert_eq!(new.secret_fields_mut().into_iter().next().unwrap().0, MASK);
+    }
+
+    #[test]
+    fn redact_error_strips_embedded_url_secrets() {
+        let out = redact_error("error sending request for url https://h.com/a?key=sek : timed out");
+        assert!(!out.contains("key=sek"), "secret leaked: {out}");
+        assert!(out.contains("https://h.com/a"));
+        assert_eq!(redact_error("plain message"), "plain message");
     }
 
     #[test]

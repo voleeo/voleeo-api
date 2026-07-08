@@ -266,7 +266,17 @@ fn parse_callback(path: &str, expected_state: &str) -> Outcome {
     }
 }
 
+/// Escape HTML metacharacters — `message` can carry a provider-controlled
+/// `error_description`, so interpolating it raw would allow markup injection.
+fn esc(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+}
+
 fn page(title: &str, message: &str) -> String {
+    let (title, message) = (esc(title), esc(message));
     format!(
         "<!doctype html><html><head><meta charset=\"utf-8\"><title>{title}</title></head>\
          <body style=\"font-family:system-ui;background:#0b0b0d;color:#d7d8db;display:flex;\

@@ -1,5 +1,5 @@
 import { JSONPath } from "jsonpath-plus"
-import { useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import type { BodyLang } from "./bodyLang"
 
 export interface FilterResult {
@@ -101,39 +101,25 @@ function applyXPath(rawText: string, path: string): FilterResult {
 interface UseBodyFilterOptions {
   rawText: string
   lang: BodyLang
+  open: boolean
 }
 
-export function useBodyFilter({ rawText, lang }: UseBodyFilterOptions) {
-  const [filterOpen, setFilterOpen] = useState(false)
+export function useBodyFilter({ rawText, lang, open }: UseBodyFilterOptions) {
   const [filterQuery, setFilterQuery] = useState("")
   const filterInputRef = useRef<HTMLInputElement>(null)
 
+  useEffect(() => {
+    if (!open) setFilterQuery("")
+  }, [open])
+
   const filterResult = useMemo((): FilterResult => {
-    if (!filterOpen || !filterQuery.trim()) {
+    if (!open || !filterQuery.trim()) {
       return { displayText: rawText, error: null, matchCount: null }
     }
     if (lang === "json") return applyJsonPath(rawText, filterQuery)
     if (lang === "xml") return applyXPath(rawText, filterQuery)
     return { displayText: rawText, error: null, matchCount: null }
-  }, [rawText, lang, filterOpen, filterQuery])
+  }, [rawText, lang, open, filterQuery])
 
-  function openFilter() {
-    setFilterOpen(true)
-    requestAnimationFrame(() => filterInputRef.current?.focus())
-  }
-
-  function closeFilter() {
-    setFilterOpen(false)
-    setFilterQuery("")
-  }
-
-  return {
-    filterOpen,
-    filterQuery,
-    setFilterQuery,
-    filterInputRef,
-    filterResult,
-    openFilter,
-    closeFilter,
-  }
+  return { filterQuery, setFilterQuery, filterInputRef, filterResult }
 }

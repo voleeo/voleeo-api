@@ -147,7 +147,7 @@ impl EnvironmentStore {
 
         let content =
             serde_yaml::to_string(env).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-        std::fs::write(&target, content).map_err(|e| VoleeoError::Storage(e.to_string()))?;
+        crate::write_atomic(&target, content)?;
 
         if other.exists() {
             std::fs::remove_file(&other).map_err(|e| VoleeoError::Storage(e.to_string()))?;
