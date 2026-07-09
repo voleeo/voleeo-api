@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils"
 import type { RunStrategy } from "@/store/folderRun"
 
 const OPTIONS: { value: RunStrategy; label: string }[] = [
-  { value: "sequential", label: "One by one" },
+  { value: "sequential", label: "Sequential" },
   { value: "parallel", label: "Parallel" },
 ]
 
