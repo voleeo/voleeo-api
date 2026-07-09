@@ -73,6 +73,7 @@ import {
   StackIcon,
   TableIcon,
   TerminalIcon,
+  TextAlignLeftIcon,
   TrashIcon,
   TreeStructureIcon,
   UploadSimpleIcon,
@@ -173,6 +174,7 @@ const KIND_MAP: Record<string, Icon> = {
   "drag-handle": DotsSixVerticalIcon,
   more: DotsThreeVerticalIcon,
   wand: MagicWandIcon,
+  wrap: TextAlignLeftIcon,
   index: SortAscendingIcon,
   sidebar: SidebarSimpleIcon,
 }

@@ -15,11 +15,13 @@ interface InterfaceStore {
   fontSize: number
   editorFontFamily: string
   editorFontSize: number
+  wrapResponse: boolean
   setWorkspaceBehavior: (v: WorkspaceBehavior) => void
   setFontFamily: (v: string) => void
   setFontSize: (v: number) => void
   setEditorFontFamily: (v: string) => void
   setEditorFontSize: (v: number) => void
+  setWrapResponse: (v: boolean) => void
 }
 
 const STORAGE_KEY = "voleeo:interface"
@@ -61,6 +63,7 @@ const initFamily = saved.fontFamily ?? ""
 const initSize = saved.fontSize ?? 14
 const initEditorFamily = saved.editorFontFamily ?? ""
 const initEditorSize = saved.editorFontSize ?? 12
+const initWrapResponse = saved.wrapResponse ?? false
 applyFont(initFamily, initSize)
 applyEditorFont(initEditorFamily, initEditorSize)
 
@@ -70,6 +73,7 @@ type Snapshot = {
   fontSize: number
   editorFontFamily: string
   editorFontSize: number
+  wrapResponse: boolean
 }
 
 function snapshot(): Snapshot {
@@ -80,6 +84,7 @@ function snapshot(): Snapshot {
     fontSize: s.fontSize,
     editorFontFamily: s.editorFontFamily,
     editorFontSize: s.editorFontSize,
+    wrapResponse: s.wrapResponse,
   }
 }
 
@@ -104,6 +109,7 @@ export const useInterfaceStore = create<InterfaceStore>((set, get) => ({
   fontSize: initSize,
   editorFontFamily: initEditorFamily,
   editorFontSize: initEditorSize,
+  wrapResponse: initWrapResponse,
 
   setWorkspaceBehavior: (workspaceBehavior) => {
     set({ workspaceBehavior })
@@ -132,6 +138,11 @@ export const useInterfaceStore = create<InterfaceStore>((set, get) => ({
     set({ editorFontSize })
     applyEditorFont(get().editorFontFamily, editorFontSize)
     save({ editorFontSize })
+    broadcast()
+  },
+  setWrapResponse: (wrapResponse) => {
+    set({ wrapResponse })
+    save({ wrapResponse })
     broadcast()
   },
 }))
