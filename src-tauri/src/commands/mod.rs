@@ -9,6 +9,7 @@ pub mod http;
 pub mod import;
 pub mod info;
 pub mod oauth2;
+pub mod onepassword;
 pub mod plugin_store;
 pub mod request;
 pub mod response;

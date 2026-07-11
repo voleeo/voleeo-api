@@ -87,7 +87,7 @@ Several below are distilled from confirmed 100%+ CPU bugs in this codebase. Trea
 
 **18. Prefer `Arc<T>` for shared ownership; `Arc<RwLock<T>>` for read-heavy state.** Avoid cloning `Vec`/`String`/`HashMap` in hot paths.
 
-**19. Hold `Mutex`/`RwLock` only across sync work — never across `.await`.** Deadlock/starvation hazard. Clone out, drop the guard, then await.
+**19. Hold `Mutex`/`RwLock` only across sync work — never across `.await`.** Deadlock/starvation hazard. Clone out, drop the guard, then await. Exception: `tokio::sync::Mutex` held across `.await` is fine when serializing the awaited work *is* the design (e.g. one 1Password auth prompt at a time) — say so in a comment at the lock.
 
 **20. Skip default-valued storage fields from YAML** via `#[serde(default, skip_serializing_if = …)]` — `Option::is_none` for options, an `is_false`/`is_default_*` predicate for bools/enums. A field that serializes its default value is a phantom git diff on every unrelated edit.
 

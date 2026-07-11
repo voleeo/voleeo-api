@@ -39,7 +39,10 @@
     "active": true,
     "targets": "all",
     "createUpdaterArtifacts": true,
-    "externalBin": ["binaries/voleeo-mcp-bridge"],
+    "externalBin": [
+      "binaries/voleeo-mcp-bridge",
+      "binaries/voleeo-1password-bridge"
+    ],
     "icon": [
       "icons/production/32x32.png",
       "icons/production/128x128.png",

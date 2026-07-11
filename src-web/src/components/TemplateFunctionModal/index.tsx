@@ -1,3 +1,4 @@
+import type { TemplateFunctionArg } from "@voleeo/plugin-api"
 import { useEffect, useRef, useState } from "react"
 import type { BoundTemplateFunction } from "@/plugins/types"
 import { useUiStore } from "@/store/workspace"
@@ -95,6 +96,11 @@ export function TemplateFunctionModal({
   const missingRequired = visibleArgs.some(
     (a) => a.required && (values[a.name] ?? "") === "",
   )
+  const argError = (a: TemplateFunctionArg): string | null => {
+    const v = values[a.name] ?? ""
+    return v && a.validate ? a.validate(v) : null
+  }
+  const hasInvalid = visibleArgs.some((a) => argError(a) !== null)
 
   function setValue(name: string, value: string) {
     setValues((prev) => ({ ...prev, [name]: value }))
@@ -102,7 +108,7 @@ export function TemplateFunctionModal({
   }
 
   function handleInsert() {
-    if (missingRequired) return
+    if (missingRequired || hasInvalid) return
     onInsert(values)
   }
 
@@ -180,6 +186,17 @@ export function TemplateFunctionModal({
                       onFocusChange={(f) => setFocusedArg(f ? head.name : null)}
                     />
                   )}
+                  {group.map((arg) => {
+                    const err = argError(arg)
+                    return err ? (
+                      <div
+                        key={`${arg.name}-error`}
+                        className="font-sans text-[0.75rem] text-destructive"
+                      >
+                        {err}
+                      </div>
+                    ) : null
+                  })}
                 </div>
               )
             })}
@@ -206,9 +223,13 @@ export function TemplateFunctionModal({
           <button
             type="button"
             onClick={handleInsert}
-            disabled={missingRequired}
+            disabled={missingRequired || hasInvalid}
             title={
-              missingRequired ? "Fill required fields to continue" : undefined
+              missingRequired
+                ? "Fill required fields to continue"
+                : hasInvalid
+                  ? "Fix invalid fields to continue"
+                  : undefined
             }
             className="px-3 py-1.5 rounded-[5px] font-sans text-[0.857rem] font-medium border border-accent/40 bg-accent/10 text-accent hover:bg-accent/20 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer outline-none transition-colors"
           >

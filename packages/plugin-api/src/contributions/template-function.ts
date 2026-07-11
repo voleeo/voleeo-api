@@ -26,6 +26,10 @@ export interface TemplateFunctionArg {
    *  first arg in the group provides the shared label; later args' labels are
    *  hidden. Hidden args (via `visibleWhen`) drop out of the row. */
   row?: string
+  /** Validate a non-empty value in the function modal. Return an error message
+   *  to show under the input (and block Insert), or null when valid. Must be
+   *  pure and synchronous — it runs on every keystroke. */
+  validate?: (value: string) => string | null
 }
 
 export interface TemplateFunctionContribution {

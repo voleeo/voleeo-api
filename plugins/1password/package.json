@@ -1,0 +1,14 @@
+{
+  "name": "@voleeo/1password",
+  "displayName": "1Password",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@1password/sdk": "^0.4.0",
+    "@voleeo/plugin-api": "workspace:*"
+  }
+}

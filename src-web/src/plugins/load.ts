@@ -1,3 +1,4 @@
+import { plugin as onePasswordPlugin } from "@voleeo/1password"
 import { plugin as askPlugin } from "@voleeo/ask"
 import { plugin as base64Plugin } from "@voleeo/base64"
 import { plugin as curlPlugin } from "@voleeo/curl"
@@ -30,6 +31,10 @@ export async function loadBundledPlugins(): Promise<void> {
   await registry.register(fakerPlugin, createContext(fakerPlugin.meta))
   await registry.register(encryptPlugin, createContext(encryptPlugin.meta))
   await registry.register(askPlugin, createContext(askPlugin.meta))
+  await registry.register(
+    onePasswordPlugin,
+    createContext(onePasswordPlugin.meta),
+  )
   await registry.register(curlPlugin, createContext(curlPlugin.meta))
   await registry.register(fetchPlugin, createContext(fetchPlugin.meta))
   await registry.register(httpiePlugin, createContext(httpiePlugin.meta))

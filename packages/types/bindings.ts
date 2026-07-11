@@ -151,6 +151,12 @@ export const commands = {
 	 *  so the Tauri UI and the MCP send path share one cache + acquisition logic.
 	 */
 	oauth2EnsureToken: (workspaceId: string, auth: AuthConfig_Deserialize) => typedError<string, VoleeoError>(__TAURI_INVOKE("oauth2_ensure_token", { workspaceId, auth })),
+	/**
+	 *  Resolve a 1Password secret reference for `account`. Auth failures map to
+	 *  `NotFound` so the frontend can re-prompt for the account name; the value is
+	 *  returned to the caller and never logged or persisted.
+	 */
+	opRead: (reference: string, account: string) => typedError<string, VoleeoError>(__TAURI_INVOKE("op_read", { reference, account })),
 	graphqlIntrospect: (workspaceId: string, requestId: string, environmentId: string | null, query: string) => typedError<HttpResponse_Serialize, VoleeoError>(__TAURI_INVOKE("graphql_introspect", { workspaceId, requestId, environmentId, query })),
 	listWsConnections: (workspaceId: string) => typedError<WsConnection_Serialize[], VoleeoError>(__TAURI_INVOKE("list_ws_connections", { workspaceId })),
 	getWsConnection: (workspaceId: string, id: string) => typedError<WsConnection_Serialize, VoleeoError>(__TAURI_INVOKE("get_ws_connection", { workspaceId, id })),

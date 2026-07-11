@@ -28,6 +28,14 @@
       "name": "@voleeo/ui",
       "version": "0.1.0",
     },
+    "plugins/1password": {
+      "name": "@voleeo/1password",
+      "version": "1.0.0",
+      "dependencies": {
+        "@1password/sdk": "^0.4.0",
+        "@voleeo/plugin-api": "workspace:*",
+      },
+    },
     "plugins/ask": {
       "name": "@voleeo/ask",
       "version": "1.0.0",
@@ -140,6 +148,7 @@
         "@tauri-apps/plugin-updater": "^2.0.0",
         "@uiw/react-codemirror": "^4.25.9",
         "@uiw/react-color": "^2.10.1",
+        "@voleeo/1password": "workspace:*",
         "@voleeo/ask": "workspace:*",
         "@voleeo/base64": "workspace:*",
         "@voleeo/curl": "workspace:*",
@@ -186,6 +195,10 @@
     },
   },
   "packages": {
+    "@1password/sdk": ["@1password/sdk@0.4.0", "", { "dependencies": { "@1password/sdk-core": "0.4.0" } }, "sha512-RIypujc9R/UeUaobjyClTYokqRFpcaIkHq+EO/X9XoHId98Vg+SbjwGV+yygRC4MyHwYNo1KP1iEbZcqJ4ZTdw=="],
+
+    "@1password/sdk-core": ["@1password/sdk-core@0.4.0", "", {}, "sha512-vjeI1o4wiONY+t1naA4dtUp6HktdLH1D2S+tN1Lh4l41S9XIUHxrljov9B5u6G+VHr7f2MUoxmzXA9zT3aokQQ=="],
+
     "@babel/code-frame": ["@babel/code-frame@7.29.0", "", { "dependencies": { "@babel/helper-validator-identifier": "^7.28.5", "js-tokens": "^4.0.0", "picocolors": "^1.1.1" } }, "sha512-9NhCeYjq9+3uxgdtp20LSiJXJvN0FeCtNGpJxuMFZ1Kv3cWUNb6DOhJwUvcVCzKGR66cw4njwM6hrJLqgOwbcw=="],
 
     "@babel/compat-data": ["@babel/compat-data@7.29.0", "", {}, "sha512-T1NCJqT/j9+cn8fvkt7jtwbLBfLC/1y1c7NtCeXFRgzGTsafi68MRv8yzkYSapBnFA6L3U2VSc02ciDzoAJhJg=="],
@@ -615,6 +628,8 @@
     "@uiw/react-drag-event-interactive": ["@uiw/react-drag-event-interactive@2.10.1", "", { "peerDependencies": { "@babel/runtime": ">=7.19.0", "react": ">=16.9.0", "react-dom": ">=16.9.0" } }, "sha512-eArtX/XdSrg5aQs8CV0vne9vChybw2GkNZCP9H68zjBBzucuYgjURqKBJ/+3jid06YpRZ5zz/YTnAlySqOt0Ag=="],
 
     "@vitejs/plugin-react": ["@vitejs/plugin-react@6.0.2", "", { "dependencies": { "@rolldown/pluginutils": "^1.0.0" }, "peerDependencies": { "@rolldown/plugin-babel": "^0.1.7 || ^0.2.0", "babel-plugin-react-compiler": "^1.0.0", "vite": "^8.0.0" }, "optionalPeers": ["@rolldown/plugin-babel", "babel-plugin-react-compiler"] }, "sha512-DlSMqo4WhThw4vB8Mpn0Woe9J+Jfq1geJ61AKW0QEgLzGMNwtIMdxbDUzLxcun8W7NbJO0e2Jg/Nxm3cCSVzzg=="],
+
+    "@voleeo/1password": ["@voleeo/1password@workspace:plugins/1password"],
 
     "@voleeo/ask": ["@voleeo/ask@workspace:plugins/ask"],
 
