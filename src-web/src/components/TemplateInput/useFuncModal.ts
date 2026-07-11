@@ -1,7 +1,7 @@
 import type { RefObject } from "react"
 import { useState } from "react"
 import { ensureTrailingTextNode, extractStoredValue } from "@/lib/caret"
-import { parseExpr, serialize } from "@/lib/template"
+import { serialize } from "@/lib/template"
 import type { BoundTemplateFunction } from "@/plugins/types"
 import { commands } from "../../../../packages/types/bindings"
 
@@ -86,14 +86,19 @@ export function useFuncModal({
       return
     }
 
-    let initialArgs: Record<string, string> = {}
+    let originalArgs: Record<string, string> = {}
     try {
-      initialArgs = target.dataset.args ? JSON.parse(target.dataset.args) : {}
+      originalArgs = target.dataset.args ? JSON.parse(target.dataset.args) : {}
     } catch {}
 
-    const encryptedValue = initialArgs.value
+    const oldToken = serialize([
+      { kind: "func", name: fnName, args: originalArgs },
+    ])
+
+    let initialArgs = originalArgs
+    const encryptedValue = originalArgs.value
     if (encryptedValue?.startsWith("enc:v1:") && activeWorkspaceId) {
-      initialArgs = { ...initialArgs, value: "" }
+      initialArgs = { ...originalArgs, value: "" }
       commands
         .workspaceDecryptValue(activeWorkspaceId, encryptedValue)
         .then((res) => {
@@ -110,16 +115,11 @@ export function useFuncModal({
         })
     }
 
-    const tok = parseExpr(
-      `${fnName}(${Object.entries(initialArgs)
-        .map(([k, v]) => `${k}="${v}"`)
-        .join(", ")})`,
-    )
     // insertStart/insertEnd are unused for chip-edit path (replaced by oldToken match).
     setFuncModal({
       fnName,
       initialArgs,
-      oldToken: tok ? serialize([tok]) : "",
+      oldToken,
       insertStart: 0,
       insertEnd: 0,
     })
