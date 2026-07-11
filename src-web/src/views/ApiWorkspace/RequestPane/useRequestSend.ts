@@ -105,6 +105,10 @@ export function useRequestSend({
     const jarForSend =
       cookiesLoadedWorkspaceId === activeWorkspaceId ? activeJar : null
 
+    // Show the spinner through resolution — ask() prompts and 1Password reads
+    // can take seconds, and without this the app looks idle until they finish.
+    useHttpStore.getState().setLoading(activeRequest.id, true)
+
     let payload: Awaited<ReturnType<typeof resolveSendPayload>>
     try {
       payload = await resolveSendPayload({
@@ -121,12 +125,21 @@ export function useRequestSend({
       })
     } catch (e) {
       // Cancelled ask() prompt — abort silently.
-      if (isAbortError(e)) return
+      if (isAbortError(e)) {
+        useHttpStore.getState().setLoading(activeRequest.id, false)
+        return
+      }
+      // Cancel clicked while resolution was in flight — a late resolver error
+      // must not resurrect an error banner for an already-cancelled send.
+      if (!useHttpStore.getState().loading[activeRequest.id]) return
       useHttpStore
         .getState()
         .setError(activeRequest.id, e instanceof Error ? e.message : String(e))
       return
     }
+
+    // Cancel clicked while resolution was in flight — don't send.
+    if (!useHttpStore.getState().loading[activeRequest.id]) return
 
     const preflightEvents = pendingPreflightEvents.splice(0)
 

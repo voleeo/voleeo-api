@@ -36,6 +36,10 @@ interface HttpStore {
     authOverride?: AuthConfig | null,
   ) => Promise<void>
   cancelRequest: (requestId: string) => Promise<void>
+  /** Mark a request as in-flight before template resolution starts, so the
+   *  spinner covers slow resolvers (ask prompts, 1Password reads) — the
+   *  response timer itself only ever measures the HTTP exchange. */
+  setLoading: (requestId: string, loading: boolean) => void
   clearResponse: (requestId: string) => void
   /** Surface a send-pipeline failure (e.g. a thrown OAuth token fetch) as the
    *  request's error banner, and clear any stuck loading state. */
@@ -104,6 +108,9 @@ export const useHttpStore = create<HttpStore>((set) => ({
     set((s) => ({ loading: { ...s.loading, [requestId]: false } }))
     await commands.cancelRequest(requestId)
   },
+
+  setLoading: (requestId, loading) =>
+    set((s) => ({ loading: { ...s.loading, [requestId]: loading } })),
 
   setError: (requestId, message) =>
     set((s) => ({
