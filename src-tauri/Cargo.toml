@@ -50,7 +50,7 @@ tauri-plugin-process = { workspace = true }
 font-kit = "0.14"
 # E2E bridge for the voleeo-e2e suite. Registered only under debug_assertions
 # (see lib.rs), so its WebSocket server never starts in release builds.
-tauri-plugin-mcp-bridge = "0.11"
+tauri-plugin-mcp-bridge = "0.12"
 
 # macOS-only: native titlebar via cocoa/objc. Not compiled on Linux/Windows.
 [target.'cfg(target_os = "macos")'.dependencies]
