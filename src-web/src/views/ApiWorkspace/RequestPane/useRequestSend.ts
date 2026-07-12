@@ -47,10 +47,11 @@ export function useRequestSend({
   const updateRequest = useRequestStore((s) => s.updateRequest)
   const renameRequest = useRequestStore((s) => s.renameRequest)
 
-  const { environments, activeEnvId } = useEnvironmentStore(
+  const { environments, activeEnvId, systemEnvVars } = useEnvironmentStore(
     useShallow((s) => ({
       environments: s.environments,
       activeEnvId: s.activeEnvId,
+      systemEnvVars: s.systemEnvVars,
     })),
   )
   // Active jar feeds sendResolution.ts so plugin-function cookie templates
@@ -99,6 +100,7 @@ export function useRequestSend({
     const vars = mergeEnvVars(
       environments.find((e) => e.kind === "global")?.variables ?? [],
       environments.find((e) => e.id === activeEnvId)?.variables ?? [],
+      systemEnvVars,
     )
     clearResponseCycleCache()
     // Skip cookie overrides if the store's jar belongs to a different workspace.

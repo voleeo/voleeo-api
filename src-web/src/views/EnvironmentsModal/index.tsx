@@ -4,13 +4,14 @@ import { Glyph } from "@/components/Glyph"
 import { ManagementModal } from "@/components/ManagementModal"
 import { type Environment, useEnvironmentStore } from "@/store/environment"
 import { EnvPane } from "./EnvPane"
+import type { EnvFocusTarget } from "./focusTarget"
 import { InlineNewEnvItem } from "./InlineNewEnvItem"
 import { NavEnvItem } from "./NavEnvItem"
 
 interface Props {
   workspaceId: string
   onClose: () => void
-  focusVariable?: { envId?: string; key: string }
+  focusVariable?: EnvFocusTarget & { envId?: string }
 }
 
 function resolveFocusEnvId(
@@ -31,15 +32,17 @@ function resolveInitialEnvId(
   activeEnvId: string | null,
   focusVariable: Props["focusVariable"],
 ): string | null {
+  const globalId = environments.find((e) => e.kind === "global")?.id ?? null
   if (focusVariable) {
-    const { envId, key } = focusVariable
+    const { envId, key, system } = focusVariable
     if (envId) return envId
+    // System vars live in the global env's System block.
+    if (system) return globalId
     const found = resolveFocusEnvId(environments, activeEnvId, key)
     if (found) return found
   }
   const active = environments.find((e) => e.id === activeEnvId)
-  const global = environments.find((e) => e.kind === "global")
-  return active?.id ?? global?.id ?? environments[0]?.id ?? null
+  return active?.id ?? globalId ?? environments[0]?.id ?? null
 }
 
 export function EnvironmentsModal({
@@ -64,14 +67,18 @@ export function EnvironmentsModal({
   // Re-select when focusVariable changes after mount.
   useEffect(() => {
     if (!focusVariable) return
-    const { envId, key } = focusVariable
+    const { envId, key, system } = focusVariable
     if (envId) {
       setSelectedId(envId)
       return
     }
+    if (system) {
+      setSelectedId(globalEnv?.id ?? null)
+      return
+    }
     const found = resolveFocusEnvId(environments, activeEnvId, key)
     if (found) setSelectedId(found)
-  }, [focusVariable, environments, activeEnvId])
+  }, [focusVariable, environments, activeEnvId, globalEnv?.id])
 
   const selectedEnv = environments.find((e) => e.id === selectedId) ?? null
   const personalEnvs = environments.filter((e) => e.kind !== "global")
@@ -147,6 +154,8 @@ export function EnvironmentsModal({
             key={selectedEnv.id}
             env={selectedEnv}
             focusKey={focusVariable?.key}
+            focusSystem={focusVariable?.system ?? false}
+            flashNonce={focusVariable?.nonce}
           />
         ) : (
           <div className="flex items-center justify-center h-full text-muted font-sans text-[0.929rem]">

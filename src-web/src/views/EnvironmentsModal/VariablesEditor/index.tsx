@@ -10,6 +10,7 @@ interface Props {
   onSave: (vars: EnvironmentVariable[]) => void
   onRename: (oldKey: string, newKey: string) => void
   focusKey?: string
+  flashNonce?: number
 }
 
 export function VariablesEditor({
@@ -18,6 +19,7 @@ export function VariablesEditor({
   onSave,
   onRename,
   focusKey,
+  flashNonce,
 }: Props) {
   const {
     variables,
@@ -68,6 +70,7 @@ export function VariablesEditor({
             onKeyFocus={handleKeyFocus}
             onKeyBlur={handleKeyBlur}
             focusKey={focusKey}
+            flashNonce={flashNonce}
           />
         )
       })}

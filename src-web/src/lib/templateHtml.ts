@@ -9,11 +9,14 @@ function escHtml(s: string): string {
 }
 
 const BASE_SPAN =
-  "display:inline-block;border-radius:3px;padding:0 4px;margin:0 1px;cursor:pointer;"
+  "display:inline-block;border-radius:3px;padding:0 4px;margin:0 1px;cursor:pointer;font-size:var(--editor-font-size);"
 
 const VAR_STYLE = `${BASE_SPAN}background-color:color-mix(in srgb,var(--base0C) 12%,transparent);color:var(--base0C);`
 
 const VAR_MISSING_STYLE = `${BASE_SPAN}background-color:color-mix(in srgb,var(--base08) 12%,transparent);color:var(--base08);`
+
+export const SYSTEM_VAR_PREFIX = "$"
+export const SYSTEM_VAR_MARK = `<span class="tpl-var-sys-mark">${SYSTEM_VAR_PREFIX}</span>`
 
 const FUNC_STYLE = `${BASE_SPAN}background-color:color-mix(in srgb,var(--base0D) 12%,transparent);color:var(--base0D);`
 
@@ -21,7 +24,7 @@ const FUNC_ERROR_STYLE = `${BASE_SPAN}background-color:color-mix(in srgb,var(--b
 
 export function toHtml(
   text: string,
-  varStatus: (name: string) => "found" | "missing",
+  varStatus: (name: string) => "found" | "missing" | "system",
   funcStatus?: (name: string, args: Record<string, string>) => "ok" | "error",
 ): string {
   return tokenize(text)
@@ -29,20 +32,22 @@ export function toHtml(
       if (tok.kind === "plain") return escHtml(tok.text)
 
       if (tok.kind === "var") {
-        const missing = varStatus(tok.name) === "missing"
+        const status = varStatus(tok.name)
+        const missing = status === "missing"
+        const system = status === "system"
         const style = missing ? VAR_MISSING_STYLE : VAR_STYLE
         const title = missing
           ? ` title="Variable &quot;${escHtml(tok.name)}&quot; not found in active environment"`
-          : ""
+          : system
+            ? ' title="System environment variable"'
+            : ""
         return (
           `<span contenteditable="false" data-tpl="var" data-var="${escHtml(tok.name)}"` +
           `${missing ? ' data-missing="true"' : ""}${title} style="${style}">` +
-          `${escHtml(tok.name)}</span>`
+          `${system ? SYSTEM_VAR_MARK : ""}${escHtml(tok.name)}</span>`
         )
       }
 
-      // func — show name(...) when args are present, name() when none.
-      // Full args are preserved in data-args so they round-trip unchanged.
       const hasArgs = Object.keys(tok.args).length > 0
       const display = hasArgs ? `${tok.name}(...)` : `${tok.name}()`
       const argsJson = escHtml(JSON.stringify(tok.args))

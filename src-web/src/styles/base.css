@@ -157,6 +157,47 @@ body {
   }
 }
 
+/* One-shot double pulse for a chip-navigated env-var row. Constant colour with
+   a spread that pulses 0→2px→0→2px→0 — inset so it never shifts layout and is
+   never clipped by the System block's overflow-hidden. */
+@keyframes env-row-flash {
+  0%,
+  40%,
+  100% {
+    box-shadow: inset 0 0 0 0 var(--base0C);
+  }
+  20%,
+  60% {
+    box-shadow: inset 0 0 0 2px var(--base0C);
+  }
+}
+
+/* Rounded so the ring's corners curve clear of the row's flush-left checkbox
+   instead of a square corner poking past it. Removed after the run (see
+   useRowFlash), so the radius never lingers on the row. */
+.env-row-flash {
+  animation: env-row-flash 1.15s ease-in-out;
+  border-radius: 6px;
+}
+
+/* Variant for grid rows whose content is flush to the edge (the checkbox
+   column). Padding pushes the ring out for breathing room; the equal negative
+   margin keeps the content-box — and therefore the grid — exactly in place. */
+.env-row-flash-pad {
+  padding-left: 8px;
+  padding-right: 8px;
+  margin-left: -8px;
+  margin-right: -8px;
+}
+
+/* The system-var marker prefix on chips (SYSTEM_VAR_PREFIX) — breathing room
+   before the name, and click-transparent so chip clicks (which read
+   target.dataset.var) work on it. */
+.tpl-var-sys-mark {
+  padding-right: 3px;
+  pointer-events: none;
+}
+
 @utility select-control {
   appearance: none;
   -webkit-appearance: none;

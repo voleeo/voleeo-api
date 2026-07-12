@@ -11,7 +11,7 @@ interface UseEditorSyncOptions {
   divRef: RefObject<HTMLDivElement | null>
   value: string
   buildHtml: (text: string) => string
-  varStatus: (name: string) => "found" | "missing"
+  varStatus: (name: string) => "found" | "missing" | "system"
   forwardedRef: Ref<HTMLDivElement> | undefined
   skipSyncRef: RefObject<boolean>
 }

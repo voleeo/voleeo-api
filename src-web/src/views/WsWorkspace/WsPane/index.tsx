@@ -12,6 +12,7 @@ import { AuthTypeSelect } from "@/views/ApiWorkspace/AuthTab/AuthTypeSelect"
 import { useAuthEditor } from "@/views/ApiWorkspace/AuthTab/useAuthEditor"
 import { computeInheritedHeaders } from "@/views/ApiWorkspace/HeadersTab/computeInheritedHeaders"
 import { EnvironmentsModal } from "@/views/EnvironmentsModal"
+import type { EnvFocusTarget } from "@/views/EnvironmentsModal/focusTarget"
 import { useWsCommits } from "./useWsCommits"
 import { useWsConnectionLifecycle } from "./useWsConnectionLifecycle"
 import { useWsPathParamDraft } from "./useWsPathParamDraft"
@@ -53,7 +54,7 @@ export function WsPane() {
   const [urlOverride, setUrlOverride] = useState<string | null>(null)
   const urlDraft = urlOverride ?? connection?.url ?? ""
   const setUrlDraft = setUrlOverride
-  const [envModalVar, setEnvModalVar] = useState<string | null>(null)
+  const [envModalVar, setEnvModalVar] = useState<EnvFocusTarget | null>(null)
 
   const {
     pathParamValues,
@@ -215,7 +216,7 @@ export function WsPane() {
         {envModalVar && workspaceId && (
           <EnvironmentsModal
             workspaceId={workspaceId}
-            focusVariable={{ key: envModalVar }}
+            focusVariable={envModalVar}
             onClose={() => setEnvModalVar(null)}
           />
         )}

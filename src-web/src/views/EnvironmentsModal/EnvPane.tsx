@@ -3,6 +3,7 @@ import { Glyph } from "@/components/Glyph"
 import { cn } from "@/lib/utils"
 import type { Environment, EnvironmentVariable } from "@/store/environment"
 import { useEnvironmentStore } from "@/store/environment"
+import { SystemEnvBlock } from "./SystemEnvBlock"
 import { TextEditor } from "./TextEditor"
 import { VariablesEditor } from "./VariablesEditor"
 import { propagateVariableRename } from "./VariablesEditor/propagateRename"
@@ -25,9 +26,13 @@ const SCOPES = [
 export function EnvPane({
   env,
   focusKey,
+  focusSystem = false,
+  flashNonce,
 }: {
   env: Environment
   focusKey?: string
+  focusSystem?: boolean
+  flashNonce?: number
 }) {
   const [viewMode, setViewMode] = useState<ViewMode>("form")
   const update = useEnvironmentStore((s) => s.update)
@@ -86,13 +91,23 @@ export function EnvPane({
         </div>
       </div>
 
+      {env.kind === "global" && (
+        <SystemEnvBlock
+          key={env.workspaceId}
+          workspaceId={env.workspaceId}
+          flashKey={focusSystem ? focusKey : undefined}
+          flashNonce={flashNonce}
+        />
+      )}
+
       {viewMode === "form" ? (
         <VariablesEditor
           source={env.variables}
           updatedAt={env.updatedAt}
           onSave={saveVars}
           onRename={renameVar}
-          focusKey={focusKey}
+          focusKey={focusSystem ? undefined : focusKey}
+          flashNonce={flashNonce}
         />
       ) : (
         <TextEditor env={env} />

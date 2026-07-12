@@ -2,7 +2,10 @@ import { Prec } from "@codemirror/state"
 import type { EditorView } from "@uiw/react-codemirror"
 import { EditorView as CMEditorView, keymap } from "@uiw/react-codemirror"
 import { useMemo, useRef, useState } from "react"
-import type { AutocompleteItem } from "@/components/TemplateInput/Autocomplete"
+import type {
+  AutocompleteItem,
+  VarSuggestion,
+} from "@/components/TemplateInput/Autocomplete"
 import { buildItems } from "@/components/TemplateInput/Autocomplete"
 import type { BoundTemplateFunction } from "@/plugins/types"
 import {
@@ -29,7 +32,7 @@ const CLOSED: BodyOverlayState = {
 }
 
 export function useBodyOverlay(
-  varKeys: string[],
+  varKeys: VarSuggestion[],
   fns: BoundTemplateFunction[],
   onPickFunc?: (
     fnName: string,

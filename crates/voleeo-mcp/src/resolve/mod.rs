@@ -6,12 +6,14 @@
 
 mod grpc;
 mod http;
+mod system_env;
 mod text;
 mod vars;
 
 pub use grpc::{apply_to_grpc, grpc_vars, resolve_grpc_for_send};
 pub(crate) use http::auth_header;
 pub use http::{apply_to_connection, apply_to_request};
+pub use system_env::snapshot as system_env_snapshot;
 pub use vars::{
     apply_folder_vars, load_env_vars, load_env_vars_from, merge_inherited_metadata, resolve_str,
 };

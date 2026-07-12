@@ -193,3 +193,11 @@ pub async fn env_delete(
     })
     .await
 }
+
+/// Full OS env snapshot for the system-variables allowlist picker. The first
+/// call may spawn the user's login shell (see `resolve::system_env`).
+#[tauri::command]
+#[specta::specta]
+pub async fn system_env_list() -> Result<std::collections::HashMap<String, String>, VoleeoError> {
+    run_blocking(|| Ok(voleeo_mcp::resolve::system_env_snapshot().clone())).await
+}

@@ -3,6 +3,7 @@ import { memo, useMemo } from "react"
 import { EncryptedInput } from "@/components/EncryptedInput"
 import { Glyph } from "@/components/Glyph"
 import { Checkbox } from "@/components/ui/checkbox"
+import { useRowFlash } from "@/hooks/useRowFlash"
 import { cn } from "@/lib/utils"
 import type { Row } from "./types"
 
@@ -34,6 +35,7 @@ export interface VarRowProps {
   onKeyFocus: (rowId: number, currentKey: string) => void
   onKeyBlur: (rowId: number, newKey: string) => void
   focusKey?: string
+  flashNonce?: number
 }
 
 export const VarRow = memo(function VarRow({
@@ -54,15 +56,22 @@ export const VarRow = memo(function VarRow({
   onKeyFocus,
   onKeyBlur,
   focusKey,
+  flashNonce,
 }: VarRowProps) {
   // Stable reference — prevents TemplateInput from treating a new array as a dep change.
   const excludeVarKeys = useMemo(() => (v.key ? [v.key] : undefined), [v.key])
+  const flashRef = useRowFlash<HTMLDivElement>(
+    !isTrailing && !!v.key && focusKey === v.key,
+    flashNonce,
+    true, // grid row is flush to the edge — pad the ring off the checkbox
+  )
 
   return (
     <div {...(!isTrailing && { "data-list-index": idx })}>
       {dropIndex === idx && !isTrailing && <DropLine />}
 
       <div
+        ref={flashRef}
         className={cn(
           "group/row grid gap-x-1 py-[3px] items-center border-b border-border/40 transition-opacity",
           isDragging && "opacity-40",

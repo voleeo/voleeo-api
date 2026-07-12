@@ -90,7 +90,7 @@ export function FieldShell({
       <span className="font-mono text-[0.714rem] uppercase tracking-wide text-muted">
         {label}
       </span>
-      <div className="border border-border rounded-[4px] bg-surface px-1.5 py-1 focus-within:border-accent transition-colors">
+      <div className="border border-border rounded-[4px] bg-surface px-1.5 py-1 font-mono text-[0.786rem] focus-within:border-accent transition-colors">
         {children}
       </div>
     </div>

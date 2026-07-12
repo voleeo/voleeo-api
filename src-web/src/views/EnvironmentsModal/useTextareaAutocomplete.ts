@@ -4,6 +4,7 @@ import { useState } from "react"
 import {
   type AutocompleteItem,
   buildItems,
+  type VarSuggestion,
 } from "@/components/TemplateInput/Autocomplete"
 import { serialize } from "@/lib/template"
 import { getTextareaCaretRect } from "@/lib/textareaCaretRect"
@@ -11,7 +12,7 @@ import type { BoundTemplateFunction } from "@/plugins/types"
 
 interface UseTextareaAutocompleteOptions {
   textareaRef: RefObject<HTMLTextAreaElement | null>
-  varKeys: string[]
+  varKeys: VarSuggestion[]
   fns: BoundTemplateFunction[]
   setText: (v: string) => void
 }

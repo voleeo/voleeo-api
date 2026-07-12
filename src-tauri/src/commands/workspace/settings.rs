@@ -46,6 +46,11 @@ pub struct WorkspaceSettings {
     pub tree_visible: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub editor_visible: Option<bool>,
+    /// OS env var names exposed to `{{ }}` resolution (lowest precedence).
+    /// Machine-local by design — also read leniently by
+    /// `voleeo_mcp::resolve::system_env` at send time.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub system_env_allowlist: Option<Vec<String>>,
 }
 
 /// One entry in the YAML list — carries the id key so we can look up by workspace.

@@ -11,6 +11,7 @@ import { html as beautifyHtmlJs } from "js-beautify"
 import type { RefObject } from "react"
 import { useMemo } from "react"
 import { Glyph } from "@/components/Glyph"
+import type { VarSuggestion } from "@/components/TemplateInput/Autocomplete"
 import { useThemeStore } from "@/store/theme"
 import { cmEditorTheme } from "../cmEditorTheme"
 import { foldingExtension } from "../cmFolding"
@@ -22,7 +23,7 @@ import type { useBodyOverlay } from "./useBodyOverlay"
 interface Props {
   bodyKind: BodyKind
   bodyText: string
-  varKeys: string[]
+  varKeys: VarSuggestion[]
   onVarClickRef: RefObject<((name: string) => void) | null>
   onFuncClickRef?: RefObject<
     ((token: string, from: number, to: number) => void) | null
@@ -44,7 +45,14 @@ export function BodyEditor({
 }: Props) {
   const activeTheme = useThemeStore((s) => s.activeTheme)
   const isDark = activeTheme?.kind !== "light"
-  const varKeysSet = useMemo(() => new Set(varKeys), [varKeys])
+  const varKeysSet = useMemo(
+    () => new Set(varKeys.map((v) => v.name)),
+    [varKeys],
+  )
+  const systemKeysSet = useMemo(
+    () => new Set(varKeys.filter((v) => v.system).map((v) => v.name)),
+    [varKeys],
+  )
 
   const langExt = useMemo(() => {
     if (bodyKind === "json") return jsonLang()
@@ -61,8 +69,14 @@ export function BodyEditor({
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: refs are stable
   const chipDecorations = useMemo(
-    () => createTemplateDecorations(onVarClickRef, onFuncClickRef, varKeysSet),
-    [varKeysSet],
+    () =>
+      createTemplateDecorations(
+        onVarClickRef,
+        onFuncClickRef,
+        varKeysSet,
+        systemKeysSet,
+      ),
+    [varKeysSet, systemKeysSet],
   )
 
   const extensions = useMemo(

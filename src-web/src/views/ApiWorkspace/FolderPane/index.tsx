@@ -113,7 +113,7 @@ export function FolderPane() {
       {envModalVar !== null && activeWorkspaceId && (
         <EnvironmentsModal
           workspaceId={activeWorkspaceId}
-          focusVariable={{ key: envModalVar }}
+          focusVariable={envModalVar}
           onClose={() => setEnvModalVar(null)}
         />
       )}

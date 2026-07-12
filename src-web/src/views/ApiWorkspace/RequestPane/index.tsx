@@ -165,7 +165,7 @@ export function RequestPane() {
       {ui.envModalVar && activeWorkspaceId && (
         <EnvironmentsModal
           workspaceId={activeWorkspaceId}
-          focusVariable={{ key: ui.envModalVar }}
+          focusVariable={ui.envModalVar}
           onClose={() => ui.setEnvModalVar(null)}
         />
       )}

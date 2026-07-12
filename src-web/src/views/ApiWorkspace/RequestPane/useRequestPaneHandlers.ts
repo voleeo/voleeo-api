@@ -5,6 +5,11 @@ import { usePaneTabsStore } from "@/store/paneTabs"
 import type { HttpRequest } from "@/store/requests"
 import { useRequestStore } from "@/store/requests"
 import { useToastStore } from "@/store/toast"
+import {
+  type EnvFocusTarget,
+  envFocusTarget,
+  systemHasVar,
+} from "@/views/EnvironmentsModal/focusTarget"
 import { revealInTree } from "../revealInTree"
 import type { RequestTab } from "./TabBar"
 
@@ -37,7 +42,7 @@ export function useRequestPaneHandlers(activeRequest: HttpRequest | null) {
     [activeRequest?.id],
   )
   const [focusedPathParam, setFocusedPathParam] = useState<string | null>(null)
-  const [envModalVar, setEnvModalVar] = useState<string | null>(null)
+  const [envModalVar, setEnvModalVar] = useState<EnvFocusTarget | null>(null)
   const [paramCounts, setParamCounts] = useState<{
     enabled: number
     total: number
@@ -92,7 +97,9 @@ export function useRequestPaneHandlers(activeRequest: HttpRequest | null) {
         revealInTree(sourceFolderId, sourceFolderId, folders)
         useRequestStore.getState().focusFolderVariable(sourceFolderId, varName)
       } else if (envHasVar(varName)) {
-        setEnvModalVar(varName)
+        setEnvModalVar(envFocusTarget(varName, false))
+      } else if (systemHasVar(varName)) {
+        setEnvModalVar(envFocusTarget(varName, true))
       } else {
         useToastStore
           .getState()

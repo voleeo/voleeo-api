@@ -73,13 +73,14 @@ export function TextEditor({ env }: Props) {
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  const { environments, activeEnvId } = useEnvironmentStore(
+  const { environments, activeEnvId, systemEnvVars } = useEnvironmentStore(
     useShallow((s) => ({
       environments: s.environments,
       activeEnvId: s.activeEnvId,
+      systemEnvVars: s.systemEnvVars,
     })),
   )
-  const activeVars = useMemo(() => {
+  const varKeys = useMemo(() => {
     const globalVars =
       environments
         .find((e) => e.kind === "global")
@@ -89,11 +90,18 @@ export function TextEditor({ env }: Props) {
         .find((e) => e.id === activeEnvId)
         ?.variables.filter((v) => v.enabled) ?? []
     const personalKeys = new Set(personalVars.map((v) => v.key))
-    return [
+    const envVars = [
       ...personalVars,
       ...globalVars.filter((v) => !personalKeys.has(v.key)),
     ]
-  }, [environments, activeEnvId])
+    const envKeys = new Set(envVars.map((v) => v.key))
+    return [
+      ...envVars.map((v) => ({ name: v.key })),
+      ...systemEnvVars
+        .filter((v) => !envKeys.has(v.key))
+        .map((v) => ({ name: v.key, system: true })),
+    ]
+  }, [environments, activeEnvId, systemEnvVars])
 
   const fns = useTemplateFunctions()
 
@@ -109,7 +117,7 @@ export function TextEditor({ env }: Props) {
     handleKeyDown,
   } = useTextareaAutocomplete({
     textareaRef,
-    varKeys: useMemo(() => activeVars.map((v) => v.key), [activeVars]),
+    varKeys,
     fns,
     setText,
   })

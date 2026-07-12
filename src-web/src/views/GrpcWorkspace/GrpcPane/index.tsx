@@ -20,6 +20,7 @@ import {
   countLabel,
 } from "@/views/ApiWorkspace/RequestPane/TabBar"
 import { EnvironmentsModal } from "@/views/EnvironmentsModal"
+import type { EnvFocusTarget } from "@/views/EnvironmentsModal/focusTarget"
 import { useWsVarClickHandler } from "@/views/WsWorkspace/WsPane/useWsVarClickHandler"
 import type {
   AuthConfig,
@@ -57,7 +58,7 @@ function GrpcPaneInner({ request }: { request: GrpcRequest }) {
     setMsgModeState(next)
     usePaneTabsStore.getState().setGrpcMode(request.id, next)
   }
-  const [envModalVar, setEnvModalVar] = useState<string | null>(null)
+  const [envModalVar, setEnvModalVar] = useState<EnvFocusTarget | null>(null)
   const handleVarClick = useWsVarClickHandler(
     request.folderId ?? null,
     setEnvModalVar,
@@ -220,7 +221,7 @@ function GrpcPaneInner({ request }: { request: GrpcRequest }) {
         {envModalVar && workspaceId && (
           <EnvironmentsModal
             workspaceId={workspaceId}
-            focusVariable={{ key: envModalVar }}
+            focusVariable={envModalVar}
             onClose={() => setEnvModalVar(null)}
           />
         )}
