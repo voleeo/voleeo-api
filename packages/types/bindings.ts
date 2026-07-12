@@ -399,6 +399,11 @@ params_location?: OAuth1Location; callback?: string; verifier?: string; timestam
 	envCreate: (workspaceId: string, name: string, color: string, shared: boolean) => typedError<Environment, VoleeoError>(__TAURI_INVOKE("env_create", { workspaceId, name, color, shared })),
 	envUpdate: (env: Environment) => typedError<Environment, VoleeoError>(__TAURI_INVOKE("env_update", { env })),
 	envDelete: (workspaceId: string, id: string) => typedError<null, VoleeoError>(__TAURI_INVOKE("env_delete", { workspaceId, id })),
+	/**
+	 *  Full OS env snapshot for the system-variables allowlist picker. The first
+	 *  call may spawn the user's login shell (see `resolve::system_env`).
+	 */
+	systemEnvList: () => typedError<{ [key in string]: string }, VoleeoError>(__TAURI_INVOKE("system_env_list")),
 	cookiesListJars: (workspaceId: string) => typedError<CookieJar_Serialize[], VoleeoError>(__TAURI_INVOKE("cookies_list_jars", { workspaceId })),
 	cookiesCreateJar: (workspaceId: string, name: string) => typedError<CookieJar_Serialize, VoleeoError>(__TAURI_INVOKE("cookies_create_jar", { workspaceId, name })),
 	cookiesRenameJar: (workspaceId: string, jarId: string, name: string) => typedError<CookieJar_Serialize, VoleeoError>(__TAURI_INVOKE("cookies_rename_jar", { workspaceId, jarId, name })),
@@ -2007,6 +2012,12 @@ export type WorkspaceSettings_Deserialize = {
 	itemsCount?: number | null,
 	treeVisible?: boolean | null,
 	editorVisible?: boolean | null,
+	/**
+	 *  OS env var names exposed to `{{ }}` resolution (lowest precedence).
+	 *  Machine-local by design — also read leniently by
+	 *  `voleeo_mcp::resolve::system_env` at send time.
+	 */
+	systemEnvAllowlist?: string[] | null,
 };
 
 /**
@@ -2022,6 +2033,12 @@ export type WorkspaceSettings_Serialize = {
 	itemsCount?: number | null,
 	treeVisible?: boolean | null,
 	editorVisible?: boolean | null,
+	/**
+	 *  OS env var names exposed to `{{ }}` resolution (lowest precedence).
+	 *  Machine-local by design — also read leniently by
+	 *  `voleeo_mcp::resolve::system_env` at send time.
+	 */
+	systemEnvAllowlist?: string[] | null,
 };
 
 export type Workspace_Deserialize = {
