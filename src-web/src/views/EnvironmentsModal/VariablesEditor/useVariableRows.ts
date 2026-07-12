@@ -25,14 +25,30 @@ export function useVariableRows({
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Resync on external writes; skip mid-save (the incoming change is our echo).
+  // Also skip when content is identical (e.g. the Local/Shared toggle bumps
+  // updatedAt without touching variables): fresh _rowIds remount every row,
+  // which drops focus and — via focusOnMount on a navigated encrypted value —
+  // re-reveals it.
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional — keyed on updatedAt timestamp; source.map is read at resync time, not a dep
   useEffect(() => {
     if (saveTimerRef.current !== null) return
-    setVariables([
-      ...source.map((v) => ({ ...v, _rowId: nextRowId() })),
-      emptyRow(),
-    ])
-    touchedRowIds.current.clear()
+    setVariables((prev) => {
+      const prevVars = toVars(prev)
+      const same =
+        prevVars.length === source.length &&
+        prevVars.every((v, i) => {
+          const s = source[i]
+          return (
+            v.key === s.key &&
+            v.value === s.value &&
+            v.encrypted === s.encrypted &&
+            v.enabled === s.enabled
+          )
+        })
+      if (same) return prev
+      touchedRowIds.current.clear()
+      return [...source.map((v) => ({ ...v, _rowId: nextRowId() })), emptyRow()]
+    })
   }, [updatedAt])
 
   function toVars(rows: Row[]): EnvironmentVariable[] {

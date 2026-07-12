@@ -7,7 +7,10 @@ import CodeMirror, {
 import { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { useShallow } from "zustand/react/shallow"
-import { Autocomplete } from "@/components/TemplateInput/Autocomplete"
+import {
+  Autocomplete,
+  type VarSuggestion,
+} from "@/components/TemplateInput/Autocomplete"
 import { parseExpr, serializeFuncToken } from "@/lib/template"
 import { useTemplateFunctions } from "@/plugins/hooks"
 import { useEnvironmentStore } from "@/store/environment"
@@ -58,10 +61,11 @@ export function MessageEditor({
     })
   }, [valueJson, value])
 
-  const { environments, activeEnvId } = useEnvironmentStore(
+  const { environments, activeEnvId, systemEnvVars } = useEnvironmentStore(
     useShallow((s) => ({
       environments: s.environments,
       activeEnvId: s.activeEnvId,
+      systemEnvVars: s.systemEnvVars,
     })),
   )
   const varKeys = useMemo(() => {
@@ -71,10 +75,21 @@ export function MessageEditor({
       environments.find((e) => e.id === activeEnvId)?.variables ?? []
     const keys = new Set<string>()
     for (const v of [...personal, ...globals]) if (v.enabled) keys.add(v.key)
-    return [...keys]
-  }, [environments, activeEnvId])
+    const out: VarSuggestion[] = [...keys].map((name) => ({ name }))
+    for (const v of systemEnvVars)
+      if (!keys.has(v.key)) out.push({ name: v.key, system: true })
+    return out
+  }, [environments, activeEnvId, systemEnvVars])
   const fns = useTemplateFunctions()
   const overlay = useBodyOverlay(varKeys, fns)
+  const varKeysSet = useMemo(
+    () => new Set(varKeys.map((v) => v.name)),
+    [varKeys],
+  )
+  const systemKeysSet = useMemo(
+    () => new Set(varKeys.filter((v) => v.system).map((v) => v.name)),
+    [varKeys],
+  )
 
   const onVarClickRef = useRef<((name: string) => void) | null>(null)
   onVarClickRef.current = onVarClick ?? null
@@ -91,8 +106,14 @@ export function MessageEditor({
   }
 
   const chipDecorations = useMemo(
-    () => createTemplateDecorations(onVarClickRef, onFuncClickRef),
-    [],
+    () =>
+      createTemplateDecorations(
+        onVarClickRef,
+        onFuncClickRef,
+        varKeysSet,
+        systemKeysSet,
+      ),
+    [varKeysSet, systemKeysSet],
   )
 
   async function replaceFuncToken(args: Record<string, string>) {

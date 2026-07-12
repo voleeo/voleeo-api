@@ -10,9 +10,9 @@ import {
 } from "@/lib/caret"
 import { parseExpr, serialize } from "@/lib/template"
 import type { BoundTemplateFunction } from "@/plugins/types"
-import type { EnvironmentVariable } from "@/store/environment"
 import type { AutocompleteItem, ConstantSuggestion } from "./Autocomplete"
 import { Autocomplete, buildItems } from "./Autocomplete"
+import type { ActiveVar } from "./useTemplateInputData"
 
 export type { AutocompleteItem }
 export { Autocomplete }
@@ -30,7 +30,7 @@ function storedTokenDisplayLen(storedToken: string): number {
 
 interface UseAutocompleteOptions {
   divRef: RefObject<HTMLDivElement | null>
-  activeVars: EnvironmentVariable[]
+  activeVars: ActiveVar[]
   fns: BoundTemplateFunction[]
   excludeVarKeys?: string[]
   multiline?: boolean
@@ -102,8 +102,8 @@ export function useAutocomplete({
     const el = divRef.current
     if (!el) return
     const varKeys = activeVars
-      .map((v) => v.key)
-      .filter((k) => !excludeVarKeys?.includes(k))
+      .map((v) => ({ name: v.key, system: v.system }))
+      .filter((v) => !excludeVarKeys?.includes(v.name))
     // Constants are only shown in plain (non-template, non-namespace) context.
     const constants = isTemplate || nsFilter ? undefined : constantItems
     const items = buildItems(query, varKeys, fns, nsFilter, constants)

@@ -6,8 +6,13 @@ export interface ConstantSuggestion {
   description?: string
 }
 
+export interface VarSuggestion {
+  name: string
+  system?: boolean
+}
+
 export type AutocompleteItem =
-  | { kind: "var"; name: string }
+  | { kind: "var"; name: string; system?: boolean }
   | { kind: "func"; fn: BoundTemplateFunction }
   | { kind: "namespace"; prefix: string }
   | { kind: "constant"; value: string; badge: string; description?: string }
@@ -36,7 +41,7 @@ function longestNsPrefix(q: string, namespaces: string[]): string | null {
 
 export function buildItems(
   query: string,
-  varNames: string[],
+  varNames: VarSuggestion[],
   fns: BoundTemplateFunction[],
   nsFilter: string | null,
   constantItems?: ConstantSuggestion[],
@@ -86,9 +91,9 @@ export function buildItems(
     }
   } else {
     // Variables
-    for (const name of varNames) {
-      if (!q || name.toLowerCase().includes(q)) {
-        items.push({ kind: "var", name })
+    for (const v of varNames) {
+      if (!q || v.name.toLowerCase().includes(q)) {
+        items.push({ kind: "var", name: v.name, system: v.system })
       }
     }
 

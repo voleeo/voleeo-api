@@ -5,6 +5,7 @@ import {
   Autocomplete,
   buildItems,
 } from "@/components/TemplateInput/Autocomplete"
+import type { ActiveVar } from "@/components/TemplateInput/useTemplateInputData"
 import {
   displayToStoredOffset,
   ensureTrailingTextNode,
@@ -15,7 +16,6 @@ import {
 } from "@/lib/caret"
 import { serialize } from "@/lib/template"
 import type { BoundTemplateFunction } from "@/plugins/types"
-import type { EnvironmentVariable } from "@/store/environment"
 
 export type { AutocompleteItem }
 export { Autocomplete }
@@ -80,7 +80,7 @@ export interface UseUrlAutocompleteResult {
 
 interface UseUrlAutocompleteOptions {
   divRef: RefObject<HTMLDivElement | null>
-  activeVars: EnvironmentVariable[]
+  activeVars: ActiveVar[]
   fns: BoundTemplateFunction[]
   buildHtml: (text: string) => string
   skipSyncRef: RefObject<boolean>
@@ -117,7 +117,7 @@ export function useUrlAutocomplete({
     setAnchorRect(el.getBoundingClientRect())
     const items = buildItems(
       query,
-      activeVars.map((v) => v.key),
+      activeVars.map((v) => ({ name: v.key, system: v.system })),
       fns,
       nsFilter,
     )

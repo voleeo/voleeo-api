@@ -10,7 +10,10 @@ import { useMemo, useRef } from "react"
 import { createPortal } from "react-dom"
 import { useShallow } from "zustand/react/shallow"
 import { Glyph } from "@/components/Glyph"
-import { Autocomplete } from "@/components/TemplateInput/Autocomplete"
+import {
+  Autocomplete,
+  type VarSuggestion,
+} from "@/components/TemplateInput/Autocomplete"
 import { SHORTCUTS } from "@/config/shortcuts"
 import { matchesCombo } from "@/hooks/useKeydown"
 import { useTemplateFunctions } from "@/plugins/hooks"
@@ -54,10 +57,11 @@ export function Composer({
   const sendMessage = useWebsocketStore((s) => s.sendMessage)
   const isDark = useThemeStore((s) => s.activeTheme?.kind !== "light")
 
-  const { environments, activeEnvId } = useEnvironmentStore(
+  const { environments, activeEnvId, systemEnvVars } = useEnvironmentStore(
     useShallow((s) => ({
       environments: s.environments,
       activeEnvId: s.activeEnvId,
+      systemEnvVars: s.systemEnvVars,
     })),
   )
   const activeVars = useMemo(() => {
@@ -76,9 +80,25 @@ export function Composer({
     ]
   }, [environments, activeEnvId])
   const fns = useTemplateFunctions()
-  const varKeys = useMemo(() => activeVars.map((v) => v.key), [activeVars])
+  const varKeys = useMemo<VarSuggestion[]>(() => {
+    const envKeys = new Set(activeVars.map((v) => v.key))
+    return [
+      ...activeVars.map((v) => ({ name: v.key })),
+      ...systemEnvVars
+        .filter((v) => !envKeys.has(v.key))
+        .map((v) => ({ name: v.key, system: true })),
+    ]
+  }, [activeVars, systemEnvVars])
 
   const overlay = useBodyOverlay(varKeys, fns)
+  const varKeysSet = useMemo(
+    () => new Set(varKeys.map((v) => v.name)),
+    [varKeys],
+  )
+  const systemKeysSet = useMemo(
+    () => new Set(varKeys.filter((v) => v.system).map((v) => v.name)),
+    [varKeys],
+  )
 
   // Stable ref so the chip-click decoration never captures a stale callback.
   const onVarClickRef = useRef<((name: string) => void) | null>(onVarClick)
@@ -103,8 +123,14 @@ export function Composer({
   }, [uiKind])
 
   const chipDecorations = useMemo(
-    () => createTemplateDecorations(onVarClickRef),
-    [],
+    () =>
+      createTemplateDecorations(
+        onVarClickRef,
+        undefined,
+        varKeysSet,
+        systemKeysSet,
+      ),
+    [varKeysSet, systemKeysSet],
   )
 
   const sendKeymapExt = useMemo(

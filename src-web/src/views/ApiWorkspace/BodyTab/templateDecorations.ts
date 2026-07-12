@@ -7,12 +7,17 @@ import {
   WidgetType,
 } from "@uiw/react-codemirror"
 import type { RefObject } from "react"
+import { SYSTEM_VAR_PREFIX } from "@/lib/templateHtml"
 
 const NO_KEYS: Set<string> = new Set()
 
 /** Active variable keys, so var chips referencing an unknown key render red —
  *  matching the chip inputs. Editors provide it via `createTemplateDecorations`. */
 export const varKeysFacet = Facet.define<Set<string>, Set<string>>({
+  combine: (values) => values[0] ?? NO_KEYS,
+})
+
+export const systemKeysFacet = Facet.define<Set<string>, Set<string>>({
   combine: (values) => values[0] ?? NO_KEYS,
 })
 
@@ -25,6 +30,7 @@ class TemplateChipWidget extends WidgetType {
   constructor(
     readonly fullMatch: string,
     readonly isMissing: boolean,
+    readonly isSystem: boolean,
   ) {
     super()
     const inner = fullMatch.slice(2, -2).trim()
@@ -43,22 +49,34 @@ class TemplateChipWidget extends WidgetType {
 
   toDOM(): HTMLElement {
     const span = document.createElement("span")
-    span.textContent = this.displayText
     if (this.isVar) {
       span.className = this.isMissing
         ? "cm-tpl-var cm-tpl-var-missing"
         : "cm-tpl-var"
       span.setAttribute("data-var", this.name)
+      if (this.isSystem) {
+        span.title = "System environment variable"
+        const mark = document.createElement("span")
+        mark.className = "tpl-var-sys-mark"
+        mark.textContent = SYSTEM_VAR_PREFIX
+        span.appendChild(mark)
+        span.appendChild(document.createTextNode(this.displayText))
+      } else {
+        span.textContent = this.displayText
+      }
     } else {
       span.className = "cm-tpl-func"
       span.setAttribute("data-func", this.name)
+      span.textContent = this.displayText
     }
     return span
   }
 
   eq(other: TemplateChipWidget): boolean {
     return (
-      other.fullMatch === this.fullMatch && other.isMissing === this.isMissing
+      other.fullMatch === this.fullMatch &&
+      other.isMissing === this.isMissing &&
+      other.isSystem === this.isSystem
     )
   }
 
@@ -70,6 +88,7 @@ class TemplateChipWidget extends WidgetType {
 function buildDecorations(view: EditorView): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>()
   const varKeys = view.state.facet(varKeysFacet)
+  const systemKeys = view.state.facet(systemKeysFacet)
   const { from: selFrom, to: selTo } = view.state.selection.main
   for (const { from, to } of view.visibleRanges) {
     const text = view.state.sliceDoc(from, to)
@@ -80,12 +99,14 @@ function buildDecorations(view: EditorView): DecorationSet {
         selFrom === selTo && selFrom > start && selFrom < end
       if (collapsedInside) continue
       const inner = match[0].slice(2, -2).trim()
-      const missing = !inner.includes("(") && !varKeys.has(inner)
+      const isVar = !inner.includes("(")
+      const missing = isVar && !varKeys.has(inner)
+      const system = isVar && systemKeys.has(inner)
       builder.add(
         start,
         end,
         Decoration.replace({
-          widget: new TemplateChipWidget(match[0], missing),
+          widget: new TemplateChipWidget(match[0], missing, system),
         }),
       )
     }
@@ -106,7 +127,9 @@ const decorationsPlugin = ViewPlugin.fromClass(
         upd.docChanged ||
         upd.viewportChanged ||
         upd.selectionSet ||
-        upd.startState.facet(varKeysFacet) !== upd.state.facet(varKeysFacet)
+        upd.startState.facet(varKeysFacet) !== upd.state.facet(varKeysFacet) ||
+        upd.startState.facet(systemKeysFacet) !==
+          upd.state.facet(systemKeysFacet)
       ) {
         this.decorations = buildDecorations(upd.view)
       }
@@ -157,12 +180,14 @@ export function createTemplateDecorations(
     ((token: string, from: number, to: number) => void) | null
   >,
   varKeys: Set<string> = NO_KEYS,
+  systemKeys: Set<string> = NO_KEYS,
 ) {
   return [
     decorationsPlugin,
     atomicChipRanges,
     templateDecorationsTheme,
     varKeysFacet.of(varKeys),
+    systemKeysFacet.of(systemKeys),
     EditorView.domEventHandlers({
       click(event, view) {
         const target = event.target as HTMLElement

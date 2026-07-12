@@ -6,10 +6,11 @@ import {
   buildItems,
   type ConstantSuggestion,
   deriveNamespaces,
+  type VarSuggestion,
 } from "./autocompleteItems"
 
 // Re-exported so existing importers of these from "./Autocomplete" keep working.
-export type { AutocompleteItem, ConstantSuggestion }
+export type { AutocompleteItem, ConstantSuggestion, VarSuggestion }
 export { buildItems, deriveNamespaces }
 
 interface Props {

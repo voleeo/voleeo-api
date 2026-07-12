@@ -15,8 +15,10 @@ interface EnvironmentStore {
   isLoading: boolean
   error: string | null
   activeEnvId: string | null
+  systemEnvVars: EnvironmentVariable[]
 
   load: (workspaceId: string) => Promise<void>
+  refreshSystemEnv: (workspaceId: string) => Promise<void>
   /** Force re-fetch for the currently loaded workspace (used by MCP sync). */
   reload: () => Promise<void>
   create: (
@@ -35,6 +37,34 @@ export const useEnvironmentStore = create<EnvironmentStore>((set) => ({
   isLoading: false,
   error: null,
   activeEnvId: null,
+  systemEnvVars: [],
+
+  refreshSystemEnv: async (workspaceId: string) => {
+    const allowlist = getCachedSettings(workspaceId).systemEnvAllowlist ?? []
+    let next: EnvironmentVariable[] = []
+    if (allowlist.length > 0) {
+      const res = await commands.systemEnvList()
+      if (res.status !== "ok") return
+      const snapshot = res.data
+      next = allowlist
+        .filter((key) => key in snapshot)
+        .map((key) => ({
+          key,
+          value: snapshot[key],
+          encrypted: false,
+          enabled: true,
+        }))
+    }
+
+    set((s) =>
+      s.systemEnvVars.length === next.length &&
+      s.systemEnvVars.every(
+        (v, i) => v.key === next[i].key && v.value === next[i].value,
+      )
+        ? s
+        : { systemEnvVars: next },
+    )
+  },
 
   load: async (workspaceId: string) => {
     set({ isLoading: true, error: null })
@@ -60,6 +90,7 @@ export const useEnvironmentStore = create<EnvironmentStore>((set) => ({
       isLoading: false,
       activeEnvId,
     })
+    void useEnvironmentStore.getState().refreshSystemEnv(workspaceId)
   },
 
   reload: async () => {
@@ -140,6 +171,7 @@ export const useEnvironmentStore = create<EnvironmentStore>((set) => ({
       isLoading: false,
       error: null,
       activeEnvId: null,
+      systemEnvVars: [],
     })
   },
 }))

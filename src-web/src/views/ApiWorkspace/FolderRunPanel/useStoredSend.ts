@@ -94,10 +94,11 @@ export function useStoredSendCtx(): StoredSendCtx | null {
         : null,
     })),
   )
-  const { environments, activeEnvId } = useEnvironmentStore(
+  const { environments, activeEnvId, systemEnvVars } = useEnvironmentStore(
     useShallow((s) => ({
       environments: s.environments,
       activeEnvId: s.activeEnvId,
+      systemEnvVars: s.systemEnvVars,
     })),
   )
   const { activeJar, cookiesLoadedWorkspaceId } = useCookiesStore(
@@ -114,6 +115,7 @@ export function useStoredSendCtx(): StoredSendCtx | null {
   const vars = mergeEnvVars(
     environments.find((e) => e.kind === "global")?.variables ?? [],
     environments.find((e) => e.id === activeEnvId)?.variables ?? [],
+    systemEnvVars,
   )
   return {
     workspaceId: activeWorkspaceId,

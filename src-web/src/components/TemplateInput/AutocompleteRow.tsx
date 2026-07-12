@@ -35,6 +35,11 @@ export function AutocompleteRow({
           <span className="font-mono text-[11px] text-fg flex-1 truncate">
             <HighlightMatch text={item.name} query={query} />
           </span>
+          {item.system && (
+            <span className="font-sans text-[10px] text-muted shrink-0">
+              system
+            </span>
+          )}
         </>
       )}
       {item.kind === "func" && (

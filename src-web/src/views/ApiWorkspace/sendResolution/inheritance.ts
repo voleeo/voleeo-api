@@ -106,10 +106,15 @@ export function resolveInheritedAuthAnnotated(
 export function mergeEnvVars(
   globalVars: EnvironmentVariable[],
   personalVars: EnvironmentVariable[],
+  systemVars: EnvironmentVariable[] = [],
 ): EnvironmentVariable[] {
   const personalKeys = new Set(personalVars.map((v) => v.key))
+  const voleeoKeys = new Set(
+    [...globalVars, ...personalVars].filter((v) => v.enabled).map((v) => v.key),
+  )
   return [
     ...personalVars,
     ...globalVars.filter((v) => !personalKeys.has(v.key)),
+    ...systemVars.filter((v) => !voleeoKeys.has(v.key)),
   ]
 }

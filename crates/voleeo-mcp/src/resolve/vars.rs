@@ -23,7 +23,9 @@ pub fn load_env_vars(
     load_env_vars_from(&envs, workspace_id, env_id, app_data_dir)
 }
 
-/// `load_env_vars` variant — skip the disk read when the caller already has the list.
+/// `load_env_vars` variant — skip re-listing environments when the caller
+/// already has them (the system-env allowlist is still read from disk).
+/// Layering (weakest first): allowlisted system env < global env < personal env.
 pub fn load_env_vars_from(
     envs: &[Environment],
     workspace_id: &str,
@@ -45,17 +47,13 @@ pub fn load_env_vars_from(
         value.to_string()
     };
 
-    let mut vars: HashMap<String, String> = envs
-        .iter()
-        .find(|e| e.kind == EnvironmentKind::Global)
-        .map(|e| {
-            e.variables
-                .iter()
-                .filter(|v| v.enabled)
-                .map(|v| (v.key.clone(), decrypt(&v.value, v.encrypted)))
-                .collect()
-        })
-        .unwrap_or_default();
+    let mut vars = super::system_env::allowlisted_vars(workspace_id, app_data_dir);
+
+    if let Some(global) = envs.iter().find(|e| e.kind == EnvironmentKind::Global) {
+        for v in global.variables.iter().filter(|v| v.enabled) {
+            vars.insert(v.key.clone(), decrypt(&v.value, v.encrypted));
+        }
+    }
 
     if let Some(id) = env_id {
         if let Some(personal) = envs.iter().find(|e| e.id == id) {

@@ -35,10 +35,11 @@ export function SentRequestInspector({ onClose }: Props) {
   )
   const folders = useRequestStore(useShallow((s) => s.folders))
 
-  const { environments, activeEnvId } = useEnvironmentStore(
+  const { environments, activeEnvId, systemEnvVars } = useEnvironmentStore(
     useShallow((s) => ({
       environments: s.environments,
       activeEnvId: s.activeEnvId,
+      systemEnvVars: s.systemEnvVars,
     })),
   )
   const { activeJar, cookiesLoadedWorkspaceId } = useCookiesStore(
@@ -62,6 +63,7 @@ export function SentRequestInspector({ onClose }: Props) {
     const vars = mergeEnvVars(
       environments.find((e) => e.kind === "global")?.variables ?? [],
       environments.find((e) => e.id === activeEnvId)?.variables ?? [],
+      systemEnvVars,
     )
     const jarForSend =
       cookiesLoadedWorkspaceId === activeWorkspaceId ? activeJar : null
@@ -134,6 +136,7 @@ export function SentRequestInspector({ onClose }: Props) {
     folders,
     environments,
     activeEnvId,
+    systemEnvVars,
     activeJar,
     cookiesLoadedWorkspaceId,
     templateFns,

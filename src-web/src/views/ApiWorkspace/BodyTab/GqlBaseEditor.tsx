@@ -33,7 +33,14 @@ export function GqlBaseEditor({
 }: Props) {
   const isDark = useThemeStore((s) => s.activeTheme?.kind !== "light")
   const { overlay, funcModal, varKeys } = useEditorOverlay(onChange)
-  const varKeysSet = useMemo(() => new Set(varKeys), [varKeys])
+  const varKeysSet = useMemo(
+    () => new Set(varKeys.map((v) => v.name)),
+    [varKeys],
+  )
+  const systemKeysSet = useMemo(
+    () => new Set(varKeys.filter((v) => v.system).map((v) => v.name)),
+    [varKeys],
+  )
 
   const onVarClickRef = useRef<((name: string) => void) | null>(null)
   onVarClickRef.current = onVarClick ?? null
@@ -43,8 +50,9 @@ export function GqlBaseEditor({
         onVarClickRef,
         funcModal.onFuncClickRef,
         varKeysSet,
+        systemKeysSet,
       ),
-    [funcModal.onFuncClickRef, varKeysSet],
+    [funcModal.onFuncClickRef, varKeysSet, systemKeysSet],
   )
 
   const handleBeautify = () => {

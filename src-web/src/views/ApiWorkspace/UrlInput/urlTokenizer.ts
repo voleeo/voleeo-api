@@ -1,4 +1,5 @@
 import { parseExpr } from "@/lib/template"
+import { SYSTEM_VAR_MARK } from "@/lib/templateHtml"
 
 type Segment =
   | { kind: "plain"; text: string }
@@ -65,7 +66,7 @@ const ERROR_CHIP = chipStyle("var(--base08)")
  *  Query params are stripped — they live in the Params tab, not the URL bar. */
 export function toHtml(
   url: string,
-  varStatus: (name: string) => "found" | "missing",
+  varStatus: (name: string) => "found" | "missing" | "system",
   funcStatus: (name: string) => "ok" | "error",
 ): string {
   const displayUrl = url.split("?")[0]
@@ -79,15 +80,19 @@ export function toHtml(
 
       if (seg.tplKind === "var") {
         const name = seg.text.slice(2, -2).trim()
-        const missing = varStatus(name) === "missing"
+        const status = varStatus(name)
+        const missing = status === "missing"
+        const system = status === "system"
         const style = missing ? ERROR_CHIP : INFO_CHIP
         const title = missing
           ? ` title="Variable &quot;${escHtml(name)}&quot; not found in active environment"`
-          : ""
+          : system
+            ? ' title="System environment variable"'
+            : ""
         return (
           `<span contenteditable="false" data-tpl="var" data-var="${escHtml(name)}"` +
           `${missing ? ' data-missing="true"' : ""}${title} style="${style}">` +
-          `${escHtml(name)}</span>`
+          `${system ? SYSTEM_VAR_MARK : ""}${escHtml(name)}</span>`
         )
       }
 

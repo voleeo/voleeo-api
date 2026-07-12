@@ -10,6 +10,11 @@ import type {
 } from "@/store/requests"
 import { useRequestStore } from "@/store/requests"
 import { useToastStore } from "@/store/toast"
+import {
+  type EnvFocusTarget,
+  envFocusTarget,
+  systemHasVar,
+} from "@/views/EnvironmentsModal/focusTarget"
 import { revealInTree } from "../revealInTree"
 import { propagateFolderVariableRename } from "./propagateFolderVariableRename"
 
@@ -47,7 +52,7 @@ export function useFolderPaneHandlers(
   const [headerFocusKey, setHeaderFocusKey] = useState<string | undefined>(
     undefined,
   )
-  const [envModalVar, setEnvModalVar] = useState<string | null>(null)
+  const [envModalVar, setEnvModalVar] = useState<EnvFocusTarget | null>(null)
 
   // Restore the saved tab when the active folder changes.
   const prevFolderIdRef = useRef<string | null>(folder?.id ?? null)
@@ -133,7 +138,9 @@ export function useFolderPaneHandlers(
           .getState()
           .environments.some((e) => e.variables.some((v) => v.key === varName))
       ) {
-        setEnvModalVar(varName)
+        setEnvModalVar(envFocusTarget(varName, false))
+      } else if (systemHasVar(varName)) {
+        setEnvModalVar(envFocusTarget(varName, true))
       } else {
         useToastStore
           .getState()

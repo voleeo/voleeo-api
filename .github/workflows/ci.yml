@@ -31,6 +31,10 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
+          # Bump prefix-key to evict a poisoned cache. A corrupt target/ entry
+          # (truncated build-script binary) made libz-sys fail with exit 126
+          # "cannot execute binary file"; cache-on-failure kept re-saving it.
+          prefix-key: v1-rust
           shared-key: ci
           cache-on-failure: true
 

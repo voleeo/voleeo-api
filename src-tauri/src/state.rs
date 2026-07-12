@@ -66,9 +66,13 @@ impl AppState {
         settings_path: PathBuf,
         app_data_dir: impl AsRef<Path>,
     ) -> Result<Self, VoleeoError> {
-        // Initialize the OS keyring store before any Entry operations.
-        // Best-effort: if the platform store is unavailable the keyfile fallback still works.
-        let _ = keyring::use_native_store(false);
+        // Register the OS keychain as keyring-core's default store before any
+        // Entry operations. keyring 4.1 moved the old `use_native_store` helper
+        // behind its `cli` feature (which drags in the heavy db-keystore/turso
+        // backend we don't use); its default `v1` API instead installs the
+        // platform store globally on the first `Entry::new`, so a throwaway one
+        // does the setup. Best-effort — the keyfile fallback covers a missing store.
+        let _ = keyring::Entry::new("voleeo", "keyring-init");
         let app_data_dir = app_data_dir.as_ref().to_path_buf();
         let workspaces = WorkspaceStore::new(&app_data_dir)?;
         let requests = RequestStore::new(&app_data_dir)?;
