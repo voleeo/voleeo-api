@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react"
 import { Glyph } from "@/components/Glyph"
+import { SearchField } from "@/components/SearchField"
 import { cn } from "@/lib/utils"
 import type { Environment, EnvironmentVariable } from "@/store/environment"
 import { useEnvironmentStore } from "@/store/environment"
@@ -35,6 +36,8 @@ export function EnvPane({
   flashNonce?: number
 }) {
   const [viewMode, setViewMode] = useState<ViewMode>("form")
+  const [query, setQuery] = useState("")
+  const [searchOpen, setSearchOpen] = useState(false)
   const update = useEnvironmentStore((s) => s.update)
 
   function setShared(shared: boolean) {
@@ -55,12 +58,38 @@ export function EnvPane({
   )
 
   return (
-    <div className="flex flex-col gap-4 h-full">
+    <div className="flex flex-col gap-4 h-full min-h-0">
       <div className="flex items-center justify-between">
         <span className="font-sans text-[0.857rem] text-muted font-medium uppercase tracking-wide">
           Variables
         </span>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
+          {viewMode === "form" &&
+            (searchOpen || query ? (
+              <SearchField
+                value={query}
+                onChange={setQuery}
+                placeholder="Search variables"
+                autoFocus
+                onBlur={() => {
+                  if (!query) setSearchOpen(false)
+                }}
+                onClear={() => {
+                  setQuery("")
+                  setSearchOpen(false)
+                }}
+                className="w-48 py-[3px] origin-right animate-in fade-in slide-in-from-right-4 duration-150"
+              />
+            ) : (
+              <button
+                type="button"
+                aria-label="Search variables"
+                onClick={() => setSearchOpen(true)}
+                className="flex items-center justify-center w-7 h-7 rounded-[4px] hover:bg-subtle transition-colors cursor-pointer"
+              >
+                <Glyph kind="search" size={13} color="var(--base04)" />
+              </button>
+            ))}
           <div
             role="radiogroup"
             aria-label="Environment scope"
@@ -100,20 +129,23 @@ export function EnvPane({
         />
       )}
 
-      {viewMode === "form" ? (
-        <VariablesEditor
-          source={env.variables}
-          updatedAt={env.updatedAt}
-          onSave={saveVars}
-          onRename={renameVar}
-          focusKey={focusSystem ? undefined : focusKey}
-          flashNonce={flashNonce}
-        />
-      ) : (
-        <TextEditor env={env} />
-      )}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {viewMode === "form" ? (
+          <VariablesEditor
+            source={env.variables}
+            updatedAt={env.updatedAt}
+            onSave={saveVars}
+            onRename={renameVar}
+            query={query}
+            focusKey={focusSystem ? undefined : focusKey}
+            flashNonce={flashNonce}
+          />
+        ) : (
+          <TextEditor env={env} />
+        )}
+      </div>
 
-      <div className="mt-auto flex justify-end">
+      <div className="flex justify-end shrink-0">
         <button
           type="button"
           onClick={() => setViewMode((m) => (m === "form" ? "text" : "form"))}

@@ -9,6 +9,7 @@ interface Props {
   updatedAt: string
   onSave: (vars: EnvironmentVariable[]) => void
   onRename: (oldKey: string, newKey: string) => void
+  query?: string
   focusKey?: string
   flashNonce?: number
 }
@@ -18,6 +19,7 @@ export function VariablesEditor({
   updatedAt,
   onSave,
   onRename,
+  query = "",
   focusKey,
   flashNonce,
 }: Props) {
@@ -35,10 +37,20 @@ export function VariablesEditor({
   } = useVariableRows({ source, updatedAt, onSave, onRename })
 
   const { draggingIndex, dropIndex, startDrag } = useListDrag(reorderVars)
+  const q = query.trim().toLowerCase()
+  const matches = (v: EnvironmentVariable) =>
+    !q || v.key.toLowerCase().includes(q) || v.value.toLowerCase().includes(q)
+  const anyMatch = q ? variables.some(matches) : true
 
   return (
     <div className="flex flex-col">
+      {!anyMatch && (
+        <p className="px-1 py-2 font-mono text-[0.786rem] text-muted">
+          No variables match “{query}”.
+        </p>
+      )}
       {variables.map((v, idx) => {
+        if (!matches(v)) return null
         const keyError = v.key
           ? (EnvVarKeySchema.safeParse(v.key).error?.issues[0]?.message ?? null)
           : null
