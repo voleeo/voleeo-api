@@ -150,7 +150,7 @@ export function ResponsePane() {
           trailing={
             activeRequestId &&
             activeWorkspaceId && (
-              <>
+              <div className="flex items-center gap-1">
                 <SaveSnapshotButton
                   workspaceId={activeWorkspaceId}
                   requestId={activeRequestId}
@@ -166,7 +166,7 @@ export function ResponsePane() {
                   onShowLive={showLive}
                   onClear={handleHistoryClear}
                 />
-              </>
+              </div>
             )
           }
         >
