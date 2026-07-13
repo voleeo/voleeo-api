@@ -90,11 +90,18 @@ export function buildItems(
       items.push({ kind: "namespace", prefix: ns })
     }
   } else {
-    // Variables
-    for (const v of varNames) {
-      if (!q || v.name.toLowerCase().includes(q)) {
-        items.push({ kind: "var", name: v.name, system: v.system })
-      }
+    const matchedVars = varNames.filter(
+      (v) => !q || v.name.toLowerCase().includes(q),
+    )
+    if (q) {
+      matchedVars.sort((a, b) => {
+        const ai = a.name.toLowerCase().indexOf(q)
+        const bi = b.name.toLowerCase().indexOf(q)
+        return ai - bi || a.name.length - b.name.length
+      })
+    }
+    for (const v of matchedVars) {
+      items.push({ kind: "var", name: v.name, system: v.system })
     }
 
     // Top-level functions (no dot)
