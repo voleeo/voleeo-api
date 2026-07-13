@@ -7,7 +7,8 @@ use voleeo_grpc::{DescriptorCache, GrpcExecutor, GrpcManager};
 use voleeo_http::HttpExecutor;
 use voleeo_storage::{
     CookieJarStore, EnvironmentStore, GrpcResponseStore, GrpcStore, GrpcTranscriptStore,
-    RequestStore, ResponseStore, SelectionStore, WorkspaceStore, WsStore, WsTranscriptStore,
+    RequestStore, ResponseStore, SelectionStore, SnapshotStore, WorkspaceStore, WsStore,
+    WsTranscriptStore,
 };
 use voleeo_ws::WsManager;
 
@@ -32,6 +33,7 @@ mod grpc;
 mod redact;
 mod request;
 mod response;
+mod snapshot;
 mod sse;
 mod tools;
 mod websocket;
@@ -72,6 +74,7 @@ pub struct ApiBackend {
     pub environments: EnvironmentStore,
     pub cookies: CookieJarStore,
     pub responses: ResponseStore,
+    pub snapshots: SnapshotStore,
     /// Machine-local active cookie jar selection — shared with the app so the
     /// agent sends with the same jar the user has selected (not synced via git).
     pub selections: SelectionStore,
@@ -113,6 +116,10 @@ impl ApiBackend {
             "folder.delete" => self.folder_delete(&args).await,
             "response.list" => self.response_list(&args).await,
             "response.get" => self.response_get(&args).await,
+            "snapshot.save" => self.snapshot_save(&args).await,
+            "snapshot.list" => self.snapshot_list(&args).await,
+            "snapshot.get" => self.snapshot_get(&args).await,
+            "snapshot.replay" => self.snapshot_replay(&args).await,
             "sse.tail" => self.sse_tail(&args).await,
             "sse.summary" => self.sse_summary(&args).await,
             "sse.assemble" => self.sse_assemble(&args).await,
@@ -172,6 +179,13 @@ impl ApiBackend {
         );
     }
 
+    pub(crate) fn notify_snapshots(&self, workspace_id: &str) {
+        (self.notify)(
+            "mcp:snapshots:changed",
+            serde_json::json!({ "workspaceId": workspace_id }),
+        );
+    }
+
     pub(crate) fn notify_cookies(&self, workspace_id: &str) {
         (self.notify)(
             "mcp:cookies:changed",
@@ -189,17 +203,20 @@ mod tests {
     use voleeo_http::HttpExecutor;
     use voleeo_storage::{
         CookieJarStore, EnvironmentStore, GrpcResponseStore, GrpcStore, GrpcTranscriptStore,
-        RequestStore, ResponseStore, SelectionStore, WorkspaceStore, WsStore, WsTranscriptStore,
+        RequestStore, ResponseStore, SelectionStore, SnapshotStore, WorkspaceStore, WsStore,
+        WsTranscriptStore,
     };
     use voleeo_ws::WsManager;
 
     fn make_backend(dir: &tempfile::TempDir) -> ApiBackend {
+        let workspaces = WorkspaceStore::new(dir.path()).unwrap();
         ApiBackend {
-            workspaces: WorkspaceStore::new(dir.path()).unwrap(),
+            workspaces: workspaces.clone(),
             requests: RequestStore::new(dir.path()).unwrap(),
             environments: EnvironmentStore::new(dir.path()).unwrap(),
             cookies: CookieJarStore::new(dir.path()).unwrap(),
             responses: ResponseStore::new(dir.path()).unwrap(),
+            snapshots: SnapshotStore::new(dir.path(), workspaces).unwrap(),
             selections: SelectionStore::new(dir.path()).unwrap(),
             ws: WsStore::new(dir.path()).unwrap(),
             ws_transcripts: WsTranscriptStore::new(dir.path()).unwrap(),
@@ -290,7 +307,7 @@ mod tests {
 
     #[tokio::test]
     async fn sse_tools_read_stored_frames() {
-        use voleeo_core::{HttpResponse, HttpTiming, SseFrame};
+        use voleeo_core::{AuthConfig, HttpRequest, HttpResponse, HttpTiming, SseFrame};
         let dir = tempfile::tempdir().unwrap();
         let b = make_backend(&dir);
         let (ws, req) = ("ws1", "req1");
@@ -330,7 +347,26 @@ mod tests {
             attached_cookies: vec![],
             sse_frames: frames,
         };
-        b.responses.append(ws, req, response, 20).unwrap();
+        let resolved_request = HttpRequest {
+            id: req.into(),
+            request_type: "http".into(),
+            model: "request".into(),
+            workspace_id: ws.into(),
+            folder_id: None,
+            method: "GET".into(),
+            name: "Test".into(),
+            url: "https://example.com/stream".into(),
+            parameters: vec![],
+            headers: vec![],
+            body: None,
+            auth: AuthConfig::None,
+            order: 0.0,
+            created_at: "2024-01-01T00:00:00.000000".into(),
+            updated_at: "2024-01-01T00:00:00.000000".into(),
+        };
+        b.responses
+            .append(ws, req, response, resolved_request, 20)
+            .unwrap();
         let base = || args(&[("workspaceId", ws.into()), ("requestId", req.into())]);
 
         let s = b.call_tool("sse.summary", base()).await;
@@ -1101,6 +1137,8 @@ mod tests {
             environments: EnvironmentStore::new(dir.path()).unwrap(),
             cookies: CookieJarStore::new(dir.path()).unwrap(),
             responses: ResponseStore::new(dir.path()).unwrap(),
+            snapshots: SnapshotStore::new(dir.path(), WorkspaceStore::new(dir.path()).unwrap())
+                .unwrap(),
             selections: SelectionStore::new(dir.path()).unwrap(),
             ws: WsStore::new(dir.path()).unwrap(),
             ws_transcripts: WsTranscriptStore::new(dir.path()).unwrap(),
@@ -1179,6 +1217,8 @@ mod tests {
             environments: EnvironmentStore::new(dir.path()).unwrap(),
             cookies: CookieJarStore::new(dir.path()).unwrap(),
             responses: ResponseStore::new(dir.path()).unwrap(),
+            snapshots: SnapshotStore::new(dir.path(), WorkspaceStore::new(dir.path()).unwrap())
+                .unwrap(),
             selections: SelectionStore::new(dir.path()).unwrap(),
             ws: WsStore::new(dir.path()).unwrap(),
             ws_transcripts: WsTranscriptStore::new(dir.path()).unwrap(),
@@ -1349,6 +1389,8 @@ mod tests {
             environments: EnvironmentStore::new(dir.path()).unwrap(),
             cookies: CookieJarStore::new(dir.path()).unwrap(),
             responses: ResponseStore::new(dir.path()).unwrap(),
+            snapshots: SnapshotStore::new(dir.path(), WorkspaceStore::new(dir.path()).unwrap())
+                .unwrap(),
             selections: SelectionStore::new(dir.path()).unwrap(),
             ws: WsStore::new(dir.path()).unwrap(),
             ws_transcripts: WsTranscriptStore::new(dir.path()).unwrap(),
@@ -1563,5 +1605,154 @@ mod tests {
             )
             .await;
         assert_eq!(r.is_error, Some(true));
+    }
+
+    #[tokio::test]
+    async fn snapshot_tools_save_list_get_and_replay_guard() {
+        use voleeo_core::{AuthConfig, HttpRequest, HttpResponse, HttpTiming, RequestParameter};
+        let dir = tempfile::tempdir().unwrap();
+        let b = make_backend(&dir);
+        let ws = b.workspaces.create("WS".into(), false).unwrap();
+        let req = b
+            .requests
+            .create_request(
+                ws.id.clone(),
+                None,
+                "R".into(),
+                "GET".into(),
+                "https://example.com/users".into(),
+            )
+            .unwrap();
+        // Give the stored request Bearer auth so save's redaction has a target.
+        b.requests
+            .update_request(
+                &ws.id,
+                &req.id,
+                "GET".into(),
+                req.url.clone(),
+                vec![],
+                vec![],
+                None,
+                AuthConfig::Bearer {
+                    token: "tok".into(),
+                    token_encrypted: false,
+                    enabled: true,
+                },
+            )
+            .unwrap();
+
+        // A stored response whose resolved request carries the literal header,
+        // the way the send path captures it (static auth folded in, auth None).
+        let resolved = HttpRequest {
+            id: req.id.clone(),
+            request_type: "api".into(),
+            model: "http_request".into(),
+            workspace_id: ws.id.clone(),
+            folder_id: None,
+            method: "GET".into(),
+            name: "R".into(),
+            url: "https://example.com/users".into(),
+            parameters: vec![],
+            headers: vec![RequestParameter {
+                id: "h1".into(),
+                name: "Authorization".into(),
+                value: "Bearer tok".into(),
+                enabled: true,
+            }],
+            body: None,
+            auth: AuthConfig::None,
+            order: 0.0,
+            created_at: "2024-01-01T00:00:00.000000".into(),
+            updated_at: "2024-01-01T00:00:00.000000".into(),
+        };
+        let response = HttpResponse {
+            request_id: req.id.clone(),
+            status: 200,
+            status_text: "OK".into(),
+            headers: vec![],
+            body: "{\"ok\":true}".into(),
+            body_size: 11,
+            body_is_text: true,
+            body_windowed: false,
+            body_line_count: 1,
+            response_id: String::new(),
+            timing: HttpTiming {
+                dns_ms: 0.0,
+                connect_ms: 0.0,
+                tls_ms: 0.0,
+                first_byte_ms: 1.0,
+                download_ms: 1.0,
+                total_ms: 2.0,
+            },
+            events: vec![],
+            redirect_warning: None,
+            captured_cookies: vec![],
+            attached_cookies: vec![],
+            sse_frames: vec![],
+        };
+        let stored = b
+            .responses
+            .append(&ws.id, &req.id, response, resolved, 20)
+            .unwrap();
+
+        let saved = b
+            .call_tool(
+                "snapshot.save",
+                args(&[
+                    ("workspaceId", Value::String(ws.id.clone())),
+                    ("requestId", Value::String(req.id.clone())),
+                    ("responseId", Value::String(stored.id.clone())),
+                ]),
+            )
+            .await;
+        assert!(saved.is_error.is_none(), "{}", saved.content[0].text);
+        let summary: Value = serde_json::from_str(&saved.content[0].text).unwrap();
+        assert_eq!(summary["status"], 200);
+        let snapshot_id = summary["id"].as_str().unwrap().to_string();
+
+        // list → one lightweight summary, no body payload
+        let listed = b
+            .call_tool(
+                "snapshot.list",
+                args(&[
+                    ("workspaceId", Value::String(ws.id.clone())),
+                    ("requestId", Value::String(req.id.clone())),
+                ]),
+            )
+            .await;
+        let list: Vec<Value> = serde_json::from_str(&listed.content[0].text).unwrap();
+        assert_eq!(list.len(), 1);
+        assert!(list[0].get("response").is_none());
+
+        // get → body readable, auth-derived header redacted at save time
+        let got = b
+            .call_tool(
+                "snapshot.get",
+                args(&[
+                    ("workspaceId", Value::String(ws.id.clone())),
+                    ("snapshotId", Value::String(snapshot_id.clone())),
+                ]),
+            )
+            .await;
+        let snap: Value = serde_json::from_str(&got.content[0].text).unwrap();
+        assert_eq!(snap["response"]["body"], "{\"ok\":true}");
+        let header_value = snap["request"]["headers"][0]["value"].as_str().unwrap();
+        assert!(
+            !header_value.contains("tok"),
+            "secret leaked: {header_value}"
+        );
+
+        // replay → refused: unencrypted workspace redacted the auth, nothing to replay with
+        let replayed = b
+            .call_tool(
+                "snapshot.replay",
+                args(&[
+                    ("workspaceId", Value::String(ws.id.clone())),
+                    ("snapshotId", Value::String(snapshot_id)),
+                ]),
+            )
+            .await;
+        assert_eq!(replayed.is_error, Some(true));
+        assert!(replayed.content[0].text.contains("encryption"));
     }
 }

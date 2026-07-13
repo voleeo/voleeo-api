@@ -15,13 +15,35 @@ pub(super) fn blobs_to_changes(
     workspace_id: &str,
     stores: &Stores,
 ) -> Result<Vec<GitEntityChange>, VoleeoError> {
+    // Snapshots store ciphertext at rest; decrypt their frozen response/request
+    // for this read-only display (never on the conflict-write path). Built once.
+    let snapshots =
+        voleeo_storage::SnapshotStore::new(&stores.app_data_dir, stores.workspaces.clone())?;
+    let decrypt_snapshot = |e: Option<GitEntity>| -> Option<GitEntity> {
+        let mut e = e?;
+        if let Some(s) = e.snapshot.take() {
+            e.snapshot = Some(snapshots.decrypt_for_display(workspace_id, s));
+        }
+        Some(e)
+    };
+
     let mut out = Vec::new();
     for b in blobs {
         if matches!(b.node_kind, GitNodeKind::Other) {
             continue;
         }
-        let old = parse_entity(b.node_kind, b.head.as_deref(), workspace_id, stores)?;
-        let new = parse_entity(b.node_kind, b.work.as_deref(), workspace_id, stores)?;
+        let old = decrypt_snapshot(parse_entity(
+            b.node_kind,
+            b.head.as_deref(),
+            workspace_id,
+            stores,
+        )?);
+        let new = decrypt_snapshot(parse_entity(
+            b.node_kind,
+            b.work.as_deref(),
+            workspace_id,
+            stores,
+        )?);
         out.push(GitEntityChange {
             path: b.path,
             node_id: b.node_id,
@@ -94,6 +116,16 @@ pub(super) fn parse_entity(
             };
             transform_auth_secrets(&mut ws.auth, workspace_id, stores, Direction::Decrypt)?;
             entity.workspace = Some(ws);
+        }
+        // Round-trip the ciphertext untouched here — this is the shared parse
+        // used by conflict resolution, whose write path (`encrypt_entity`) has no
+        // snapshot re-encryption. `blobs_to_changes` decrypts for the read-only
+        // review/history display instead.
+        GitNodeKind::Snapshot => {
+            let Ok(p) = serde_yaml::from_str::<voleeo_core::Snapshot>(yaml) else {
+                return Ok(None);
+            };
+            entity.snapshot = Some(p);
         }
         GitNodeKind::Other => return Ok(None),
     }
@@ -168,6 +200,7 @@ pub(super) fn entity_to_yaml(entity: &GitEntity) -> Result<String, VoleeoError> 
         GitNodeKind::Env => entity.environment.as_ref().map(serde_yaml::to_string),
         GitNodeKind::Jar => entity.jar.as_ref().map(serde_yaml::to_string),
         GitNodeKind::Workspace => entity.workspace.as_ref().map(serde_yaml::to_string),
+        GitNodeKind::Snapshot => entity.snapshot.as_ref().map(serde_yaml::to_string),
         GitNodeKind::Other => None,
     };
     yaml.ok_or_else(|| VoleeoError::Git("resolved entity has no body".into()))?

@@ -2,6 +2,7 @@ import { listen } from "@tauri-apps/api/event"
 import type { StoreApi, UseBoundStore } from "zustand"
 import { EVENTS } from "@/config/events"
 import { useRequestStore } from "../requests"
+import { useSnapshotsStore } from "../snapshots"
 import { useUiStore } from "../workspace"
 import type { GitStore } from "./types"
 
@@ -17,6 +18,14 @@ export function registerGitSubscriptions(
       state.grpcRequests === prev.grpcRequests
     )
       return
+    const id = useGitStore.getState().loadedWorkspaceId
+    if (id) useGitStore.getState().refreshDebounced(id)
+  })
+
+  // Snapshots live in their own store (git-synced files under the workspace),
+  // so saving/deleting one must also refresh the changes badge + review.
+  useSnapshotsStore.subscribe((state, prev) => {
+    if (state.byRequest === prev.byRequest) return
     const id = useGitStore.getState().loadedWorkspaceId
     if (id) useGitStore.getState().refreshDebounced(id)
   })

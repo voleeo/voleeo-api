@@ -40,6 +40,7 @@ export const EVENTS = {
   mcpCookiesChanged: "mcp:cookies:changed",
   mcpConnectionsChanged: "mcp:connections:changed",
   mcpGrpcChanged: "mcp:grpc:changed",
+  mcpSnapshotsChanged: "mcp:snapshots:changed",
   mcpEnabledChanged: "mcp:enabled:changed",
 
   // Native menu → frontend dispatcher (menuActions.ts). Payload is the item id.

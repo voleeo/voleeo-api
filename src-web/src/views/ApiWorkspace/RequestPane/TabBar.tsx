@@ -69,7 +69,7 @@ export function TabBar({
     : "HEADERS"
 
   return (
-    <div className="px-3.5 border-b border-border flex shrink-0">
+    <div className="px-3.5 border-b border-border flex shrink-0 min-w-[220px]">
       <TabItem
         label={paramsLabel}
         active={activeTab === "params"}

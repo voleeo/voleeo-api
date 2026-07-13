@@ -117,43 +117,45 @@ function GrpcPaneInner({ request }: { request: GrpcRequest }) {
   return (
     <FolderScopeProvider folderId={request.folderId ?? null}>
       <div className="h-full flex flex-col overflow-hidden">
-        <GrpcHeader
-          requestId={request.id}
-          target={draft.target}
-          onTargetChange={draft.setTarget}
-          onTargetCommit={() => draft.commitConn({})}
-          onVarClick={handleVarClick}
-          tls={draft.tls}
-          onTlsChange={(next) => {
-            draft.setTls(next)
-            draft.commitConn({ tls: next })
-          }}
-          refreshing={draft.refreshing}
-          onRefresh={draft.refresh}
-          service={draft.service}
-          method={draft.method}
-          onSelectMethod={(s, m) => {
-            draft.selectMethod(s, m)
-            draft.commitWith({ service: s, method: m })
-          }}
-          protoSource={draft.protoSource}
-          onProtoSourceChange={onProtoSourceChange}
-          kind={kind}
-          status={status}
-          canSend={canSend}
-          {...handlers}
-        />
+        <div className="shrink-0 bg-accent/[0.035]">
+          <GrpcHeader
+            requestId={request.id}
+            target={draft.target}
+            onTargetChange={draft.setTarget}
+            onTargetCommit={() => draft.commitConn({})}
+            onVarClick={handleVarClick}
+            tls={draft.tls}
+            onTlsChange={(next) => {
+              draft.setTls(next)
+              draft.commitConn({ tls: next })
+            }}
+            refreshing={draft.refreshing}
+            onRefresh={draft.refresh}
+            service={draft.service}
+            method={draft.method}
+            onSelectMethod={(s, m) => {
+              draft.selectMethod(s, m)
+              draft.commitWith({ service: s, method: m })
+            }}
+            protoSource={draft.protoSource}
+            onProtoSourceChange={onProtoSourceChange}
+            kind={kind}
+            status={status}
+            canSend={canSend}
+            {...handlers}
+          />
 
-        <GrpcTabBar
-          tab={tab}
-          onTab={setTab}
-          labels={tabLabel}
-          hasSchema={!!draft.schema}
-          msgMode={msgMode}
-          onMsgMode={setMsgMode}
-          auth={auth}
-          onAuthChange={setAuth}
-        />
+          <GrpcTabBar
+            tab={tab}
+            onTab={setTab}
+            labels={tabLabel}
+            hasSchema={!!draft.schema}
+            msgMode={msgMode}
+            onMsgMode={setMsgMode}
+            auth={auth}
+            onAuthChange={setAuth}
+          />
+        </div>
 
         <div
           className="flex-1 min-h-0 overflow-auto"

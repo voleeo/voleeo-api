@@ -110,35 +110,37 @@ export function RequestPane() {
   return (
     <>
       <FolderScopeProvider folderId={activeRequest?.folderId ?? null}>
-        <RequestActionBar
-          method={method}
-          methodLocked={body.bodyKind === "graphql"}
-          urlDraft={draft.urlDraft}
-          disabled={disabled}
-          isSending={send.isSending}
-          onMethodChange={send.commitMethod}
-          onUrlChange={draft.setUrlDraft}
-          onUrlCommit={send.commitUrl}
-          onSend={() => void send.handleSend()}
-          onCancel={send.cancelActive}
-          onInspect={() => setInspectorOpen(true)}
-          onParamClick={ui.handleUrlParamClick}
-          onVarClick={ui.handleVarClick}
-          onQueryParams={ui.handleUrlQueryParams}
-          onImportCommand={handleImportCommand}
-        />
+        <div className="shrink-0 bg-accent/[0.035]">
+          <RequestActionBar
+            method={method}
+            methodLocked={body.bodyKind === "graphql"}
+            urlDraft={draft.urlDraft}
+            disabled={disabled}
+            isSending={send.isSending}
+            onMethodChange={send.commitMethod}
+            onUrlChange={draft.setUrlDraft}
+            onUrlCommit={send.commitUrl}
+            onSend={() => void send.handleSend()}
+            onCancel={send.cancelActive}
+            onInspect={() => setInspectorOpen(true)}
+            onParamClick={ui.handleUrlParamClick}
+            onVarClick={ui.handleVarClick}
+            onQueryParams={ui.handleUrlQueryParams}
+            onImportCommand={handleImportCommand}
+          />
 
-        <TabBar
-          request={activeRequest}
-          activeTab={ui.activeTab}
-          paramCounts={ui.paramCounts}
-          inheritedHeaders={inheritedHeaders}
-          auth={auth}
-          bodyKind={body.bodyKind}
-          onTabChange={ui.setActiveTab}
-          onAuthChange={setAuth}
-          onBodyKindChange={body.setBodyKind}
-        />
+          <TabBar
+            request={activeRequest}
+            activeTab={ui.activeTab}
+            paramCounts={ui.paramCounts}
+            inheritedHeaders={inheritedHeaders}
+            auth={auth}
+            bodyKind={body.bodyKind}
+            onTabChange={ui.setActiveTab}
+            onAuthChange={setAuth}
+            onBodyKindChange={body.setBodyKind}
+          />
+        </div>
 
         <TabContent
           activeTab={ui.activeTab}

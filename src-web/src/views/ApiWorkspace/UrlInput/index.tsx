@@ -28,6 +28,9 @@ interface Props {
   onImportCommand?: (result: CommandImportResult) => void
   onFocus?: () => void
   onBlur?: () => void
+  /** Render the value (with chips) but non-editable and at full opacity — for
+   *  a saved snapshot's frozen URL. Unlike `disabled`, no dimming or placeholder. */
+  readOnly?: boolean
 }
 
 export function UrlInput({
@@ -42,6 +45,7 @@ export function UrlInput({
   onImportCommand,
   onFocus,
   onBlur,
+  readOnly = false,
 }: Props) {
   const divRef = useRef<HTMLDivElement>(null)
   const skipSyncRef = useRef(false)
@@ -182,10 +186,10 @@ export function UrlInput({
     <>
       <div
         ref={divRef}
-        contentEditable={!disabled}
+        contentEditable={!disabled && !readOnly}
         suppressContentEditableWarning
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
+        onMouseDown={readOnly ? undefined : handleMouseDown}
+        onMouseMove={readOnly ? undefined : handleMouseMove}
         onBeforeInput={handleBeforeInput}
         onInput={handleInput}
         onCopy={handleCopy}
@@ -197,11 +201,19 @@ export function UrlInput({
           onBlur?.()
         }}
         onKeyDown={handleKeyDown}
-        onClick={handleClick}
+        onClick={readOnly ? undefined : handleClick}
         data-placeholder={disabled ? "Select a request" : "https://..."}
         style={{ fontSize: "0.786rem" }}
         className={cn(
-          "ce-placeholder editor-font flex-1 min-w-0 px-2.5 py-[6px] text-fg outline-none leading-[1.5] whitespace-nowrap overflow-hidden",
+          // `min-w-[90px]` keeps the URL legible when the request pane is
+          // dragged narrow (instead of collapsing to nothing); `text-ellipsis`
+          // trails a … when the text overflows that width.
+          "ce-placeholder editor-font flex-1 min-w-[90px] px-2.5 py-[6px] outline-none leading-[1.5] whitespace-nowrap text-ellipsis",
+          // Frozen snapshot URL reads muted (like a snapshot's tree-row name);
+          // the live editor stays full-contrast.
+          readOnly
+            ? "overflow-x-auto selectable-text text-muted"
+            : "overflow-hidden text-fg",
           disabled && "opacity-40 cursor-not-allowed pointer-events-none",
         )}
       />

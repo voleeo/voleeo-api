@@ -79,7 +79,7 @@ function FolderRunRowImpl({
     : (response?.status ?? lastSummary?.status ?? null)
   const totalMs = liveSse
     ? (sseLastMs ?? 0)
-    : (response?.timing.totalMs ?? lastSummary?.totalMs ?? null)
+    : (response?.timing?.totalMs ?? lastSummary?.totalMs ?? null)
   const barPct =
     totalMs != null && maxTotalMs > 0
       ? Math.max(2, (totalMs / maxTotalMs) * 100)

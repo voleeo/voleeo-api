@@ -164,7 +164,7 @@ pub struct SseFrame {
 
 /// Phase timings (ms). DNS/TCP/TLS aren't available from the client → 0.0.
 /// `first_byte_ms` = start→headers; `download_ms` = headers→body read.
-#[derive(Type, Serialize, Deserialize, Debug, Clone)]
+#[derive(Type, Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct HttpTiming {
     pub dns_ms: f64,
@@ -173,6 +173,17 @@ pub struct HttpTiming {
     pub first_byte_ms: f64,
     pub download_ms: f64,
     pub total_ms: f64,
+}
+
+/// True when every phase is 0 — snapshots zero out timing (it's meaningless for
+/// a point-in-time capture) so it's skipped from their YAML entirely.
+fn is_zero_timing(t: &HttpTiming) -> bool {
+    t.dns_ms == 0.0
+        && t.connect_ms == 0.0
+        && t.tls_ms == 0.0
+        && t.first_byte_ms == 0.0
+        && t.download_ms == 0.0
+        && t.total_ms == 0.0
 }
 
 /// Warning surfaced when following redirects silently dropped part of the
@@ -211,10 +222,12 @@ pub struct HttpResponse {
     /// History id used to fetch windows/search; assigned on store, else empty.
     #[serde(default)]
     pub response_id: String,
+    #[serde(default, skip_serializing_if = "is_zero_timing")]
     pub timing: HttpTiming,
     /// Timeline event log; when empty the frontend reconstructs milestones
-    /// from `headers` + `timing`.
-    #[serde(default)]
+    /// from `headers` + `timing`. Skipped from YAML when empty (e.g. snapshots,
+    /// which never show a timeline) — non-empty live logs still serialize.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub events: Vec<TimelineEvent>,
     /// Present when redirects dropped the body or sensitive headers.
     #[serde(default)]
@@ -232,6 +245,63 @@ pub struct HttpResponse {
     /// the response so each run keeps its stream in history.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sse_frames: Vec<SseFrame>,
+}
+
+/// Immutable, point-in-time snapshot of a fully-resolved request and the
+/// response it produced — a git-synced "source of truth", distinct from
+/// the machine-local response history ring buffer. Never edited after
+/// creation; only `name` may be changed via a dedicated rename call.
+///
+/// `request` is the *resolved* `HttpRequest` captured at send time (literal
+/// URL/headers/body, no `{{ }}` templates) — see `resolve::apply_to_request`.
+/// When `encrypted` is true, `request.auth`'s secret fields and `response`'s
+/// body/header values are AES-256-GCM ciphertext (`enc:v1:...`) under the
+/// workspace key; when false, secret-sourced values are replaced with a
+/// redaction placeholder rather than left as plaintext.
+#[derive(Type, Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Snapshot {
+    pub id: String,
+    pub workspace_id: String,
+    pub request_id: String,
+    pub name: String,
+    pub created_at: String,
+    pub encrypted: bool,
+    /// Pinned snapshots sort to the top of their request's list. Cosmetic,
+    /// mutable (like `name`) — the rest of the snapshot stays immutable.
+    #[serde(default, skip_serializing_if = "is_snapshot_unpinned")]
+    pub pinned: bool,
+    pub request: HttpRequest,
+    pub response: HttpResponse,
+}
+
+fn is_snapshot_unpinned(pinned: &bool) -> bool {
+    !*pinned
+}
+
+/// Lightweight `Snapshot` listing entry — the sidebar tree needs every
+/// request's snapshots at workspace load, and full snapshots carry whole bodies.
+#[derive(Type, Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SnapshotSummary {
+    pub id: String,
+    pub request_id: String,
+    pub name: String,
+    pub created_at: String,
+    pub encrypted: bool,
+    pub pinned: bool,
+    pub method: String,
+    pub status: u16,
+}
+
+/// Outcome of re-executing a `Snapshot`. The fresh response is stored
+/// separately as the single machine-local "latest" entry (overwritten on
+/// each replay, never git-synced) — this struct is just the IPC return.
+#[derive(Type, Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SnapshotReplayResult {
+    pub response: HttpResponse,
+    pub status_matches: bool,
 }
 
 #[cfg(test)]

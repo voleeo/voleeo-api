@@ -1,9 +1,18 @@
 import { useMemo } from "react"
+import { SHORTCUTS } from "@/config/shortcuts"
 import type {
   HttpResponse,
   TimelineEvent,
 } from "../../../../../packages/types/bindings"
 import type { BodyInfo } from "./BodyTab"
+
+export const EMPTY_ROWS = [
+  { label: "Send Active Request", combo: SHORTCUTS.SEND_REQUEST },
+  { label: "New Request", combo: SHORTCUTS.NEW_ITEM },
+]
+
+export const ERROR_BANNER =
+  "rounded-[5px] border border-dashed border-destructive/45 bg-destructive/[0.04] px-3 py-2 font-mono text-[0.75rem] text-fg leading-[1.5] whitespace-pre-wrap break-all"
 
 type SseOpen = Pick<HttpResponse, "status" | "statusText" | "headers">
 

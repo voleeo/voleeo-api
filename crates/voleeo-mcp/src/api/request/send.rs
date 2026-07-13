@@ -6,7 +6,55 @@ use voleeo_core::{
     AuthConfig, BodyField, BodyKind, EnvironmentKind, RequestBody, RequestParameter, StoredCookie,
     VoleeoError,
 };
-use voleeo_storage::{CookieJarStore, WorkspaceStore};
+use voleeo_storage::{CookieJarStore, SelectionStore, WorkspaceStore};
+
+/// Resolve + decrypt the active cookie jar for a workspace, off-runtime.
+/// Mirrors Tauri's `load_active_jar_for_send` so MCP sends (and pair replays)
+/// use the same jar as the UI. Soft-fails to an empty jar on I/O errors rather
+/// than aborting the send.
+pub(in crate::api) fn load_active_jar(
+    workspaces: &WorkspaceStore,
+    cookies_store: &CookieJarStore,
+    selections: &SelectionStore,
+    app_data_dir: &Path,
+    workspace_id: &str,
+) -> Result<(String, Vec<StoredCookie>), String> {
+    let ws = workspaces.get(workspace_id).map_err(|e| e.to_string())?;
+    // Selection if set, else the first existing jar (mirrors the app's
+    // resolve_active_jar), else the auto-created default.
+    let jar_id = selections
+        .active_jar(workspace_id)
+        .or_else(|| {
+            cookies_store
+                .list(workspace_id)
+                .ok()
+                .and_then(|jars| jars.into_iter().next().map(|j| j.id))
+        })
+        .unwrap_or_else(|| voleeo_storage::DEFAULT_JAR_ID.to_string());
+    match cookies_store.get(workspace_id, &jar_id) {
+        Ok(mut jar) => {
+            if voleeo_cookies::crypto::jar_needs_key(&jar.cookies) {
+                if !ws.encrypted {
+                    return Err(
+                        "workspace_encryption_required for encrypted cookie values".to_string()
+                    );
+                }
+                let key = voleeo_crypto::load_key(workspace_id, app_data_dir)
+                    .map_err(|e| e.to_string())?;
+                voleeo_cookies::crypto::decrypt_values(&mut jar.cookies, &key)
+                    .map_err(|e| e.to_string())?;
+            }
+            Ok((jar_id, jar.cookies))
+        }
+        Err(e) => {
+            // Soft-fail: send without cookies rather than abort. `get`
+            // auto-creates the default jar, so this is really just I/O
+            // failures we don't want to fatal-error on.
+            eprintln!("[mcp] cookie jar load failed: {e}; sending without cookies");
+            Ok((jar_id, Vec::new()))
+        }
+    }
+}
 
 /// Parse a `headers`/`queryParams` arg into `RequestParameter`s. Accepts an
 /// object map `{ "Name": "value" }` (the common case) or an array of
@@ -223,60 +271,33 @@ impl ApiBackend {
                     }
                 }
             }
+            // Original (resolved, secrets-decrypted) auth, captured before
+            // `apply_to_request` folds static schemes into a header and clears
+            // `req.auth` — kept for the snapshot's AUTH tab (see below).
+            let stored_auth = req.auth.clone();
             resolve::apply_to_request(&mut req, &vars);
 
             if let Some(url) = url_override {
                 req.url = url;
             }
 
-            // Resolve + decrypt the active jar here (off-runtime). Mirrors the
-            // Tauri `load_active_jar_for_send` so MCP uses the same jar as the UI.
-            let ws = workspaces.get(&ws_id2).map_err(|e| e.to_string())?;
-            // Selection if set, else the first existing jar (mirrors the app's
-            // resolve_active_jar), else the auto-created default.
-            let jar_id = selections
-                .active_jar(&ws_id2)
-                .or_else(|| {
-                    cookies_store
-                        .list(&ws_id2)
-                        .ok()
-                        .and_then(|jars| jars.into_iter().next().map(|j| j.id))
-                })
-                .unwrap_or_else(|| voleeo_storage::DEFAULT_JAR_ID.to_string());
-            let (mut cookies, jar_id) = match cookies_store.get(&ws_id2, &jar_id) {
-                Ok(mut jar) => {
-                    if voleeo_cookies::crypto::jar_needs_key(&jar.cookies) {
-                        if !ws.encrypted {
-                            return Err(
-                                "workspace_encryption_required for encrypted cookie values"
-                                    .to_string(),
-                            );
-                        }
-                        let key = voleeo_crypto::load_key(&ws_id2, &app_data_dir)
-                            .map_err(|e| e.to_string())?;
-                        voleeo_cookies::crypto::decrypt_values(&mut jar.cookies, &key)
-                            .map_err(|e| e.to_string())?;
-                    }
-                    (jar.cookies, jar_id)
-                }
-                Err(e) => {
-                    // Soft-fail: send without cookies rather than abort. `get`
-                    // auto-creates the default jar, so this is really just I/O
-                    // failures we don't want to fatal-error on.
-                    eprintln!("[mcp] cookie jar load failed: {e}; sending without cookies");
-                    (Vec::new(), jar_id)
-                }
-            };
+            let (jar_id, mut cookies) = load_active_jar(
+                &workspaces,
+                &cookies_store,
+                &selections,
+                &app_data_dir,
+                &ws_id2,
+            )?;
 
             // Resolve `{{ VAR }}`, strip encrypt() chips, decrypt `enc:v1:` in
             // cookie fields — same steps as Tauri `send_request` for one wire form.
             voleeo_cookies::resolve::resolve_cookies(&mut cookies, &vars, var_key.as_ref());
 
-            Ok((req, cookies, jar_id))
+            Ok((req, cookies, jar_id, stored_auth))
         })
         .await;
 
-        let (mut req, attach_cookies, jar_id) = match prepared {
+        let (mut req, attach_cookies, jar_id, stored_auth) = match prepared {
             Ok(Ok(r)) => r,
             Ok(Err(msg)) => return ToolResult::error(msg),
             Err(e) => return ToolResult::error(format!("Internal error: {e}")),
@@ -308,6 +329,23 @@ impl ApiBackend {
                 }
             }
             req.auth = AuthConfig::None;
+        }
+
+        // `req` is now fully resolved (literal URL/headers/body, no `{{ }}`) —
+        // the authoritative "as sent" record. Cloned here, before the executor
+        // runs, so a later "save as pair" can promote it without re-resolving
+        // (which would regenerate non-deterministic template fns like
+        // `uuid.v4()`).
+        let mut resolved_request = req.clone();
+        // Static / OAuth2 auth was folded into a header above, leaving `req.auth`
+        // as None. Restore the original config on the snapshot so its AUTH tab
+        // shows the real scheme — replay ignores it (the executor only applies
+        // `is_dynamic()` auth; the folded header carries the static secret).
+        if matches!(req.auth, AuthConfig::None)
+            && stored_auth.is_active()
+            && !stored_auth.is_dynamic()
+        {
+            resolved_request.auth = stored_auth;
         }
 
         eprintln!(
@@ -398,7 +436,7 @@ impl ApiBackend {
                 let resp_clone = resp.clone();
                 let notify = self.notify.clone();
                 tokio::task::spawn_blocking(move || {
-                    match responses.append(&ws_id, &req_id, resp_clone, limit) {
+                    match responses.append(&ws_id, &req_id, resp_clone, resolved_request, limit) {
                         Ok(_) => notify(
                             "mcp:response:stored",
                             serde_json::json!({ "workspaceId": ws_id, "requestId": req_id }),

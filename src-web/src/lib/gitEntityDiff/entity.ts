@@ -19,6 +19,7 @@ const KIND_OF: Record<EntityType, GitNodeKind> = {
   environment: "env",
   cookie: "jar",
   workspace: "workspace",
+  snapshot: "snapshot",
 }
 
 export const TYPE_WORD: Record<EntityType, string> = {
@@ -29,6 +30,7 @@ export const TYPE_WORD: Record<EntityType, string> = {
   environment: "environment",
   cookie: "cookie jar",
   workspace: "workspace",
+  snapshot: "snapshot",
 }
 
 /** Pull the typed inner struct out of the tagged `GitEntity` union. */
@@ -50,6 +52,8 @@ export function innerOf(entity: GitEntity | null, type: EntityType): any {
       return entity.jar ?? null
     case "workspace":
       return entity.workspace ?? null
+    case "snapshot":
+      return entity.snapshot ?? null
   }
 }
 
@@ -78,6 +82,9 @@ export function wrap(type: EntityType, inner: any): GitEntity {
       break
     case "workspace":
       e.workspace = inner
+      break
+    case "snapshot":
+      e.snapshot = inner
       break
   }
   return e
@@ -110,5 +117,6 @@ export function locationOf(
   }
   if (type === "environment") return "Environments"
   if (type === "cookie") return "Cookies"
+  if (type === "snapshot") return "Snapshots"
   return "Workspace"
 }

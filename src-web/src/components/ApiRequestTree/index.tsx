@@ -10,6 +10,7 @@ import { useKeyNav } from "@/components/ApiRequestTree/useKeyNav"
 import { useGitStore } from "@/store/git"
 import type { MoveItemUpdate, TreeNode } from "@/store/requests"
 import { useRequestStore } from "@/store/requests"
+import { useSnapshotsStore } from "@/store/snapshots"
 import { useTreeUiStore } from "@/store/treeUi"
 import { useWebsocketStore } from "@/store/websocket"
 import { usePruneSelection } from "./usePruneSelection"
@@ -83,7 +84,11 @@ export function ApiRequestTree({
   const pendingRenameId = useTreeUiStore((s) => s.pendingRenameId)
   useEffect(() => {
     if (!pendingRenameId) return
-    const visible = flattenVisible(tree, folderState.isFolderOpen)
+    const visible = flattenVisible(
+      tree,
+      folderState.isFolderOpen,
+      (rid) => useSnapshotsStore.getState().byRequest[rid],
+    )
     if (visible.some((n) => n.id === pendingRenameId)) {
       setRenamingId(pendingRenameId)
       useTreeUiStore.getState().consumePendingRename()
@@ -102,20 +107,32 @@ export function ApiRequestTree({
 
   usePruneSelection(tree)
 
-  // Enter on a focused item starts inline rename.
-  const onEnterAction = (
+  // Open the item in its pane, exactly as a click would. Shared by Space
+  // (open only) and Enter/double-click (open + inline rename).
+  const openNode = (
     id: string,
-    kind: "folder" | "request" | "websocket" | "grpc",
+    kind: "folder" | "request" | "websocket" | "grpc" | "snapshot",
   ) => {
-    if (kind === "request") onSelectRequest(id)
+    if (kind === "snapshot") {
+      useRequestStore.getState().setActiveSnapshot(id)
+      useSnapshotsStore.getState().openSnapshot(workspaceId, id)
+    } else if (kind === "request") onSelectRequest(id)
     else if (kind === "websocket") setActiveConnection(id)
     else if (kind === "grpc") setActiveGrpc(id)
+    else useRequestStore.getState().setActiveFolder(id)
+  }
+
+  const onEnterAction = (
+    id: string,
+    kind: "folder" | "request" | "websocket" | "grpc" | "snapshot",
+  ) => {
+    openNode(id, kind)
     setRenamingId(id)
   }
 
   const commitRename = (
     id: string,
-    kind: "folder" | "request" | "websocket" | "grpc",
+    kind: "folder" | "request" | "websocket" | "grpc" | "snapshot",
     name: string,
   ) => {
     const trimmed = name.trim()
@@ -124,6 +141,8 @@ export function ApiRequestTree({
     if (kind === "request") renameRequest(workspaceId, id, trimmed)
     else if (kind === "websocket") renameConnection(workspaceId, id, trimmed)
     else if (kind === "grpc") renameGrpc(workspaceId, id, trimmed)
+    else if (kind === "snapshot")
+      useSnapshotsStore.getState().renameSnapshot(workspaceId, id, trimmed)
     else renameFolder(workspaceId, id, trimmed)
   }
 
@@ -134,6 +153,7 @@ export function ApiRequestTree({
     folderState.isFolderOpen,
     folderState.toggleFolder,
     onEnterAction,
+    openNode,
   )
 
   const handleKeyDown = useTreeKeyboard({
@@ -162,7 +182,7 @@ export function ApiRequestTree({
       {/* tabIndex makes the container focusable so keyboard events reach it */}
       <div
         ref={containerRef}
-        className="min-h-full select-none outline-none"
+        className="min-h-full min-w-[100px] select-none outline-none"
         tabIndex={0}
         // Re-focus the tree on mouseup so a click that selected a request
         // (which also opens it in the editor) doesn't strand focus there.

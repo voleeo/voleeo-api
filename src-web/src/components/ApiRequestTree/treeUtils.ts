@@ -5,20 +5,26 @@ import { effectiveOrder } from "@/store/requests"
 /** A single entry in the depth-first, visibility-aware flattened tree. */
 export type FlatNode = {
   id: string
-  kind: "folder" | "request" | "websocket"
+  kind: "folder" | "request" | "websocket" | "snapshot"
   /** ID of the containing folder, or null for top-level items. */
   parentId: string | null
   /** True when this is the first item inside its parent folder (used by Left arrow). */
   isFirstChild: boolean
 }
 
+/** Ids of the saved snapshots under a request, or undefined for none. */
+export type SnapshotsFor = (requestId: string) => { id: string }[] | undefined
+
 /**
  * Returns a flat, ordered list of every visible node — folders are included
- * but their children are only added when the folder is open.
+ * but their children are only added when the folder is open. A request's saved
+ * snapshots are injected right after it when the request is expanded, so keyboard
+ * nav and range-selection treat them like folder children.
  */
 export function flattenVisible(
   tree: TreeNode[],
   isFolderOpen: (id: string) => boolean,
+  snapshotsFor: SnapshotsFor = () => undefined,
   parentId: string | null = null,
 ): FlatNode[] {
   const result: FlatNode[] = []
@@ -29,7 +35,9 @@ export function flattenVisible(
       const id = node.folder.id
       result.push({ id, kind: "folder", parentId, isFirstChild })
       if (isFolderOpen(id)) {
-        result.push(...flattenVisible(node.children, isFolderOpen, id))
+        result.push(
+          ...flattenVisible(node.children, isFolderOpen, snapshotsFor, id),
+        )
       }
     } else if (node.kind === "websocket") {
       result.push({
@@ -39,12 +47,19 @@ export function flattenVisible(
         isFirstChild,
       })
     } else {
-      result.push({
-        id: node.request.id,
-        kind: "request",
-        parentId,
-        isFirstChild,
-      })
+      const rid = node.request.id
+      result.push({ id: rid, kind: "request", parentId, isFirstChild })
+      const snapshots = snapshotsFor(rid)
+      if (snapshots?.length && isFolderOpen(rid)) {
+        snapshots.forEach((p, j) => {
+          result.push({
+            id: p.id,
+            kind: "snapshot",
+            parentId: rid,
+            isFirstChild: j === 0,
+          })
+        })
+      }
     }
   }
   return result

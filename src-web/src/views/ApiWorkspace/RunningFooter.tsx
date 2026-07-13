@@ -129,7 +129,7 @@ export function RunningFooter() {
   if (running.length === 0 && !hasActive && !hasFolders) return null
 
   return (
-    <div className="flex items-center px-3.5 py-2 border-t border-border shrink-0 font-mono text-[0.7rem]">
+    <div className="flex items-center px-3.5 h-[32px] border-t border-border shrink-0 font-mono text-[0.7rem] bg-accent/[0.035]">
       {running.length > 0 && <RunningPill running={running} />}
       <div className="ml-auto flex items-center gap-0.5">
         {hasFolders && (

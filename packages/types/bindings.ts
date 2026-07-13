@@ -347,6 +347,14 @@ params_location?: OAuth1Location; callback?: string; verifier?: string; timestam
 	requestId: string,
 	recordedAt: string,
 	response: HttpResponse_Serialize,
+	/**
+	 *  The fully-resolved request as it was actually sent (literal
+	 *  URL/headers/body, no `{{ }}` templates) — captured by the send call
+	 *  site right before the executor runs. `None` for entries written
+	 *  before this field existed. Source for promoting a response into a
+	 *  `Snapshot`; not shown in the normal history UI.
+	 */
+	resolvedRequest?: HttpRequest_Serialize | null,
 } | null, VoleeoError>(__TAURI_INVOKE("response_get", { workspaceId, requestId, responseId })),
 	responseClear: (workspaceId: string, requestId: string) => typedError<null, VoleeoError>(__TAURI_INVOKE("response_clear", { workspaceId, requestId })),
 	/**  A line window of a large (windowed) response body. Off-thread per rule 17. */
@@ -358,6 +366,59 @@ params_location?: OAuth1Location; callback?: string; verifier?: string; timestam
 	 *  filtered result (empty query clears it).
 	 */
 	responseBodyFilter: (workspaceId: string, responseId: string, query: string) => typedError<BodyFilterResult, VoleeoError>(__TAURI_INVOKE("response_body_filter", { workspaceId, responseId, query })),
+	/**
+	 *  Promote an existing response into an immutable, git-synced snapshot. The
+	 *  response's `resolved_request` (captured at send time — see
+	 *  `StoredHttpResponse`) is the literal request that produced it; nothing is
+	 *  re-resolved here.
+	 */
+	snapshotSave: (workspaceId: string, requestId: string, responseId: string, name: string | null) => typedError<Snapshot_Serialize, VoleeoError>(__TAURI_INVOKE("snapshot_save", { workspaceId, requestId, responseId, name })),
+	/**
+	 *  All snapshot summaries for a workspace in one call — feeds the sidebar tree
+	 *  without shipping bodies over IPC. Full snapshots load lazily via `snapshot_get`.
+	 */
+	snapshotListSummaries: (workspaceId: string) => typedError<SnapshotSummary[], VoleeoError>(__TAURI_INVOKE("snapshot_list_summaries", { workspaceId })),
+	/**
+	 *  Returns the snapshot with response/request values decrypted for display —
+	 *  auth config secrets stay ciphertext (shown as "encrypted" in the UI).
+	 */
+	snapshotGet: (workspaceId: string, snapshotId: string) => typedError<Snapshot_Serialize, VoleeoError>(__TAURI_INVOKE("snapshot_get", { workspaceId, snapshotId })),
+	snapshotRename: (workspaceId: string, snapshotId: string, name: string) => typedError<Snapshot_Serialize, VoleeoError>(__TAURI_INVOKE("snapshot_rename", { workspaceId, snapshotId, name })),
+	/**  Pin/unpin a snapshot — pinned snapshots sort to the top of their request's list. */
+	snapshotSetPinned: (workspaceId: string, snapshotId: string, pinned: boolean) => typedError<Snapshot_Serialize, VoleeoError>(__TAURI_INVOKE("snapshot_set_pinned", { workspaceId, snapshotId, pinned })),
+	/**
+	 *  Deleting a snapshot is not exposed for MCP (see `crates/voleeo-mcp/src/api/snapshot/`) —
+	 *  destructive ops stay human-only for now.
+	 */
+	snapshotDelete: (workspaceId: string, snapshotId: string) => typedError<null, VoleeoError>(__TAURI_INVOKE("snapshot_delete", { workspaceId, snapshotId })),
+	/**
+	 *  Re-execute a saved snapshot and report whether the status still matches.
+	 *  Hermetic: static parts replay verbatim, dynamic auth is re-signed from the
+	 *  snapshot's saved (decrypted) config, and the cookies sent are the snapshot's saved
+	 *  `attached_cookies` — never the current jar, and captured cookies don't
+	 *  write back to it. The fresh response overwrites the single machine-local
+	 *  "latest" entry for this snapshot — never git-synced, unlike the snapshot itself.
+	 */
+	snapshotReplay: (workspaceId: string, snapshotId: string) => typedError<SnapshotReplayResult_Serialize, VoleeoError>(__TAURI_INVOKE("snapshot_replay", { workspaceId, snapshotId })),
+	/**
+	 *  The last replay result for a snapshot, if any — lets the snapshot view restore the
+	 *  verdict/diff after reopening without re-executing.
+	 */
+	snapshotGetLatestReplay: (workspaceId: string, snapshotId: string) => typedError<{
+	id: string,
+	workspaceId: string,
+	requestId: string,
+	recordedAt: string,
+	response: HttpResponse_Serialize,
+	/**
+	 *  The fully-resolved request as it was actually sent (literal
+	 *  URL/headers/body, no `{{ }}` templates) — captured by the send call
+	 *  site right before the executor runs. `None` for entries written
+	 *  before this field existed. Source for promoting a response into a
+	 *  `Snapshot`; not shown in the normal history UI.
+	 */
+	resolvedRequest?: HttpRequest_Serialize | null,
+} | null, VoleeoError>(__TAURI_INVOKE("snapshot_get_latest_replay", { workspaceId, snapshotId })),
 	settingsGetMcp: () => typedError<McpSettings, VoleeoError>(__TAURI_INVOKE("settings_get_mcp")),
 	settingsSetMcpEnabled: (enabled: boolean) => typedError<McpSettings, VoleeoError>(__TAURI_INVOKE("settings_set_mcp_enabled", { enabled })),
 	settingsRegenerateMcpToken: () => typedError<string, VoleeoError>(__TAURI_INVOKE("settings_regenerate_mcp_token")),
@@ -941,6 +1002,7 @@ export type GitEntity_Deserialize = {
 	environment?: Environment | null,
 	jar?: CookieJar_Deserialize | null,
 	workspace?: Workspace_Deserialize | null,
+	snapshot?: Snapshot_Deserialize | null,
 };
 
 /**
@@ -957,6 +1019,7 @@ export type GitEntity_Serialize = {
 	environment?: Environment | null,
 	jar?: CookieJar_Serialize | null,
 	workspace?: Workspace_Serialize | null,
+	snapshot?: Snapshot_Serialize | null,
 };
 
 /**  One changed file, already mapped back to its tree node when possible. */
@@ -1008,7 +1071,7 @@ export type GitMergeResult = {
 };
 
 /**  Which Voleeo entity a changed file maps to, derived from its filename. */
-export type GitNodeKind = "workspace" | "folder" | "request" | "webSocket" | "grpc" | "jar" | "env" | "other";
+export type GitNodeKind = "workspace" | "folder" | "request" | "webSocket" | "grpc" | "jar" | "env" | "snapshot" | "other";
 
 export type GitRemoteInfo = {
 	name: string,
@@ -1263,10 +1326,11 @@ export type HttpResponse_Deserialize = {
 	bodyLineCount?: number,
 	/**  History id used to fetch windows/search; assigned on store, else empty. */
 	responseId?: string,
-	timing: HttpTiming,
+	timing?: HttpTiming,
 	/**
 	 *  Timeline event log; when empty the frontend reconstructs milestones
-	 *  from `headers` + `timing`.
+	 *  from `headers` + `timing`. Skipped from YAML when empty (e.g. snapshots,
+	 *  which never show a timeline) — non-empty live logs still serialize.
 	 */
 	events?: TimelineEvent[],
 	/**  Present when redirects dropped the body or sensitive headers. */
@@ -1312,12 +1376,13 @@ export type HttpResponse_Serialize = {
 	bodyLineCount: number,
 	/**  History id used to fetch windows/search; assigned on store, else empty. */
 	responseId: string,
-	timing: HttpTiming,
+	timing?: HttpTiming,
 	/**
 	 *  Timeline event log; when empty the frontend reconstructs milestones
-	 *  from `headers` + `timing`.
+	 *  from `headers` + `timing`. Skipped from YAML when empty (e.g. snapshots,
+	 *  which never show a timeline) — non-empty live logs still serialize.
 	 */
-	events: TimelineEvent[],
+	events?: TimelineEvent[],
 	/**  Present when redirects dropped the body or sensitive headers. */
 	redirectWarning: RedirectInfo | null,
 	/**
@@ -1763,6 +1828,121 @@ export type SignedAuthParts = {
 };
 
 /**
+ *  Immutable, point-in-time snapshot of a fully-resolved request and the
+ *  response it produced — a git-synced "source of truth", distinct from
+ *  the machine-local response history ring buffer. Never edited after
+ *  creation; only `name` may be changed via a dedicated rename call.
+ * 
+ *  `request` is the *resolved* `HttpRequest` captured at send time (literal
+ *  URL/headers/body, no `{{ }}` templates) — see `resolve::apply_to_request`.
+ *  When `encrypted` is true, `request.auth`'s secret fields and `response`'s
+ *  body/header values are AES-256-GCM ciphertext (`enc:v1:...`) under the
+ *  workspace key; when false, secret-sourced values are replaced with a
+ *  redaction placeholder rather than left as plaintext.
+ */
+export type Snapshot = Snapshot_Serialize | Snapshot_Deserialize;
+
+/**
+ *  Outcome of re-executing a `Snapshot`. The fresh response is stored
+ *  separately as the single machine-local "latest" entry (overwritten on
+ *  each replay, never git-synced) — this struct is just the IPC return.
+ */
+export type SnapshotReplayResult = SnapshotReplayResult_Serialize | SnapshotReplayResult_Deserialize;
+
+/**
+ *  Outcome of re-executing a `Snapshot`. The fresh response is stored
+ *  separately as the single machine-local "latest" entry (overwritten on
+ *  each replay, never git-synced) — this struct is just the IPC return.
+ */
+export type SnapshotReplayResult_Deserialize = {
+	response: HttpResponse_Deserialize,
+	statusMatches: boolean,
+};
+
+/**
+ *  Outcome of re-executing a `Snapshot`. The fresh response is stored
+ *  separately as the single machine-local "latest" entry (overwritten on
+ *  each replay, never git-synced) — this struct is just the IPC return.
+ */
+export type SnapshotReplayResult_Serialize = {
+	response: HttpResponse_Serialize,
+	statusMatches: boolean,
+};
+
+/**
+ *  Lightweight `Snapshot` listing entry — the sidebar tree needs every
+ *  request's snapshots at workspace load, and full snapshots carry whole bodies.
+ */
+export type SnapshotSummary = {
+	id: string,
+	requestId: string,
+	name: string,
+	createdAt: string,
+	encrypted: boolean,
+	pinned: boolean,
+	method: string,
+	status: number,
+};
+
+/**
+ *  Immutable, point-in-time snapshot of a fully-resolved request and the
+ *  response it produced — a git-synced "source of truth", distinct from
+ *  the machine-local response history ring buffer. Never edited after
+ *  creation; only `name` may be changed via a dedicated rename call.
+ * 
+ *  `request` is the *resolved* `HttpRequest` captured at send time (literal
+ *  URL/headers/body, no `{{ }}` templates) — see `resolve::apply_to_request`.
+ *  When `encrypted` is true, `request.auth`'s secret fields and `response`'s
+ *  body/header values are AES-256-GCM ciphertext (`enc:v1:...`) under the
+ *  workspace key; when false, secret-sourced values are replaced with a
+ *  redaction placeholder rather than left as plaintext.
+ */
+export type Snapshot_Deserialize = {
+	id: string,
+	workspaceId: string,
+	requestId: string,
+	name: string,
+	createdAt: string,
+	encrypted: boolean,
+	/**
+	 *  Pinned snapshots sort to the top of their request's list. Cosmetic,
+	 *  mutable (like `name`) — the rest of the snapshot stays immutable.
+	 */
+	pinned?: boolean,
+	request: HttpRequest_Deserialize,
+	response: HttpResponse_Deserialize,
+};
+
+/**
+ *  Immutable, point-in-time snapshot of a fully-resolved request and the
+ *  response it produced — a git-synced "source of truth", distinct from
+ *  the machine-local response history ring buffer. Never edited after
+ *  creation; only `name` may be changed via a dedicated rename call.
+ * 
+ *  `request` is the *resolved* `HttpRequest` captured at send time (literal
+ *  URL/headers/body, no `{{ }}` templates) — see `resolve::apply_to_request`.
+ *  When `encrypted` is true, `request.auth`'s secret fields and `response`'s
+ *  body/header values are AES-256-GCM ciphertext (`enc:v1:...`) under the
+ *  workspace key; when false, secret-sourced values are replaced with a
+ *  redaction placeholder rather than left as plaintext.
+ */
+export type Snapshot_Serialize = {
+	id: string,
+	workspaceId: string,
+	requestId: string,
+	name: string,
+	createdAt: string,
+	encrypted: boolean,
+	/**
+	 *  Pinned snapshots sort to the top of their request's list. Cosmetic,
+	 *  mutable (like `name`) — the rest of the snapshot stays immutable.
+	 */
+	pinned?: boolean,
+	request: HttpRequest_Serialize,
+	response: HttpResponse_Serialize,
+};
+
+/**
  *  One frame parsed from a `text/event-stream` response and pushed to the UI
  *  live. `seq` is the 0-based arrival order within a send (the React key);
  *  `data` joins multiple `data:` lines with `\n`. Omitted fields were absent in
@@ -1922,6 +2102,14 @@ export type StoredHttpResponse_Deserialize = {
 	requestId: string,
 	recordedAt: string,
 	response: HttpResponse_Deserialize,
+	/**
+	 *  The fully-resolved request as it was actually sent (literal
+	 *  URL/headers/body, no `{{ }}` templates) — captured by the send call
+	 *  site right before the executor runs. `None` for entries written
+	 *  before this field existed. Source for promoting a response into a
+	 *  `Snapshot`; not shown in the normal history UI.
+	 */
+	resolvedRequest?: HttpRequest_Deserialize | null,
 };
 
 /**  Persisted HTTP response entry (machine-local, never synced). */
@@ -1931,6 +2119,14 @@ export type StoredHttpResponse_Serialize = {
 	requestId: string,
 	recordedAt: string,
 	response: HttpResponse_Serialize,
+	/**
+	 *  The fully-resolved request as it was actually sent (literal
+	 *  URL/headers/body, no `{{ }}` templates) — captured by the send call
+	 *  site right before the executor runs. `None` for entries written
+	 *  before this field existed. Source for promoting a response into a
+	 *  `Snapshot`; not shown in the normal history UI.
+	 */
+	resolvedRequest?: HttpRequest_Serialize | null,
 };
 
 /**  One connection session: everything exchanged between a connect and its close. */

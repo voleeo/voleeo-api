@@ -5,11 +5,13 @@ export function Segmented<T extends string>({
   value,
   options,
   onChange,
+  dense,
 }: {
   label?: string
   value: T
   options: readonly { value: T; label: string }[]
   onChange: (next: T) => void
+  dense?: boolean
 }) {
   return (
     <div className="flex items-center gap-3">
@@ -23,7 +25,8 @@ export function Segmented<T extends string>({
             type="button"
             onClick={() => onChange(o.value)}
             className={cn(
-              "flex items-center px-2.5 py-0.5 rounded-[4px] border-0 outline-none cursor-pointer font-sans text-[0.857rem] transition-colors",
+              "flex items-center px-2.5 rounded-[4px] border-0 outline-none cursor-pointer font-sans text-[0.857rem] transition-colors",
+              dense ? "py-0" : "py-0.5",
               value === o.value
                 ? "bg-accent/15 text-accent"
                 : "bg-transparent text-muted hover:text-fg",

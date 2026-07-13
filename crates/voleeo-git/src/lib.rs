@@ -62,6 +62,7 @@ pub fn classify_path(path: &str) -> (GitNodeKind, Option<String>) {
         ("folder_", GitNodeKind::Folder),
         ("jar_", GitNodeKind::Jar),
         ("env_", GitNodeKind::Env),
+        ("snapshot_", GitNodeKind::Snapshot),
     ] {
         if let Some(id) = name
             .strip_prefix(prefix)

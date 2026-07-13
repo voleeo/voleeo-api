@@ -64,15 +64,17 @@ export function FolderPane() {
 
   return (
     <>
-      <FolderHeader folder={folder} activeWorkspaceId={activeWorkspaceId} />
+      <div className="shrink-0 bg-accent/[0.035]">
+        <FolderHeader folder={folder} activeWorkspaceId={activeWorkspaceId} />
 
-      <FolderTabBar
-        folder={folder}
-        activeTab={activeTab}
-        auth={auth}
-        onTabChange={setActiveTab}
-        onAuthChange={setAuth}
-      />
+        <FolderTabBar
+          folder={folder}
+          activeTab={activeTab}
+          auth={auth}
+          onTabChange={setActiveTab}
+          onAuthChange={setAuth}
+        />
+      </div>
 
       <FolderScopeProvider folderId={folder.id}>
         <div className="flex-1 overflow-y-auto">

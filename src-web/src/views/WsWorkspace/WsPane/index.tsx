@@ -137,51 +137,53 @@ export function WsPane() {
   return (
     <FolderScopeProvider folderId={connection.folderId ?? null}>
       <div className="h-full flex flex-col overflow-hidden">
-        <WsUrlBar
-          urlDraft={urlDraft}
-          setUrlDraft={setUrlDraft}
-          onCommitUrl={() => commitUrl(urlDraft)}
-          onUrlSend={handleUrlSend}
-          onVarClick={handleVarClick}
-          onToggle={() => void onToggle()}
-          onSendMessage={handleSendMessage}
-          onQueryParams={(params) => {
-            setPendingQueryParams(params)
-            setTab("params")
-          }}
-          live={live}
-          open={status === "open"}
-          sendDisabled={!messageDraft.trim()}
-        />
+        <div className="shrink-0 bg-accent/[0.035]">
+          <WsUrlBar
+            urlDraft={urlDraft}
+            setUrlDraft={setUrlDraft}
+            onCommitUrl={() => commitUrl(urlDraft)}
+            onUrlSend={handleUrlSend}
+            onVarClick={handleVarClick}
+            onToggle={() => void onToggle()}
+            onSendMessage={handleSendMessage}
+            onQueryParams={(params) => {
+              setPendingQueryParams(params)
+              setTab("params")
+            }}
+            live={live}
+            open={status === "open"}
+            sendDisabled={!messageDraft.trim()}
+          />
 
-        <div className="px-3.5 border-b border-border flex items-center shrink-0">
-          {TABS.map((t) => (
-            <TabItem
-              key={t}
-              label={wsTabLabel(t, {
-                paramCounts,
-                headers: connection.headers,
-                auth,
-              })}
-              active={tab === t}
-              onClick={() => setTab(t)}
-            />
-          ))}
-          {tab === "message" && (
-            <div className="ml-auto">
-              <WsKindSelect kind={uiKind} onChange={setUiKind} />
-            </div>
-          )}
-          {tab === "auth" && (
-            <div className="ml-auto">
-              <AuthTypeSelect
-                auth={auth}
-                onChange={setAuth}
-                allowInherit
-                protocol="ws"
+          <div className="px-3.5 border-b border-border flex items-center shrink-0">
+            {TABS.map((t) => (
+              <TabItem
+                key={t}
+                label={wsTabLabel(t, {
+                  paramCounts,
+                  headers: connection.headers,
+                  auth,
+                })}
+                active={tab === t}
+                onClick={() => setTab(t)}
               />
-            </div>
-          )}
+            ))}
+            {tab === "message" && (
+              <div className="ml-auto">
+                <WsKindSelect kind={uiKind} onChange={setUiKind} />
+              </div>
+            )}
+            {tab === "auth" && (
+              <div className="ml-auto">
+                <AuthTypeSelect
+                  auth={auth}
+                  onChange={setAuth}
+                  allowInherit
+                  protocol="ws"
+                />
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex-1 min-h-0 overflow-auto">

@@ -65,7 +65,7 @@ export function FolderRunPanel() {
         </div>
       ) : (
         <>
-          <div className="px-3.5 min-h-[40px] border-b border-border flex items-center gap-3 shrink-0">
+          <div className="px-3.5 min-h-[40px] border-b border-border flex items-center gap-3 shrink-0 bg-accent/[0.035]">
             <span className="font-sans text-[0.714rem] uppercase tracking-[1.4px] text-muted/70 font-semibold">
               Run
             </span>

@@ -22,6 +22,7 @@ import {
   selectActiveRequest,
   useRequestStore,
 } from "@/store/requests"
+import { useSnapshotsStore } from "@/store/snapshots"
 import { useUiStore } from "@/store/workspace"
 
 const APP_NAME = "Voleeo"
@@ -57,6 +58,12 @@ export function TopBar() {
   const activeFolder = useRequestStore(selectActiveFolder)
   const activeConnection = useRequestStore(selectActiveConnection)
   const activeGrpc = useRequestStore(selectActiveGrpc)
+  const activeSnapshotId = useRequestStore((s) => s.activeSnapshotId)
+  const activeSnapshotName = useSnapshotsStore((s) =>
+    activeSnapshotId && s.activeSnapshot?.id === activeSnapshotId
+      ? s.activeSnapshot.name
+      : null,
+  )
   const activeEnvColor = useEnvironmentStore((s) => {
     const env = s.environments.find((e) => e.id === s.activeEnvId)
     return env?.color ?? null
@@ -75,6 +82,7 @@ export function TopBar() {
     activeConnection?.name ??
     activeGrpc?.name ??
     activeRequest?.name ??
+    activeSnapshotName ??
     null
   const centerLabel =
     activeTool === "git"

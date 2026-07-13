@@ -141,7 +141,24 @@ pub async fn send_request(
     // resolved here for the executor to sign. The executor only ever acts on
     // `req.auth`, so set it explicitly — `None` when no override (e.g. chained
     // builtin resends, which carry no resolved auth).
-    req.auth = auth_override.unwrap_or(AuthConfig::None);
+    let stored_auth = req.auth.clone();
+    req.auth = auth_override.clone().unwrap_or(AuthConfig::None);
+
+    // `req` is now fully resolved (literal URL/headers/body, no `{{ }}`) — the
+    // authoritative "as sent" record. Cloned here, before the executor runs,
+    // so a later "save as pair" can promote it without re-resolving (which
+    // would regenerate non-deterministic template fns like `uuid.v4()`).
+    let mut resolved_request = req.clone();
+    // For static schemes the frontend folded auth into a header (`auth_override`
+    // is None), leaving the executor-facing `req.auth` as `None`. Keep the
+    // original stored config on the snapshot so its AUTH tab shows the real
+    // scheme — replay ignores it (executor only applies `is_dynamic()` auth; the
+    // folded header carries the static secret). Dynamic schemes keep their
+    // resolved override so replay re-signs them. A disabled scheme was never
+    // sent, so leave it off the snapshot.
+    if auth_override.is_none() && stored_auth.is_active() {
+        resolved_request.auth = stored_auth;
+    }
 
     // Key load is sync I/O → spawn_blocking. Best-effort: unencrypted
     // workspaces have no key, so any `enc:v1:` prefix passes through to the
@@ -354,9 +371,11 @@ pub async fn send_request(
     let ws = workspace_id.clone();
     let rid = request_id.clone();
     let to_store = resp.clone();
-    let stored = tokio::task::spawn_blocking(move || responses.append(&ws, &rid, to_store, limit))
-        .await
-        .map_err(|e| VoleeoError::Storage(e.to_string()))?;
+    let stored = tokio::task::spawn_blocking(move || {
+        responses.append(&ws, &rid, to_store, resolved_request, limit)
+    })
+    .await
+    .map_err(|e| VoleeoError::Storage(e.to_string()))?;
     match stored {
         Ok(s) => Ok(s.response),
         Err(e) => {

@@ -1,6 +1,7 @@
 import type React from "react"
 import { useContext } from "react"
 import { Ctx, DropLine } from "@/components/ApiRequestTree/types"
+import { Glyph } from "@/components/Glyph"
 import { gitChangeColor } from "@/components/tokens"
 import { cn } from "@/lib/utils"
 import { dragAttrs, RenameInput, type RowKind } from "./shared"
@@ -14,6 +15,7 @@ interface Props {
   badge: React.ReactNode
   statusDot?: React.ReactNode
   onActivate: () => void
+  expand?: { open: boolean; onToggle: () => void }
 }
 
 export function LeafRow({
@@ -25,6 +27,7 @@ export function LeafRow({
   badge,
   statusDot,
   onActivate,
+  expand,
 }: Props) {
   const {
     draggingIds,
@@ -62,7 +65,9 @@ export function LeafRow({
         }}
         onDoubleClick={() => {
           if (didDrag.current) return
-          onEnterAction(id, kind)
+
+          if (expand) expand.onToggle()
+          else onEnterAction(id, kind)
         }}
         className={[
           "flex items-center gap-2 py-1.5 pr-3.5 hover:bg-subtle",
@@ -75,6 +80,18 @@ export function LeafRow({
         ].join(" ")}
         style={{ touchAction: "none", paddingLeft: indent + 4 }}
       >
+        {expand && (
+          <span
+            className="-ml-1.5 inline-flex w-[12px] shrink-0 transition-transform duration-100"
+            style={{ transform: expand.open ? "rotate(90deg)" : "none" }}
+            onClick={(e) => {
+              e.stopPropagation()
+              expand.onToggle()
+            }}
+          >
+            <Glyph kind="chevron" size={13} color="var(--base04)" />
+          </span>
+        )}
         {badge}
         {renaming ? (
           <RenameInput id={id} kind={kind} defaultValue={name} />

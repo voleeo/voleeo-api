@@ -33,6 +33,14 @@ export const SHORTCUTS = {
   /** Toggle the left tree panel visibility */
   TOGGLE_TREE: { key: "h", meta: true } satisfies KeyCombo,
 
+  /** Collapse / restore the request pane (left in columns, top in rows). */
+  // biome-ignore format: keep on one line for the file-size budget
+  TOGGLE_REQUEST_PANE: { key: "ArrowLeft", meta: true, alt: true } satisfies KeyCombo,
+
+  /** Collapse / restore the response pane (right in columns, bottom in rows). */
+  // biome-ignore format: keep on one line for the file-size budget
+  TOGGLE_RESPONSE_PANE: { key: "ArrowRight", meta: true, alt: true } satisfies KeyCombo,
+
   /** Open the Settings window. On macOS the native menu accelerator handles
    *  this; Windows/Linux hide the menu, so a frontend handler covers it. */
   SETTINGS: { key: ",", meta: true } satisfies KeyCombo,
@@ -150,6 +158,14 @@ export const SHORTCUT_HELP: {
   {
     combo: SHORTCUTS.TOGGLE_LAYOUT,
     description: "Toggle columns / rows layout",
+  },
+  {
+    combo: SHORTCUTS.TOGGLE_REQUEST_PANE,
+    description: "Collapse / restore the request pane",
+  },
+  {
+    combo: SHORTCUTS.TOGGLE_RESPONSE_PANE,
+    description: "Collapse / restore the response pane",
   },
   {
     combo: SHORTCUTS.GIT_UPDATE,

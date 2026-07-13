@@ -22,12 +22,12 @@ export interface TreeCtx {
   selectRow: (id: string, modifiers: { meta: boolean; shift: boolean }) => void
   onEnterAction: (
     id: string,
-    kind: "folder" | "request" | "websocket" | "grpc",
+    kind: "folder" | "request" | "websocket" | "grpc" | "snapshot",
   ) => void
   renamingId: string | null
   commitRename: (
     id: string,
-    kind: "folder" | "request" | "websocket" | "grpc",
+    kind: "folder" | "request" | "websocket" | "grpc" | "snapshot",
     name: string,
   ) => void
   cancelRename: () => void

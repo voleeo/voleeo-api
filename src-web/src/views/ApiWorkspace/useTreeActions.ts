@@ -96,6 +96,9 @@ export function useTreeActions(
 
     // Reveal in the tree (folders re-fetch via reload, so read fresh).
     revealInTree(item.id, item.folderId, open.folders)
+    // Pull keyboard focus back to the tree so Delete/arrows hit the new row —
+    // the context menu / trigger otherwise strands focus off the container.
+    treeRef.current?.focus()
   }
 
   function handleRollback(target: RollbackTarget, id: string) {

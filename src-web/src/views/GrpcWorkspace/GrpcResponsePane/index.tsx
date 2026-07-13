@@ -93,111 +93,113 @@ export function GrpcResponsePane() {
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-bg">
-      {showHeader && (
-        <ResponseHeader
-          trailing={
-            workspaceId &&
-            id && (
-              <GrpcHistoryPicker
-                workspaceId={workspaceId}
-                requestId={id}
-                mode={streaming ? "session" : "unary"}
-                selectedId={histId}
-                refreshKey={refreshKey}
-                onSelect={onSelectHistory}
-                onClear={onClearHistory}
-              />
-            )
-          }
-        >
-          {viewing && <HistoryTag />}
-          <StatusBadge
-            loading={!!loading}
-            streaming={streaming}
-            status={status}
-            error={error}
-            response={response}
-            msgCount={messages.length}
-          />
-        </ResponseHeader>
-      )}
-
-      <div className="pt-1.5 px-3.5 border-b border-border flex shrink-0">
-        {streaming ? (
-          <>
-            <TabItem
-              label="TRANSCRIPT"
-              active={streamTab === "transcript"}
-              onClick={() => setStreamTab("transcript")}
-            />
-            <TabItem
-              label="TIMELINE"
-              active={streamTab === "timeline"}
-              onClick={() => setStreamTab("timeline")}
-            />
-            {streamTab === "transcript" && (
-              <TranscriptToolbar view={transcript} count={messages.length} />
-            )}
-          </>
-        ) : (
-          <>
-            <TabItem
-              label="RESPONSE"
-              active={unaryTab === "response"}
-              onClick={() => setUnaryTab("response")}
-            />
-            <TabItem
-              label={countLabel("METADATA", response?.metadata?.length ?? 0)}
-              active={unaryTab === "metadata"}
-              onClick={() => setUnaryTab("metadata")}
-            />
-            <TabItem
-              label={countLabel("TRAILERS", response?.trailers?.length ?? 0)}
-              active={unaryTab === "trailers"}
-              onClick={() => setUnaryTab("trailers")}
-            />
-            <TabItem
-              label={
-                response ? (
-                  <>
-                    TIMING{" "}
-                    <span className="font-normal opacity-40 tracking-normal">
-                      {formatDuration(response.totalMs ?? 0)}
-                    </span>
-                  </>
-                ) : (
-                  "TIMING"
-                )
-              }
-              active={unaryTab === "timing"}
-              onClick={() => setUnaryTab("timing")}
-            />
-            {unaryTab === "response" && response?.message !== undefined && (
-              <div className="ml-auto flex items-center gap-1 pr-0.5">
-                <IconToggle
-                  glyph="filter"
-                  title="Filter (JSONPath)"
-                  active={codeTools.filterOpen}
-                  onClick={() =>
-                    codeTools.filterOpen
-                      ? codeTools.closeFilter()
-                      : codeTools.openFilter()
-                  }
+      <div className="shrink-0 bg-accent/[0.035]">
+        {showHeader && (
+          <ResponseHeader
+            trailing={
+              workspaceId &&
+              id && (
+                <GrpcHistoryPicker
+                  workspaceId={workspaceId}
+                  requestId={id}
+                  mode={streaming ? "session" : "unary"}
+                  selectedId={histId}
+                  refreshKey={refreshKey}
+                  onSelect={onSelectHistory}
+                  onClear={onClearHistory}
                 />
-                <IconToggle
-                  glyph="search"
-                  title="Find in response"
-                  active={codeTools.findOpen}
-                  onClick={() =>
-                    codeTools.findOpen
-                      ? codeTools.closeFind()
-                      : codeTools.openFind()
-                  }
-                />
-              </div>
-            )}
-          </>
+              )
+            }
+          >
+            {viewing && <HistoryTag />}
+            <StatusBadge
+              loading={!!loading}
+              streaming={streaming}
+              status={status}
+              error={error}
+              response={response}
+              msgCount={messages.length}
+            />
+          </ResponseHeader>
         )}
+
+        <div className="pt-1.5 px-3.5 border-b border-border flex shrink-0">
+          {streaming ? (
+            <>
+              <TabItem
+                label="TRANSCRIPT"
+                active={streamTab === "transcript"}
+                onClick={() => setStreamTab("transcript")}
+              />
+              <TabItem
+                label="TIMELINE"
+                active={streamTab === "timeline"}
+                onClick={() => setStreamTab("timeline")}
+              />
+              {streamTab === "transcript" && (
+                <TranscriptToolbar view={transcript} count={messages.length} />
+              )}
+            </>
+          ) : (
+            <>
+              <TabItem
+                label="RESPONSE"
+                active={unaryTab === "response"}
+                onClick={() => setUnaryTab("response")}
+              />
+              <TabItem
+                label={countLabel("METADATA", response?.metadata?.length ?? 0)}
+                active={unaryTab === "metadata"}
+                onClick={() => setUnaryTab("metadata")}
+              />
+              <TabItem
+                label={countLabel("TRAILERS", response?.trailers?.length ?? 0)}
+                active={unaryTab === "trailers"}
+                onClick={() => setUnaryTab("trailers")}
+              />
+              <TabItem
+                label={
+                  response ? (
+                    <>
+                      TIMING{" "}
+                      <span className="font-normal opacity-40 tracking-normal">
+                        {formatDuration(response.totalMs ?? 0)}
+                      </span>
+                    </>
+                  ) : (
+                    "TIMING"
+                  )
+                }
+                active={unaryTab === "timing"}
+                onClick={() => setUnaryTab("timing")}
+              />
+              {unaryTab === "response" && response?.message !== undefined && (
+                <div className="ml-auto flex items-center gap-1 pr-0.5">
+                  <IconToggle
+                    glyph="filter"
+                    title="Filter (JSONPath)"
+                    active={codeTools.filterOpen}
+                    onClick={() =>
+                      codeTools.filterOpen
+                        ? codeTools.closeFilter()
+                        : codeTools.openFilter()
+                    }
+                  />
+                  <IconToggle
+                    glyph="search"
+                    title="Find in response"
+                    active={codeTools.findOpen}
+                    onClick={() =>
+                      codeTools.findOpen
+                        ? codeTools.closeFind()
+                        : codeTools.openFind()
+                    }
+                  />
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">

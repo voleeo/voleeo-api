@@ -75,7 +75,7 @@ export function DiffView({ patch }: { patch: string }) {
           >
             {r.sign === "+" || r.sign === "-" ? r.sign : ""}
           </span>
-          <span className="whitespace-pre-wrap break-words text-fg">
+          <span className="selectable-text whitespace-pre-wrap break-words text-fg">
             {r.text}
           </span>
         </div>
