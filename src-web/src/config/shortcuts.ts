@@ -34,18 +34,12 @@ export const SHORTCUTS = {
   TOGGLE_TREE: { key: "h", meta: true } satisfies KeyCombo,
 
   /** Collapse / restore the request pane (left in columns, top in rows). */
-  TOGGLE_REQUEST_PANE: {
-    key: "ArrowLeft",
-    meta: true,
-    alt: true,
-  } satisfies KeyCombo,
+  // biome-ignore format: keep on one line for the file-size budget
+  TOGGLE_REQUEST_PANE: { key: "ArrowLeft", meta: true, alt: true } satisfies KeyCombo,
 
   /** Collapse / restore the response pane (right in columns, bottom in rows). */
-  TOGGLE_RESPONSE_PANE: {
-    key: "ArrowRight",
-    meta: true,
-    alt: true,
-  } satisfies KeyCombo,
+  // biome-ignore format: keep on one line for the file-size budget
+  TOGGLE_RESPONSE_PANE: { key: "ArrowRight", meta: true, alt: true } satisfies KeyCombo,
 
   /** Open the Settings window. On macOS the native menu accelerator handles
    *  this; Windows/Linux hide the menu, so a frontend handler covers it. */

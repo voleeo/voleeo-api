@@ -30,7 +30,6 @@ import { useCodeTools } from "./useCodeTools"
 import { useHistorySync } from "./useHistorySync"
 
 const NO_FRAMES: never[] = []
-const NO_EVENTS: never[] = []
 
 export function ResponsePane() {
   const activeRequestId = useRequestStore((s) => s.activeRequestId)
@@ -99,8 +98,8 @@ export function ResponsePane() {
   )
   const liveHeader = isLive ? sseOpen : undefined
   const timelineEvents = isLive
-    ? (liveTimeline ?? NO_EVENTS)
-    : (response?.events ?? NO_EVENTS)
+    ? (liveTimeline ?? NO_FRAMES)
+    : (response?.events ?? NO_FRAMES)
 
   const streamError =
     timelineEvents.find((e) => e.kind === "error")?.text ?? null

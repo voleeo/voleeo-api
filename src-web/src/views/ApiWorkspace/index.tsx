@@ -1,6 +1,5 @@
 import { useRef, useState } from "react"
-import { Glyph } from "@/components/Glyph"
-import { formatKeyCombo, SHORTCUTS } from "@/config/shortcuts"
+import { SHORTCUTS } from "@/config/shortcuts"
 import { useKeydown } from "@/hooks/useKeydown"
 import { cn } from "@/lib/utils"
 import { useRequestStore } from "@/store/requests"
@@ -14,71 +13,12 @@ import { FolderPane } from "./FolderPane"
 import { FolderRunPanel } from "./FolderRunPanel"
 import { GraphqlDocsRail } from "./GraphqlDocsRail"
 import { PaneSeparator } from "./PaneSeparator"
+import { CollapsedPaneStrip, EmptyWorkspace, NoSelection } from "./paneChrome"
 import { RequestPane } from "./RequestPane"
 import { RequestTreePane } from "./RequestTreePane"
 import { ResponsePane } from "./ResponsePane"
 import { SnapshotResponsePane, SnapshotView } from "./SnapshotView"
 import { usePaneDrag } from "./usePaneDrag"
-
-function EmptyWorkspace() {
-  return (
-    <div className="h-full flex flex-col items-center justify-center gap-2 text-center px-8">
-      <p className="font-sans text-[1rem] text-fg">No requests yet</p>
-      <p className="font-mono text-[0.857rem] text-muted">
-        Press{" "}
-        <kbd className="px-1.5 py-0.5 rounded border border-border bg-surface font-mono text-[0.857rem] tracking-[0.2em] text-fg">
-          {formatKeyCombo(SHORTCUTS.NEW_ITEM)}
-        </kbd>{" "}
-        to create your first request
-      </p>
-    </div>
-  )
-}
-
-const STRIP = {
-  left: { glyph: "arrow-line-right", border: "border-r border-border" },
-  right: { glyph: "arrow-line-left", border: "border-l border-border" },
-  top: { glyph: "arrow-line-down", border: "border-b border-border" },
-  bottom: { glyph: "arrow-line-up", border: "border-t border-border" },
-} as const
-
-function CollapsedPaneStrip({
-  side,
-  onExpand,
-}: {
-  side: keyof typeof STRIP
-  onExpand: () => void
-}) {
-  const vertical = side === "left" || side === "right"
-  return (
-    <div
-      className={cn(
-        "shrink-0 flex bg-bg",
-        vertical
-          ? "w-8 h-full items-start justify-center pt-2.5"
-          : "h-8 w-full items-center justify-start pl-2.5",
-        STRIP[side].border,
-      )}
-    >
-      <button
-        type="button"
-        title="Expand pane"
-        onClick={onExpand}
-        className="p-1 rounded text-muted hover:text-fg hover:bg-subtle cursor-pointer"
-      >
-        <Glyph kind={STRIP[side].glyph} size={16} />
-      </button>
-    </div>
-  )
-}
-
-function NoSelection() {
-  return (
-    <div className="h-full flex items-center justify-center text-center px-8">
-      <p className="font-mono text-[0.857rem] text-muted">Select a request</p>
-    </div>
-  )
-}
 
 export function ApiWorkspace() {
   const activeWorkspaceId = useUiStore((s) => s.activeWorkspaceId)
@@ -96,13 +36,12 @@ export function ApiWorkspace() {
   const wsId = activeWorkspaceId ?? "default"
   const isColumns = panelLayout === "columns"
 
-  // Which of the center/response panes is collapsed to a thin strip (columns layout only)
+  // Which center/response pane is collapsed to a strip (columns layout only).
   const [collapsed, setCollapsed] = useState<"none" | "center" | "response">(
     "none",
   )
 
-  // An open snapshot renders only when no other entity is active — same lowest
-  // precedence as its slot in the center chain (see requests store types).
+  // A snapshot renders only when no other entity is active (lowest precedence).
   const showSnapshot = Boolean(
     activeSnapshotId &&
       !activeFolderId &&
@@ -111,8 +50,7 @@ export function ApiWorkspace() {
       !activeRequestId,
   )
 
-  // The request/response chrome (URL bar, tabs, response pane) only renders when
-  // something is selected; otherwise the center shows a bare placeholder.
+  // Chrome (URL bar, tabs, response) renders only when something is selected.
   const hasSelection = Boolean(
     activeFolderId ||
       activeConnectionId ||
@@ -157,7 +95,6 @@ export function ApiWorkspace() {
     <ResponsePane />
   )
 
-  // Container refs — each layout passes its own ref to the drag hook
   const colRef = useRef<HTMLDivElement>(null)
   const rowRef = useRef<HTMLDivElement>(null)
   const innerRef = useRef<HTMLDivElement>(null)
@@ -303,7 +240,6 @@ export function ApiWorkspace() {
       </div>
     </div>
   )
-
   return (
     <div className="h-full flex overflow-hidden bg-bg">
       <div className="flex-1 min-w-0 h-full overflow-hidden">{layout}</div>
