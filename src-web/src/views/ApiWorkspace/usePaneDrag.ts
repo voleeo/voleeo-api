@@ -1,17 +1,27 @@
 import type React from "react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { patchSettings } from "@/lib/workspaceSettings"
+import { useUiStore } from "@/store/workspace"
 import type { WorkspaceSettings } from "../../../../packages/types/bindings"
 import { commands } from "../../../../packages/types/bindings"
 
-// Pixel minimums for each pane
-const TREE_MIN = 160
-const REQUEST_MIN = 380
-const RESPONSE_MIN = 380
-const ROW_TREE_MIN = 160
-const ROW_RIGHT_MIN = 400
-const ROW_REQUEST_MIN = 180
-const ROW_RESPONSE_MIN = 150
+// Dragging the tree separator narrower than this collapses the tree entirely.
+const TREE_COLLAPSE_PX = 80
+
+// Dragging the center↔response separator until either pane is narrower than this
+// collapses that pane to a strip.
+const PANE_COLLAPSE_PX = 75
+
+// Pixel minimums for each pane. All are unconstrained (0) so separators drag
+// freely; the tree instead collapses entirely once it shrinks past
+// `TREE_COLLAPSE_PX` (handled in onMove).
+const TREE_MIN = 0
+const REQUEST_MIN = 0
+const RESPONSE_MIN = 0
+const ROW_TREE_MIN = 0
+const ROW_RIGHT_MIN = 0
+const ROW_REQUEST_MIN = 0
+const ROW_RESPONSE_MIN = 0
 
 // Internal type with non-nullable numbers (PanelSizes fields are number|null from specta)
 type Sizes = {
@@ -61,7 +71,12 @@ export function usePaneDrag(
   colRef: React.RefObject<HTMLDivElement | null>,
   rowRef: React.RefObject<HTMLDivElement | null>,
   innerRef: React.RefObject<HTMLDivElement | null>,
+  // Dragging the center↔response separator until one side shrinks past
+  // PANE_COLLAPSE_PX collapses that side (request or response) to a strip.
+  onCollapse?: (which: "center" | "response") => void,
 ) {
+  const onCollapseRef = useRef(onCollapse)
+  onCollapseRef.current = onCollapse
   const [sizes, setSizes] = useState<Sizes>(
     () => sizeCache.get(wsId) ?? DEFAULTS,
   )
@@ -100,6 +115,66 @@ export function usePaneDrag(
       const pos = d.dir === "h" ? e.clientX : e.clientY
       const delta = ((pos - d.startPos) / d.containerSize) * 100
       const cw = d.containerSize
+
+      // Tree separator dragged below the collapse threshold → hide the tree and
+      // end the drag. Reset the stored width so it reopens at a sane size.
+      if (d.sep === "colSep1" || d.sep === "rowOuter") {
+        const rawPx = ((d.startPct + delta) / 100) * cw
+        if (rawPx < TREE_COLLAPSE_PX) {
+          dragRef.current = null
+          document.body.style.cursor = ""
+          document.body.style.userSelect = ""
+          const reset: Sizes =
+            d.sep === "colSep1"
+              ? { ...sizesRef.current, colPane1: DEFAULTS.colPane1 }
+              : { ...sizesRef.current, rowTree: DEFAULTS.rowTree }
+          sizesRef.current = reset
+          setSizes(reset)
+          sizeCache.set(wsIdRef.current, reset)
+          patchSettings(wsIdRef.current, { panelSizes: reset })
+          const ui = useUiStore.getState()
+          if (ui.treeVisible) ui.toggleTreeVisible()
+          return
+        }
+      }
+
+      // Center↔response separator dragged until one side is too small → collapse
+      // that side to a strip and reset its stored size so it re-expands sanely.
+      if (
+        (d.sep === "colSep2" || d.sep === "rowInner") &&
+        onCollapseRef.current
+      ) {
+        let centerPx: number
+        let responsePx: number
+        if (d.sep === "colSep2") {
+          const p3 = d.startPct - delta // response %
+          responsePx = (p3 / 100) * cw
+          centerPx = ((100 - d.fixedPct - p3) / 100) * cw // fixedPct = colPane1
+        } else {
+          const pi = d.startPct + delta // center (top) %; cw is the height here
+          centerPx = (pi / 100) * cw
+          responsePx = ((100 - pi) / 100) * cw
+        }
+        const which =
+          responsePx < PANE_COLLAPSE_PX
+            ? "response"
+            : centerPx < PANE_COLLAPSE_PX
+              ? "center"
+              : null
+        if (which) {
+          dragRef.current = null
+          document.body.style.cursor = ""
+          document.body.style.userSelect = ""
+          const key = d.sep === "colSep2" ? "colPane3" : "rowInner"
+          const reset: Sizes = { ...sizesRef.current, [key]: DEFAULTS[key] }
+          sizesRef.current = reset
+          setSizes(reset)
+          sizeCache.set(wsIdRef.current, reset)
+          patchSettings(wsIdRef.current, { panelSizes: reset })
+          onCollapseRef.current(which)
+          return
+        }
+      }
 
       setSizes((prev) => {
         let next: Sizes = prev
@@ -188,6 +263,42 @@ export function usePaneDrag(
     }
   }
 
+  // Double-click a separator to reset it: the tree separator snaps the tree to
+  // a fixed 260px; the request/response separator splits its two panes 50/50.
+  const TREE_RESET_PX = 260
+  function centerSep(sep: SepId) {
+    setSizes((prev) => {
+      let next: Sizes = prev
+      if (sep === "colSep1") {
+        const w = colRef.current?.offsetWidth ?? 1000
+        const pct = clamp((TREE_RESET_PX / w) * 100, 0, 100 - prev.colPane3)
+        next = { ...prev, colPane1: pct }
+      } else if (sep === "colSep2") {
+        next = { ...prev, colPane3: (100 - prev.colPane1) / 2 }
+      } else if (sep === "rowOuter") {
+        const w = rowRef.current?.offsetWidth ?? 1000
+        next = { ...prev, rowTree: clamp((TREE_RESET_PX / w) * 100, 0, 100) }
+      } else {
+        next = { ...prev, rowInner: 50 }
+      }
+      sizesRef.current = next
+      return next
+    })
+    const s = sizesRef.current
+    const id = wsIdRef.current
+    sizeCache.set(id, s)
+    patchSettings(id, { panelSizes: s })
+  }
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reads only stable refs
+  const onColSep1DoubleClick = useCallback(() => centerSep("colSep1"), [])
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reads only stable refs
+  const onColSep2DoubleClick = useCallback(() => centerSep("colSep2"), [])
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reads only stable refs
+  const onRowOuterDoubleClick = useCallback(() => centerSep("rowOuter"), [])
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reads only stable refs
+  const onRowInnerDoubleClick = useCallback(() => centerSep("rowInner"), [])
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: startDrag reads only stable refs; no reactive deps
   const onColSep1Down = useCallback(
     (e: React.MouseEvent) => startDrag(e, "colSep1"),
@@ -215,5 +326,9 @@ export function usePaneDrag(
     onColSep2Down,
     onRowOuterSepDown,
     onRowInnerSepDown,
+    onColSep1DoubleClick,
+    onColSep2DoubleClick,
+    onRowOuterDoubleClick,
+    onRowInnerDoubleClick,
   }
 }
