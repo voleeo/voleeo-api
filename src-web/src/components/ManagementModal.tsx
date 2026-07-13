@@ -47,8 +47,8 @@ export function ManagementModal({
       <div
         style={{ width }}
         className={cn(
-          "bg-surface border border-border rounded-xl shadow-[0_12px_48px_rgba(0,0,0,0.6)] max-w-[96vw] h-auto max-h-[88vh] flex flex-col overflow-hidden transition-[width] duration-200 ease-out",
-          !fitContent && "min-h-[65vh]",
+          "bg-surface border border-border rounded-xl shadow-[0_12px_48px_rgba(0,0,0,0.6)] max-w-[96vw] flex flex-col overflow-hidden transition-[width] duration-200 ease-out",
+          fitContent ? "h-auto max-h-[88vh]" : "h-[80vh]",
         )}
         onClick={(e) => e.stopPropagation()}
       >

@@ -100,7 +100,7 @@ export function EnvironmentsModal({
         </span>
       }
     >
-      <div className="w-60 border-r border-border flex flex-col shrink-0 py-3 gap-y-1">
+      <div className="w-60 border-r border-border flex flex-col shrink-0 py-3 gap-y-1 overflow-y-auto">
         {globalEnv && (
           <>
             <NavEnvItem
@@ -148,7 +148,7 @@ export function EnvironmentsModal({
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-5">
+      <div className="flex-1 min-h-0 overflow-hidden p-5">
         {selectedEnv ? (
           <EnvPane
             key={selectedEnv.id}
