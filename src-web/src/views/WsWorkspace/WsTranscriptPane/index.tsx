@@ -82,70 +82,72 @@ export function WsTranscriptPane() {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      <ResponseHeader
-        trailing={
-          <WsHistoryPicker
-            workspaceId={workspaceId}
-            connectionId={id}
-            selectedId={selectedSessionId}
-            refreshKey={refreshKey}
-            live={live}
-            onSelect={(sessionId, isLatest) =>
-              setSelectedSessionId(isLatest ? null : sessionId)
-            }
-            onClear={() => setSelectedSessionId(null)}
-          />
-        }
-      >
-        <StatusPill className={cn(pill.className, pill.textClass)}>
-          {(status === "connecting" || status === "closing") && (
-            <Spinner className="size-3 shrink-0" aria-label="Connecting" />
-          )}
-          {pill.label}
-        </StatusPill>
-        <div className="font-mono text-[0.75rem] text-muted">
-          {viewMessages.length}{" "}
-          {viewMessages.length === 1 ? "message" : "messages"}
-        </div>
-        {historical && <HistoryTag />}
-      </ResponseHeader>
+      <div className="shrink-0 bg-accent/[0.035]">
+        <ResponseHeader
+          trailing={
+            <WsHistoryPicker
+              workspaceId={workspaceId}
+              connectionId={id}
+              selectedId={selectedSessionId}
+              refreshKey={refreshKey}
+              live={live}
+              onSelect={(sessionId, isLatest) =>
+                setSelectedSessionId(isLatest ? null : sessionId)
+              }
+              onClear={() => setSelectedSessionId(null)}
+            />
+          }
+        >
+          <StatusPill className={cn(pill.className, pill.textClass)}>
+            {(status === "connecting" || status === "closing") && (
+              <Spinner className="size-3 shrink-0" aria-label="Connecting" />
+            )}
+            {pill.label}
+          </StatusPill>
+          <div className="font-mono text-[0.75rem] text-muted">
+            {viewMessages.length}{" "}
+            {viewMessages.length === 1 ? "message" : "messages"}
+          </div>
+          {historical && <HistoryTag />}
+        </ResponseHeader>
 
-      <div className="pt-1.5 px-3.5 border-b border-border flex shrink-0">
-        <TabItem
-          label={
-            viewMessages.length > 0 ? (
-              <>
-                TRANSCRIPT{" "}
-                <span className="font-normal opacity-40 tracking-normal">
-                  {viewMessages.length}
-                </span>
-              </>
-            ) : (
-              "TRANSCRIPT"
-            )
-          }
-          active={tab === "transcript"}
-          onClick={() => setTab("transcript")}
-        />
-        <TabItem
-          label={
-            viewTimeline.length > 0 ? (
-              <>
-                TIMELINE{" "}
-                <span className="font-normal opacity-40 tracking-normal">
-                  {viewTimeline.length}
-                </span>
-              </>
-            ) : (
-              "TIMELINE"
-            )
-          }
-          active={tab === "timeline"}
-          onClick={() => setTab("timeline")}
-        />
-        {tab === "transcript" && (
-          <TranscriptToolbar view={transcript} count={viewMessages.length} />
-        )}
+        <div className="pt-1.5 px-3.5 border-b border-border flex shrink-0">
+          <TabItem
+            label={
+              viewMessages.length > 0 ? (
+                <>
+                  TRANSCRIPT{" "}
+                  <span className="font-normal opacity-40 tracking-normal">
+                    {viewMessages.length}
+                  </span>
+                </>
+              ) : (
+                "TRANSCRIPT"
+              )
+            }
+            active={tab === "transcript"}
+            onClick={() => setTab("transcript")}
+          />
+          <TabItem
+            label={
+              viewTimeline.length > 0 ? (
+                <>
+                  TIMELINE{" "}
+                  <span className="font-normal opacity-40 tracking-normal">
+                    {viewTimeline.length}
+                  </span>
+                </>
+              ) : (
+                "TIMELINE"
+              )
+            }
+            active={tab === "timeline"}
+            onClick={() => setTab("timeline")}
+          />
+          {tab === "transcript" && (
+            <TranscriptToolbar view={transcript} count={viewMessages.length} />
+          )}
+        </div>
       </div>
 
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
