@@ -159,7 +159,7 @@ function StatusBar({
   total: number
 }) {
   return (
-    <div className="flex items-center gap-3.5 px-4 py-2 border-t border-border shrink-0 font-mono text-[0.7rem] text-muted/70">
+    <div className="flex items-center gap-3.5 px-4 h-[32px] border-t border-border shrink-0 font-mono text-[0.7rem] text-muted/70 bg-accent/[0.035]">
       <span
         className={cn(
           "inline-flex items-center gap-1.5",
