@@ -8,6 +8,7 @@ import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog"
 import { SHORTCUTS } from "@/config/shortcuts"
 import { useKeydown } from "@/hooks/useKeydown"
 import { useRequestStore } from "@/store/requests"
+import { useSnapshotsStore } from "@/store/snapshots"
 import { useTreeUiStore } from "@/store/treeUi"
 import { useUiStore } from "@/store/workspace"
 import { DeleteDialogs } from "./DeleteDialogs"
@@ -28,6 +29,7 @@ export function RequestTreePane() {
     requests,
     folders,
     activeRequestId,
+    activeSnapshotId,
     load,
     setActiveRequest,
     moveItems,
@@ -37,11 +39,13 @@ export function RequestTreePane() {
       requests: s.requests,
       folders: s.folders,
       activeRequestId: s.activeRequestId,
+      activeSnapshotId: s.activeSnapshotId,
       load: s.load,
       setActiveRequest: s.setActiveRequest,
       moveItems: s.moveItems,
     })),
   )
+  const snapshotsByRequest = useSnapshotsStore((s) => s.byRequest)
 
   const [query, setQuery] = useState("")
   const [searchVisible, setSearchVisible] = useState(false)
@@ -65,7 +69,10 @@ export function RequestTreePane() {
   useKeydown(SHORTCUTS.EXPAND_ALL, expandAll)
 
   useEffect(() => {
-    if (activeWorkspaceId) load(activeWorkspaceId)
+    if (activeWorkspaceId) {
+      load(activeWorkspaceId)
+      useSnapshotsStore.getState().load(activeWorkspaceId)
+    }
   }, [activeWorkspaceId, load])
 
   // Switching workspaces clears the search — the prior query (and its results) are meaningless in the new tree.
@@ -84,8 +91,18 @@ export function RequestTreePane() {
     )
   }, [query, requests])
 
+  const filteredSnapshots = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return []
+
+    return Object.values(snapshotsByRequest)
+      .flat()
+      .filter((p) => p.name.toLowerCase().includes(q))
+  }, [query, snapshotsByRequest])
+
   function handlePaneKeyDown(e: React.KeyboardEvent) {
     if (actions.isBlocking) return
+    if (e.key === " ") return
     if (e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1) return
     const target = e.target as HTMLElement
     if (
@@ -113,6 +130,17 @@ export function RequestTreePane() {
     setSearchVisible(false)
   }
 
+  function handleSelectSnapshot(snapshotId: string) {
+    if (!activeWorkspaceId) return
+    const treeUi = useTreeUiStore.getState()
+    treeUi.clearSelection()
+    treeUi.setFocusedNodeId(null)
+    useRequestStore.getState().setActiveSnapshot(snapshotId)
+    useSnapshotsStore.getState().openSnapshot(activeWorkspaceId, snapshotId)
+    setQuery("")
+    setSearchVisible(false)
+  }
+
   return (
     <div
       className="w-full h-full flex flex-col overflow-hidden"
@@ -136,9 +164,12 @@ export function RequestTreePane() {
         {query.trim() ? (
           <FilteredResults
             requests={filteredRequests}
+            snapshots={filteredSnapshots}
             folders={folders}
             activeRequestId={activeRequestId}
+            activeSnapshotId={activeSnapshotId}
             onSelect={handleSelectFiltered}
+            onSelectSnapshot={handleSelectSnapshot}
           />
         ) : (
           <ApiRequestTree

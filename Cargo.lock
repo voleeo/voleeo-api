@@ -6931,6 +6931,7 @@ dependencies = [
  "tokio",
  "ulid",
  "voleeo-core",
+ "voleeo-crypto",
 ]
 
 [[package]]

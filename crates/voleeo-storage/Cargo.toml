@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 voleeo-core = { path = "../voleeo-core" }
+voleeo-crypto = { path = "../voleeo-crypto" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_json_path = { workspace = true }

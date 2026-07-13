@@ -28,6 +28,10 @@ export interface RequestStore {
   activeConnectionId: string | null
   /** Mutually exclusive with the other `active*Id` fields. */
   activeGrpcId: string | null
+  /** Open saved pair (read-only view). Lowest render precedence: any other
+   *  `active*Id` wins the center pane, so direct crud writes to those fields
+   *  don't need to clear this one. */
+  activeSnapshotId: string | null
   loadedWorkspaceId: string | null
   /** Recently-activated nodes of any type (HTTP / WS / gRPC), most-recent-first. */
   recentNodeIds: string[]
@@ -43,6 +47,7 @@ export interface RequestStore {
   setActiveFolder: (id: string | null) => void
   setActiveConnection: (id: string | null) => void
   setActiveGrpc: (id: string | null) => void
+  setActiveSnapshot: (id: string | null) => void
   focusFolderVariable: (folderId: string, key: string) => void
   focusFolderHeader: (folderId: string, key: string) => void
   consumePendingFolderFocus: () => void

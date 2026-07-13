@@ -32,6 +32,7 @@ interface Props {
   showCodeTools: boolean
   canFilter: boolean
   codeTools: CodeTools
+  showTiming?: boolean
 }
 
 export function ResponseTabBar({
@@ -50,9 +51,10 @@ export function ResponseTabBar({
   showCodeTools,
   canFilter,
   codeTools,
+  showTiming = true,
 }: Props) {
   return (
-    <div className="pt-1.5 px-3.5 border-b border-border flex">
+    <div className="pt-1.5 px-3.5 border-b border-border flex shrink-0 min-w-[220px]">
       <TabItem
         label={
           isSse && frameCount > 0 ? (
@@ -92,19 +94,21 @@ export function ResponseTabBar({
         active={tab === "cookies"}
         onClick={() => setTab("cookies")}
       />
-      <TabItem
-        label={
-          timingMs !== null ? (
-            <>
-              TIMING <Count value={formatDuration(timingMs)} />
-            </>
-          ) : (
-            "TIMING"
-          )
-        }
-        active={tab === "timeline"}
-        onClick={() => setTab("timeline")}
-      />
+      {showTiming && (
+        <TabItem
+          label={
+            timingMs !== null ? (
+              <>
+                TIMING <Count value={formatDuration(timingMs)} />
+              </>
+            ) : (
+              "TIMING"
+            )
+          }
+          active={tab === "timeline"}
+          onClick={() => setTab("timeline")}
+        />
+      )}
       {tab === "body" && isHtml && (
         <div className="ml-auto flex items-center gap-0.5 pr-0.5">
           {(["preview", "raw"] as const).map((m) => (

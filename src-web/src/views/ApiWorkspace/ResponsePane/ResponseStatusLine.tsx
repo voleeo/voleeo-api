@@ -22,11 +22,13 @@ function StatusAndStats({
   statusText,
   durationMs,
   bytes,
+  hideTiming,
 }: {
   status: number
   statusText: string
   durationMs: number
   bytes: number
+  hideTiming?: boolean
 }) {
   return (
     <>
@@ -39,9 +41,13 @@ function StatusAndStats({
       >
         {status} {statusText || "—"}
       </StatusPill>
-      <div className="flex items-center font-mono text-[0.75rem] text-muted min-w-0">
-        <span>{formatDuration(durationMs)}</span>
-        <Dot size={13} />
+      <div className="flex items-center font-mono text-[0.75rem] text-muted min-w-0 whitespace-nowrap shrink-0">
+        {!hideTiming && (
+          <>
+            <span>{formatDuration(durationMs)}</span>
+            <Dot size={13} />
+          </>
+        )}
         <span>{formatBytes(bytes)}</span>
       </div>
     </>
@@ -58,6 +64,7 @@ interface Props {
   historicalResponse: HttpResponse | null
   isLatestHistory: boolean
   selectedHistoryRecordedAt: string | null
+  hideTiming?: boolean
 }
 
 export function ResponseStatusLine({
@@ -70,6 +77,7 @@ export function ResponseStatusLine({
   historicalResponse,
   isLatestHistory,
   selectedHistoryRecordedAt,
+  hideTiming,
 }: Props) {
   if (error) {
     return (
@@ -116,8 +124,9 @@ export function ResponseStatusLine({
         <StatusAndStats
           status={response.status}
           statusText={response.statusText}
-          durationMs={response.timing.totalMs ?? 0}
+          durationMs={response.timing?.totalMs ?? 0}
           bytes={response.bodySize}
+          hideTiming={hideTiming}
         />
         {response.redirectWarning && (
           <RedirectWarningBadge info={response.redirectWarning} />

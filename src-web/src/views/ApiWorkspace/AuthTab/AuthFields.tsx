@@ -24,6 +24,7 @@ interface Props {
   setAuth: SetAuth
   onVarClick: (varName: string) => void
   protocol?: AuthProtocol
+  hideToggle?: boolean
 }
 
 function FieldGroup({ auth, setAuth, onVarClick }: Props) {
@@ -65,16 +66,24 @@ function FieldGroup({ auth, setAuth, onVarClick }: Props) {
   }
 }
 
-export function AuthFields({ auth, setAuth, onVarClick, protocol }: Props) {
+export function AuthFields({
+  auth,
+  setAuth,
+  onVarClick,
+  protocol,
+  hideToggle,
+}: Props) {
   if (!isConcreteScheme(auth.kind)) return null
   const httpOnly = !protocol && !schemeSupports(auth.kind, "grpc")
   const enabled = isAuthEnabled(auth)
   return (
     <div className="relative flex flex-col gap-4">
-      <AuthToggleButton
-        enabled={enabled}
-        onChange={(next) => setAuth(setAuthEnabled(auth, next))}
-      />
+      {!hideToggle && (
+        <AuthToggleButton
+          enabled={enabled}
+          onChange={(next) => setAuth(setAuthEnabled(auth, next))}
+        />
+      )}
       {httpOnly && (
         <WarningBlock className="mr-8">
           <span className="font-semibold">HTTP only.</span> gRPC and WebSocket

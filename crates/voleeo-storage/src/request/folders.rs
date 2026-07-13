@@ -230,6 +230,31 @@ impl RequestStore {
         Ok(())
     }
 
+    /// Every request id that `delete_folder_cascade(id)` would remove — direct
+    /// children plus everything under nested subfolders. Read-only; callers
+    /// (e.g. the Tauri layer, to cascade-delete each request's saved pairs)
+    /// use this to act on the doomed set *before* the cascade runs.
+    pub fn descendant_request_ids(
+        &self,
+        workspace_id: &str,
+        folder_id: &str,
+    ) -> Result<Vec<String>, VoleeoError> {
+        let requests = self.list_requests(workspace_id)?;
+        let mut ids: Vec<String> = requests
+            .iter()
+            .filter(|r| r.folder_id.as_deref() == Some(folder_id))
+            .map(|r| r.id.clone())
+            .collect();
+        let folders = self.list_folders(workspace_id)?;
+        for folder in folders
+            .iter()
+            .filter(|f| f.folder_id.as_deref() == Some(folder_id))
+        {
+            ids.extend(self.descendant_request_ids(workspace_id, &folder.id)?);
+        }
+        Ok(ids)
+    }
+
     pub fn delete_folder_cascade(&self, workspace_id: &str, id: &str) -> Result<(), VoleeoError> {
         let requests = self.list_requests(workspace_id)?;
         for req in requests

@@ -199,7 +199,7 @@ export function AuthToggleButton({
       }
       onClick={() => onChange(!enabled)}
       className={cn(
-        "absolute top-0 right-0 z-10 p-1 rounded-[3px] border bg-transparent cursor-pointer transition-colors",
+        "absolute top-0 right-0 z-10 p-1 rounded-[3px] border bg-transparent cursor-pointer transition-colors flex items-center justify-center",
         enabled
           ? "border-border text-muted hover:text-success hover:border-success/70"
           : "border-error/40 text-error hover:border-error/70",

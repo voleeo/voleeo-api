@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react"
 import { EmptyPaneShortcuts } from "@/components/EmptyPaneShortcuts"
 import { ResponseHeader } from "@/components/ResponseHeader"
-import { SHORTCUTS } from "@/config/shortcuts"
 import { useHttpStore } from "@/store/http"
 import { useRequestStore } from "@/store/requests"
 import { type SseFrame, useSseStore } from "@/store/sse"
@@ -15,7 +14,13 @@ import type { HtmlView } from "./HtmlBody"
 import { ResponseLoading } from "./ResponseLoading"
 import { ResponseStatusLine } from "./ResponseStatusLine"
 import { ResponseTabBar, type TabId } from "./ResponseTabBar"
-import { codeBodyFlags, useLiveSseResponse } from "./responsePaneHelpers"
+import {
+  codeBodyFlags,
+  EMPTY_ROWS,
+  ERROR_BANNER,
+  useLiveSseResponse,
+} from "./responsePaneHelpers"
+import { SaveSnapshotButton } from "./SaveSnapshotButton"
 import { SseStreamTab } from "./SseStreamTab"
 import { SseFilterPane } from "./SseStreamTab/SseFilterPane"
 import { SseRawView } from "./SseStreamTab/SseRawView"
@@ -26,14 +31,6 @@ import { useHistorySync } from "./useHistorySync"
 
 const NO_FRAMES: never[] = []
 const NO_EVENTS: never[] = []
-
-const EMPTY_ROWS = [
-  { label: "Send Active Request", combo: SHORTCUTS.SEND_REQUEST },
-  { label: "New Request", combo: SHORTCUTS.NEW_ITEM },
-]
-
-const ERROR_BANNER =
-  "rounded-[5px] border border-dashed border-destructive/45 bg-destructive/[0.04] px-3 py-2 font-mono text-[0.75rem] text-fg leading-[1.5] whitespace-pre-wrap break-all"
 
 export function ResponsePane() {
   const activeRequestId = useRequestStore((s) => s.activeRequestId)
@@ -89,7 +86,7 @@ export function ResponsePane() {
     isLive && liveFrames.length > 0
       ? liveFrames[liveFrames.length - 1].atMs
       : null
-  const timingMs = liveTimingMs ?? response?.timing.totalMs ?? null
+  const timingMs = liveTimingMs ?? response?.timing?.totalMs ?? null
 
   const liveTimeline = useSseStore((s) =>
     activeRequestId ? s.timeline[activeRequestId] : undefined,
@@ -148,57 +145,66 @@ export function ResponsePane() {
 
   return (
     <div className="@container h-full min-h-0 flex flex-col">
-      <ResponseHeader
-        trailing={
-          activeRequestId &&
-          activeWorkspaceId && (
-            <HistoryPicker
-              workspaceId={activeWorkspaceId}
-              requestId={activeRequestId}
-              selectedId={selectedHistoryId}
-              refreshKey={historyRefreshKey}
-              loading={loading}
-              onSelect={handleHistorySelect}
-              onShowLive={showLive}
-              onClear={handleHistoryClear}
-            />
-          )
-        }
-      >
-        <ResponseStatusLine
-          error={error}
-          loading={loading}
-          liveHeader={liveHeader}
-          liveTimingMs={liveTimingMs}
-          liveBytes={liveBytes}
-          response={response}
-          historicalResponse={historicalResponse}
-          isLatestHistory={isLatestHistory}
-          selectedHistoryRecordedAt={selectedHistoryRecordedAt}
-        />
-      </ResponseHeader>
+      <div className="shrink-0 bg-accent/[0.035]">
+        <ResponseHeader
+          trailing={
+            activeRequestId &&
+            activeWorkspaceId && (
+              <>
+                <SaveSnapshotButton
+                  workspaceId={activeWorkspaceId}
+                  requestId={activeRequestId}
+                  responseId={!isSse && !isLive ? response?.responseId : null}
+                />
+                <HistoryPicker
+                  workspaceId={activeWorkspaceId}
+                  requestId={activeRequestId}
+                  selectedId={selectedHistoryId}
+                  refreshKey={historyRefreshKey}
+                  loading={loading}
+                  onSelect={handleHistorySelect}
+                  onShowLive={showLive}
+                  onClear={handleHistoryClear}
+                />
+              </>
+            )
+          }
+        >
+          <ResponseStatusLine
+            error={error}
+            loading={loading}
+            liveHeader={liveHeader}
+            liveTimingMs={liveTimingMs}
+            liveBytes={liveBytes}
+            response={response}
+            historicalResponse={historicalResponse}
+            isLatestHistory={isLatestHistory}
+            selectedHistoryRecordedAt={selectedHistoryRecordedAt}
+          />
+        </ResponseHeader>
 
-      <ResponseTabBar
-        tab={tab}
-        setTab={setTab}
-        isSse={isSse}
-        frameCount={sseFrames.length}
-        headerCount={headerCount}
-        cookieCount={cookieCount}
-        timingMs={timingMs}
-        isHtml={isHtml}
-        htmlView={htmlView}
-        setHtmlView={setHtmlView}
-        sseTools={sseTools}
-        sseView={sseView}
-        showCodeTools={tab === "body" && isCodeBody}
-        canFilter={canFilter}
-        codeTools={codeTools}
-      />
+        <ResponseTabBar
+          tab={tab}
+          setTab={setTab}
+          isSse={isSse}
+          frameCount={sseFrames.length}
+          headerCount={headerCount}
+          cookieCount={cookieCount}
+          timingMs={timingMs}
+          isHtml={isHtml}
+          htmlView={htmlView}
+          setHtmlView={setHtmlView}
+          sseTools={sseTools}
+          sseView={sseView}
+          showCodeTools={tab === "body" && isCodeBody}
+          canFilter={canFilter}
+          codeTools={codeTools}
+        />
+      </div>
 
       {sseTools && sseView.searchOpen && <SseFilterPane view={sseView} />}
 
-      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden min-w-[270px]">
         {historyLoading ? (
           <ResponseLoading />
         ) : error ? (

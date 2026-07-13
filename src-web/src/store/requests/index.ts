@@ -66,6 +66,7 @@ export const useRequestStore = create<RequestStore>((set, get) => ({
   grpcRequests: [],
   tree: [],
   activeRequestId: null,
+  activeSnapshotId: null,
   activeFolderId: null,
   activeConnectionId: null,
   activeGrpcId: null,

@@ -374,6 +374,42 @@ mod tests {
     }
 
     #[test]
+    fn descendant_request_ids_covers_nested_subfolders() {
+        let dir = tempfile::tempdir().unwrap();
+        let s = store(&dir);
+        let parent = s
+            .create_folder("ws1".into(), None, "Parent".into())
+            .unwrap();
+        let child_folder = s
+            .create_folder("ws1".into(), Some(parent.id.clone()), "Child".into())
+            .unwrap();
+        let r1 = s
+            .create_request(
+                "ws1".into(),
+                Some(parent.id.clone()),
+                "R1".into(),
+                "GET".into(),
+                "/".into(),
+            )
+            .unwrap();
+        let r2 = s
+            .create_request(
+                "ws1".into(),
+                Some(child_folder.id.clone()),
+                "R2".into(),
+                "GET".into(),
+                "/".into(),
+            )
+            .unwrap();
+
+        let mut ids = s.descendant_request_ids("ws1", &parent.id).unwrap();
+        ids.sort();
+        let mut expected = vec![r1.id, r2.id];
+        expected.sort();
+        assert_eq!(ids, expected);
+    }
+
+    #[test]
     fn delete_folder_cascade_removes_children() {
         let dir = tempfile::tempdir().unwrap();
         let s = store(&dir);

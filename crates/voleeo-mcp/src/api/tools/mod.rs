@@ -7,6 +7,7 @@ use crate::protocol::{bool_schema, obj_schema, str_schema, ToolDef};
 use serde_json::Value;
 
 mod request;
+mod snapshot;
 mod streaming;
 
 /// Optional `reveal` arg shared by read tools that mask secrets by default.
@@ -32,6 +33,7 @@ pub(in crate::api) fn definitions() -> Vec<ToolDef> {
     workspace_tools()
         .into_iter()
         .chain(request::request_tools())
+        .chain(snapshot::snapshot_tools())
         .chain(env_tools())
         .chain(cookie_tools())
         .chain(streaming::websocket_tools())

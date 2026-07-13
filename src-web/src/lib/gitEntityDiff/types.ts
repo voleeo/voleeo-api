@@ -11,6 +11,7 @@ export const GROUP_ORDER = [
   "Headers",
   "Metadata",
   "Body",
+  "Response",
   "Query",
   "Variables",
   "Message",
@@ -29,6 +30,7 @@ export type EntityType =
   | "environment"
   | "cookie"
   | "workspace"
+  | "snapshot"
 
 export const TYPE_GROUPS: { type: EntityType; label: string }[] = [
   { type: "request", label: "Requests" },
@@ -38,6 +40,7 @@ export const TYPE_GROUPS: { type: EntityType; label: string }[] = [
   { type: "environment", label: "Environments" },
   { type: "cookie", label: "Cookies" },
   { type: "workspace", label: "Workspace" },
+  { type: "snapshot", label: "Snapshots" },
 ]
 
 export function nodeKindToType(kind: GitNodeKind): EntityType | null {
@@ -56,6 +59,8 @@ export function nodeKindToType(kind: GitNodeKind): EntityType | null {
       return "cookie"
     case "workspace":
       return "workspace"
+    case "snapshot":
+      return "snapshot"
     default:
       return null
   }

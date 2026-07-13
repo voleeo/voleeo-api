@@ -36,6 +36,10 @@ fn classify_maps_filenames_to_nodes() {
     );
     assert_eq!(classify_path("jar_1.yaml").0, GitNodeKind::Jar);
     assert_eq!(classify_path("env_1.yaml").0, GitNodeKind::Env);
+    assert_eq!(
+        classify_path("snapshot_Z9.yaml"),
+        (GitNodeKind::Snapshot, Some("Z9".into()))
+    );
     assert_eq!(classify_path(".gitignore"), (GitNodeKind::Other, None));
 }
 

@@ -44,6 +44,7 @@ pub mod grpc_transcript;
 pub mod request;
 pub mod response;
 pub mod selection;
+pub mod snapshot;
 pub mod workspace;
 pub mod ws;
 pub mod ws_transcript;
@@ -57,6 +58,9 @@ pub use grpc_transcript::{GrpcTranscriptStore, StoredGrpcSession, StoredGrpcSess
 pub use request::RequestStore;
 pub use response::{ResponseStore, StoredHttpResponse, StoredHttpResponseSummary};
 pub use selection::SelectionStore;
+pub use snapshot::{
+    has_redacted_secrets, SnapshotStore, MAX_BODY_BYTES as SNAPSHOT_MAX_BODY_BYTES,
+};
 pub use workspace::WorkspaceStore;
 pub use ws::WsStore;
 pub use ws_transcript::{StoredWsSession, StoredWsSessionSummary, WsTranscriptStore};

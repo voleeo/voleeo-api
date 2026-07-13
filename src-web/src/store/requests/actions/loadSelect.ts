@@ -71,8 +71,21 @@ export function loadSelectActions(set: SetState, get: GetState) {
         activeFolderId: null,
         activeConnectionId: null,
         activeGrpcId: null,
+        activeSnapshotId: null,
         recentNodeIds: pushRecentNode(get, id),
       })
+    },
+
+    setActiveSnapshot: (id: string | null) => {
+      if (id)
+        set({
+          activeSnapshotId: id,
+          activeRequestId: null,
+          activeFolderId: null,
+          activeConnectionId: null,
+          activeGrpcId: null,
+        })
+      else set({ activeSnapshotId: null })
     },
 
     setActiveFolder: (id: string | null) => {
@@ -82,6 +95,7 @@ export function loadSelectActions(set: SetState, get: GetState) {
           activeRequestId: null,
           activeConnectionId: null,
           activeGrpcId: null,
+          activeSnapshotId: null,
         })
       else set({ activeFolderId: null })
     },
@@ -93,6 +107,7 @@ export function loadSelectActions(set: SetState, get: GetState) {
           activeRequestId: null,
           activeFolderId: null,
           activeGrpcId: null,
+          activeSnapshotId: null,
           recentNodeIds: pushRecentNode(get, id),
         })
       else set({ activeConnectionId: null })
@@ -105,6 +120,7 @@ export function loadSelectActions(set: SetState, get: GetState) {
           activeRequestId: null,
           activeFolderId: null,
           activeConnectionId: null,
+          activeSnapshotId: null,
           recentNodeIds: pushRecentNode(get, id),
         })
       else set({ activeGrpcId: null })

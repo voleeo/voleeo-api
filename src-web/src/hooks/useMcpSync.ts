@@ -4,6 +4,7 @@ import { EVENTS } from "@/config/events"
 import { useCookiesStore } from "@/store/cookies"
 import { useEnvironmentStore } from "@/store/environment"
 import { useRequestStore } from "@/store/requests"
+import { useSnapshotsStore } from "@/store/snapshots"
 
 export function useMcpSync() {
   useEffect(() => {
@@ -39,10 +40,21 @@ export function useMcpSync() {
         }
       },
     )
+    const unlisten4 = listen<{ workspaceId: string }>(
+      EVENTS.mcpSnapshotsChanged,
+      ({ payload }) => {
+        if (
+          payload.workspaceId === useSnapshotsStore.getState().loadedWorkspaceId
+        ) {
+          useSnapshotsStore.getState().reload()
+        }
+      },
+    )
     return () => {
       unlisten1.then((f) => f())
       unlisten2.then((f) => f())
       unlisten3.then((f) => f())
+      unlisten4.then((f) => f())
     }
   }, [])
 }

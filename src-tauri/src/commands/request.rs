@@ -425,7 +425,12 @@ pub async fn delete_request(
     id: String,
 ) -> Result<(), VoleeoError> {
     let requests = state.requests.clone();
-    run_blocking(move || requests.delete_request(&workspace_id, &id)).await
+    let snapshots = state.snapshots.clone();
+    run_blocking(move || {
+        snapshots.delete_by_request(&workspace_id, &id)?;
+        requests.delete_request(&workspace_id, &id)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -436,7 +441,17 @@ pub async fn delete_folder(
     id: String,
 ) -> Result<(), VoleeoError> {
     let requests = state.requests.clone();
-    run_blocking(move || requests.delete_folder_cascade(&workspace_id, &id)).await
+    let snapshots = state.snapshots.clone();
+    run_blocking(move || {
+        // Gather the doomed request ids before the cascade removes them — the
+        // cascade lives in `RequestStore` alone (Tauri-free), so snapshots (a
+        // separate store) can't be swept from inside it.
+        for req_id in requests.descendant_request_ids(&workspace_id, &id)? {
+            snapshots.delete_by_request(&workspace_id, &req_id)?;
+        }
+        requests.delete_folder_cascade(&workspace_id, &id)
+    })
+    .await
 }
 
 #[tauri::command]

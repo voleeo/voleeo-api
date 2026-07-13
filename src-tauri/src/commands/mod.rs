@@ -14,6 +14,7 @@ pub mod plugin_store;
 pub mod request;
 pub mod response;
 pub mod settings;
+pub mod snapshot;
 pub mod system_fonts;
 pub mod theme;
 pub mod voleeo_bundle;

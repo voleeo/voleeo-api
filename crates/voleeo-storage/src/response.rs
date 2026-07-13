@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use voleeo_core::{new_id, HttpResponse, VoleeoError};
+use voleeo_core::{new_id, HttpRequest, HttpResponse, VoleeoError};
 
 /// Persisted HTTP response entry (machine-local, never synced).
 #[derive(Type, Serialize, Deserialize, Debug, Clone)]
@@ -18,6 +18,13 @@ pub struct StoredHttpResponse {
     pub request_id: String,
     pub recorded_at: String,
     pub response: HttpResponse,
+    /// The fully-resolved request as it was actually sent (literal
+    /// URL/headers/body, no `{{ }}` templates) — captured by the send call
+    /// site right before the executor runs. `None` for entries written
+    /// before this field existed. Source for promoting a response into a
+    /// `Snapshot`; not shown in the normal history UI.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resolved_request: Option<HttpRequest>,
 }
 
 /// Lightweight summary returned by `response_list` — avoids loading full bodies.
@@ -305,12 +312,14 @@ impl ResponseStore {
     }
 
     /// Prepend `response` to the history ring buffer, trimming to `limit` entries.
-    /// `limit = 0` disables storage and is a no-op.
+    /// `limit = 0` disables storage and is a no-op. `resolved_request` is the
+    /// literal request as sent (see `StoredHttpResponse::resolved_request`).
     pub fn append(
         &self,
         workspace_id: &str,
         request_id: &str,
         response: HttpResponse,
+        resolved_request: HttpRequest,
         limit: usize,
     ) -> Result<StoredHttpResponse, VoleeoError> {
         let id = new_id();
@@ -326,6 +335,7 @@ impl ResponseStore {
                 request_id: request_id.to_string(),
                 recorded_at,
                 response,
+                resolved_request: Some(resolved_request),
             });
         }
 
@@ -336,6 +346,7 @@ impl ResponseStore {
             request_id: request_id.to_string(),
             recorded_at,
             response,
+            resolved_request: Some(resolved_request),
         };
 
         let mut items = self.read_all(workspace_id, request_id)?;
@@ -380,6 +391,21 @@ impl ResponseStore {
         Ok(items.into_iter().find(|r| r.id == response_id))
     }
 
+    /// The response body regardless of windowing — `response.body` is empty
+    /// when `body_windowed` (the body lives in a side file, read here). Used
+    /// by "save as pair", which needs the whole body inline, not paginated.
+    pub fn read_full_body(
+        &self,
+        workspace_id: &str,
+        stored: &StoredHttpResponse,
+    ) -> Result<String, VoleeoError> {
+        if !stored.response.body_windowed {
+            return Ok(stored.response.body.clone());
+        }
+        let path = self.body_file(workspace_id, &stored.id)?;
+        std::fs::read_to_string(&path).map_err(|e| VoleeoError::Storage(e.to_string()))
+    }
+
     /// The most recent stored response (files are newest-first).
     pub fn latest(
         &self,
@@ -415,7 +441,27 @@ impl ResponseStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use voleeo_core::{HttpResponse, HttpTiming};
+    use voleeo_core::{AuthConfig, HttpRequest, HttpResponse, HttpTiming};
+
+    fn dummy_request(request_id: &str) -> HttpRequest {
+        HttpRequest {
+            id: request_id.to_string(),
+            request_type: "api".into(),
+            model: "http_request".into(),
+            workspace_id: "ws".into(),
+            folder_id: None,
+            method: "GET".into(),
+            name: "Test".into(),
+            url: "https://example.com".into(),
+            parameters: vec![],
+            headers: vec![],
+            body: None,
+            auth: AuthConfig::None,
+            order: 0.0,
+            created_at: "2024-01-01T00:00:00.000000".into(),
+            updated_at: "2024-01-01T00:00:00.000000".into(),
+        }
+    }
 
     fn dummy_response(request_id: &str) -> HttpResponse {
         HttpResponse {
@@ -458,7 +504,9 @@ mod tests {
         let req = "req1";
 
         for _ in 0..12 {
-            store.append(ws, req, dummy_response(req), 10).unwrap();
+            store
+                .append(ws, req, dummy_response(req), dummy_request(req), 10)
+                .unwrap();
         }
 
         let list = store.list(ws, req).unwrap();
@@ -469,7 +517,9 @@ mod tests {
     fn test_limit_zero_no_op() {
         let dir = tempfile::tempdir().unwrap();
         let store = ResponseStore::new(dir.path()).unwrap();
-        store.append("ws", "req", dummy_response("req"), 0).unwrap();
+        store
+            .append("ws", "req", dummy_response("req"), dummy_request("req"), 0)
+            .unwrap();
         let list = store.list("ws", "req").unwrap();
         assert_eq!(list.len(), 0);
     }
@@ -478,7 +528,9 @@ mod tests {
     fn test_clear() {
         let dir = tempfile::tempdir().unwrap();
         let store = ResponseStore::new(dir.path()).unwrap();
-        store.append("ws", "req", dummy_response("req"), 5).unwrap();
+        store
+            .append("ws", "req", dummy_response("req"), dummy_request("req"), 5)
+            .unwrap();
         store.clear("ws", "req").unwrap();
         let list = store.list("ws", "req").unwrap();
         assert_eq!(list.len(), 0);
@@ -488,8 +540,12 @@ mod tests {
     fn list_served_from_index_without_touching_heavy_file() {
         let dir = tempfile::tempdir().unwrap();
         let store = ResponseStore::new(dir.path()).unwrap();
-        store.append("ws", "req", dummy_response("req"), 5).unwrap();
-        store.append("ws", "req", dummy_response("req"), 5).unwrap();
+        store
+            .append("ws", "req", dummy_response("req"), dummy_request("req"), 5)
+            .unwrap();
+        store
+            .append("ws", "req", dummy_response("req"), dummy_request("req"), 5)
+            .unwrap();
 
         // Delete the ring-buffer file; `list` must still answer from the index —
         // proving it never parses the heavy entries.
@@ -503,7 +559,9 @@ mod tests {
     fn list_backfills_index_for_history_predating_it() {
         let dir = tempfile::tempdir().unwrap();
         let store = ResponseStore::new(dir.path()).unwrap();
-        store.append("ws", "req", dummy_response("req"), 5).unwrap();
+        store
+            .append("ws", "req", dummy_response("req"), dummy_request("req"), 5)
+            .unwrap();
         // Simulate an old store: index missing, only the heavy file present.
         std::fs::remove_file(store.index_path("ws", "req").unwrap()).unwrap();
 
@@ -518,7 +576,9 @@ mod tests {
         let mut resp = dummy_response("req");
         resp.body = large_json(40_000); // > 256 KiB → windowed + pretty-printed
         resp.body_size = resp.body.len() as u32;
-        let stored = store.append("ws", "req", resp, 5).unwrap();
+        let stored = store
+            .append("ws", "req", resp, dummy_request("req"), 5)
+            .unwrap();
         assert!(stored.response.body_windowed);
         assert!(stored.response.body.is_empty());
         assert!(stored.response.body_line_count > 1);

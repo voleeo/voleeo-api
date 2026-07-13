@@ -3,6 +3,7 @@ import { useEffect } from "react"
 import { EVENTS } from "@/config/events"
 import type { GitRevealPayload } from "@/store/gitReview"
 import { useRequestStore } from "@/store/requests"
+import { useSnapshotsStore } from "@/store/snapshots"
 import { useUiStore } from "@/store/workspace"
 import { revealInTree } from "@/views/ApiWorkspace/revealInTree"
 
@@ -40,6 +41,13 @@ function handleReveal({ workspaceId, type, nodeId }: GitRevealPayload) {
     if (switching) ui.openWorkspace(workspaceId, "api")
     else ui.setActiveTool("api")
     if (nodeId) revealTreeNode(type, nodeId)
+    return
+  }
+  if (type === "snapshot") {
+    if (switching) ui.openWorkspace(workspaceId, "api")
+    else ui.setActiveTool("api")
+    if (nodeId)
+      void useSnapshotsStore.getState().revealSnapshot(workspaceId, nodeId)
     return
   }
   if (switching) ui.openWorkspace(workspaceId)

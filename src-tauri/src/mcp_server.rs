@@ -22,6 +22,7 @@ pub fn spawn(app: &tauri::AppHandle, state: &AppState, socket_path: PathBuf) {
         environments: state.environments.clone(),
         cookies: state.cookies.clone(),
         responses: state.responses.clone(),
+        snapshots: state.snapshots.clone(),
         selections: state.selections.clone(),
         ws: state.ws.clone(),
         ws_transcripts: state.ws_transcripts.clone(),

@@ -3,6 +3,7 @@ import { create } from "zustand"
 interface PaneTabsStore {
   requestTabs: Record<string, string>
   folderTabs: Record<string, string>
+  snapshotTabs: Record<string, string>
   wsTabs: Record<string, string>
   grpcTabs: Record<string, string>
   grpcModes: Record<string, string>
@@ -10,6 +11,7 @@ interface PaneTabsStore {
   graphqlVarsCollapsed: Record<string, boolean>
   setRequestTab: (id: string, tab: string) => void
   setFolderTab: (id: string, tab: string) => void
+  setSnapshotTab: (id: string, tab: string) => void
   setWsTab: (id: string, tab: string) => void
   setGrpcTab: (id: string, tab: string) => void
   setGrpcMode: (id: string, mode: string) => void
@@ -20,6 +22,7 @@ interface PaneTabsStore {
 export const usePaneTabsStore = create<PaneTabsStore>((set) => ({
   requestTabs: {},
   folderTabs: {},
+  snapshotTabs: {},
   wsTabs: {},
   grpcTabs: {},
   grpcModes: {},
@@ -29,6 +32,8 @@ export const usePaneTabsStore = create<PaneTabsStore>((set) => ({
     set((s) => ({ requestTabs: { ...s.requestTabs, [id]: tab } })),
   setFolderTab: (id, tab) =>
     set((s) => ({ folderTabs: { ...s.folderTabs, [id]: tab } })),
+  setSnapshotTab: (id, tab) =>
+    set((s) => ({ snapshotTabs: { ...s.snapshotTabs, [id]: tab } })),
   setWsTab: (id, tab) => set((s) => ({ wsTabs: { ...s.wsTabs, [id]: tab } })),
   setGrpcTab: (id, tab) =>
     set((s) => ({ grpcTabs: { ...s.grpcTabs, [id]: tab } })),

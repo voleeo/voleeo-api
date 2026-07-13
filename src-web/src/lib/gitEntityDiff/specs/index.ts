@@ -6,6 +6,7 @@ import { environmentSpecs } from "./environment"
 import { folderSpecs } from "./folder"
 import { grpcSpecs } from "./grpc"
 import { requestSpecs } from "./request"
+import { snapshotSpecs } from "./snapshot"
 import { workspaceSpecs } from "./workspace"
 
 export {
@@ -15,6 +16,7 @@ export {
   grpcSpecs,
   jarSpecs,
   requestSpecs,
+  snapshotSpecs,
   workspaceSpecs,
 }
 
@@ -27,4 +29,5 @@ export const SPECS_BY_TYPE: Record<EntityType, Field<any>[]> = {
   environment: environmentSpecs,
   cookie: jarSpecs,
   workspace: workspaceSpecs,
+  snapshot: snapshotSpecs,
 }

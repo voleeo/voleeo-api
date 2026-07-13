@@ -1,4 +1,5 @@
 import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog"
+import { useSnapshotsStore } from "@/store/snapshots"
 import type { PendingDelete } from "./useTreeActions"
 
 interface Props {
@@ -18,6 +19,11 @@ export function DeleteDialogs({
   onConfirmBatch,
   onCancelBatch,
 }: Props) {
+  const snapshotCount = useSnapshotsStore((s) =>
+    pendingDelete?.kind === "request"
+      ? (s.byRequest[pendingDelete.id]?.length ?? 0)
+      : 0,
+  )
   return (
     <>
       {pendingDelete && (
@@ -39,7 +45,9 @@ export function DeleteDialogs({
           warningText={
             pendingDelete.kind === "folder"
               ? "Every request and sub-folder inside it will also be permanently deleted."
-              : undefined
+              : snapshotCount > 0
+                ? `This also deletes ${snapshotCount} saved snapshot${snapshotCount === 1 ? "" : "s"} (recoverable from git history if synced).`
+                : undefined
           }
           confirmLabel="Delete"
           confirmVariant="destructive"
@@ -54,12 +62,13 @@ export function DeleteDialogs({
             <>
               Permanently delete{" "}
               <span className="font-semibold text-fg">
-                {pendingDeleteBatch.length} items
+                {pendingDeleteBatch.length}{" "}
+                {pendingDeleteBatch.length === 1 ? "item" : "items"}
               </span>
               ?
             </>
           }
-          warningText="Any folders in the selection take their requests and sub-folders with them."
+          warningText="Folders take their requests and sub-folders with them; deleted snapshots stay recoverable from git history if synced."
           confirmLabel="Delete"
           confirmVariant="destructive"
           onConfirm={onConfirmBatch}

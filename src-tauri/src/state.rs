@@ -5,7 +5,8 @@ use tokio::sync::{Mutex, RwLock};
 use voleeo_core::VoleeoError;
 use voleeo_storage::{
     CookieJarStore, EnvironmentStore, GrpcResponseStore, GrpcStore, GrpcTranscriptStore,
-    RequestStore, ResponseStore, SelectionStore, WorkspaceStore, WsStore, WsTranscriptStore,
+    RequestStore, ResponseStore, SelectionStore, SnapshotStore, WorkspaceStore, WsStore,
+    WsTranscriptStore,
 };
 
 const DEFAULT_THEME: &str = "dark";
@@ -38,6 +39,7 @@ pub struct AppState {
     pub environments: EnvironmentStore,
     pub cookies: CookieJarStore,
     pub responses: ResponseStore,
+    pub snapshots: SnapshotStore,
     pub selections: SelectionStore,
     pub ws: WsStore,
     pub ws_transcripts: WsTranscriptStore,
@@ -79,6 +81,7 @@ impl AppState {
         let environments = EnvironmentStore::new(&app_data_dir)?;
         let cookies = CookieJarStore::new(&app_data_dir)?;
         let responses = ResponseStore::new(&app_data_dir)?;
+        let snapshots = SnapshotStore::new(&app_data_dir, workspaces.clone())?;
         let selections = SelectionStore::new(&app_data_dir)?;
         let ws = WsStore::new(&app_data_dir)?;
         let ws_transcripts = WsTranscriptStore::new(&app_data_dir)?;
@@ -119,6 +122,7 @@ impl AppState {
             environments,
             cookies,
             responses,
+            snapshots,
             selections,
             ws,
             ws_transcripts,
