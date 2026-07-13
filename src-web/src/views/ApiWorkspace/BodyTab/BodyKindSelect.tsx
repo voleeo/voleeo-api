@@ -55,13 +55,13 @@ export function BodyKindSelect({ bodyKind, onChange }: Props) {
     <DropdownMenu>
       <DropdownMenuTrigger
         className={cn(
-          "px-2.5 pt-[9px] pb-2 font-sans text-[0.857rem] leading-none flex items-center gap-1 cursor-pointer outline-none transition-colors",
+          "px-2.5 pt-[9px] pb-2 font-sans text-[0.857rem] leading-none flex items-center gap-1 cursor-pointer outline-none transition-colors whitespace-nowrap shrink-0",
           bodyKind === "none"
             ? "text-muted hover:text-fg"
             : "text-accent hover:text-accent/80",
         )}
       >
-        {activeLabel}
+        <span className="whitespace-nowrap">{activeLabel}</span>
         <Glyph kind="chevron" size={11} color="currentColor" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-[150px]">

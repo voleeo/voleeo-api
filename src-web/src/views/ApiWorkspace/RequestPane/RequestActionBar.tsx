@@ -202,7 +202,7 @@ export function RequestActionBar({
           {isSending ? (
             <Glyph kind="x" size={14} color="var(--base08)" />
           ) : (
-            <Glyph kind="send-right" size={14} color="var(--base0D)" />
+            <Glyph kind="play" size={14} color="var(--base0B)" />
           )}
         </button>
       </div>

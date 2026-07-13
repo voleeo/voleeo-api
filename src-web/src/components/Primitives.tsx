@@ -124,7 +124,7 @@ export function TabItem({
       }
       tabIndex={onClick ? 0 : undefined}
       className={cn(
-        "px-2.5 pt-[9px] pb-2 text-[0.714rem] tracking-[0.3px]",
+        "px-2.5 pt-[9px] pb-2 text-[0.714rem] tracking-[0.3px] whitespace-nowrap shrink-0",
         onClick ? "cursor-pointer" : "cursor-default",
         active
           ? "border-b-[1.5px] border-fg text-fg font-semibold"

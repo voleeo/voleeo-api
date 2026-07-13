@@ -27,7 +27,7 @@ export function FolderRunList({
 
   const liveMax = useHttpStore((s) =>
     ordered.reduce(
-      (m, r) => Math.max(m, s.responses[r.id]?.timing.totalMs ?? 0),
+      (m, r) => Math.max(m, s.responses[r.id]?.timing?.totalMs ?? 0),
       0,
     ),
   )
@@ -44,7 +44,7 @@ export function FolderRunList({
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <div className="flex items-center gap-2.5 px-3.5 pt-[9px] pb-2 border-b border-border shrink-0">
+      <div className="flex items-center gap-2.5 px-3.5 h-[33px] border-b border-border shrink-0 bg-accent/[0.035]">
         <Checkbox
           checked={allChecked}
           onCheckedChange={() => setAll(!allChecked, ids)}
