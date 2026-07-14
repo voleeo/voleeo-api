@@ -111,7 +111,7 @@ export function usePaneDrag(
       }
 
       setSizes((prev) => {
-        const next = resizeSizes(d, delta, cw, prev)
+        const next = resizeSizes(d, delta, prev)
         sizesRef.current = next // keep ref current between renders during drag
         return next
       })

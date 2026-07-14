@@ -16,23 +16,9 @@ function repositionWindowControls() {
 
 export function applyThemeToCss(theme: Theme) {
   const root = document.documentElement
-  const p = theme.palette
-  root.style.setProperty("--base00", p.base00)
-  root.style.setProperty("--base01", p.base01)
-  root.style.setProperty("--base02", p.base02)
-  root.style.setProperty("--base03", p.base03)
-  root.style.setProperty("--base04", p.base04)
-  root.style.setProperty("--base05", p.base05)
-  root.style.setProperty("--base06", p.base06)
-  root.style.setProperty("--base07", p.base07)
-  root.style.setProperty("--base08", p.base08)
-  root.style.setProperty("--base09", p.base09)
-  root.style.setProperty("--base0A", p.base0A)
-  root.style.setProperty("--base0B", p.base0B)
-  root.style.setProperty("--base0C", p.base0C)
-  root.style.setProperty("--base0D", p.base0D)
-  root.style.setProperty("--base0E", p.base0E)
-  root.style.setProperty("--base0F", p.base0F)
+  for (const [slot, hex] of Object.entries(theme.palette)) {
+    root.style.setProperty(`--${slot}`, hex)
+  }
 }
 
 type ColorMode = "dark" | "light"

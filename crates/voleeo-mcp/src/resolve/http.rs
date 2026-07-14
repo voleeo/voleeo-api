@@ -13,15 +13,18 @@ use super::text::{
 };
 use super::vars::resolve_str;
 
-/// Apply full template resolution to a request in-place before execution.
-pub fn apply_to_request(req: &mut HttpRequest, vars: &HashMap<String, String>) {
-    let path_param_names = extract_path_params(&req.url);
+/// Substitute `:params`, resolve `{{ }}` in the base URL, and build the query
+/// string from the non-path enabled parameters. Shared by HTTP requests and WS
+/// connections — both carry `url` + `parameters`.
+fn resolve_url_and_query(
+    url: &str,
+    parameters: &[RequestParameter],
+    vars: &HashMap<String, String>,
+) -> (String, Vec<String>) {
+    let path_param_names = extract_path_params(url);
 
-    // 1 & 2: substitute :params then resolve {{ }} in the base URL.
-    let base_url = strip_query(&req.url);
-    let mut resolved_base = base_url.to_string();
-    for param in req
-        .parameters
+    let mut resolved_base = strip_query(url).to_string();
+    for param in parameters
         .iter()
         .filter(|p| p.enabled && path_param_names.contains(&p.name))
     {
@@ -30,9 +33,7 @@ pub fn apply_to_request(req: &mut HttpRequest, vars: &HashMap<String, String>) {
     }
     resolved_base = resolve_str(&resolved_base, vars);
 
-    // 3: build query string from non-path enabled parameters.
-    let mut query_parts: Vec<String> = req
-        .parameters
+    let query_parts = parameters
         .iter()
         .filter(|p| p.enabled && !p.name.trim().is_empty() && !path_param_names.contains(&p.name))
         .map(|p| {
@@ -45,6 +46,14 @@ pub fn apply_to_request(req: &mut HttpRequest, vars: &HashMap<String, String>) {
             }
         })
         .collect();
+
+    (resolved_base, query_parts)
+}
+
+/// Apply full template resolution to a request in-place before execution.
+pub fn apply_to_request(req: &mut HttpRequest, vars: &HashMap<String, String>) {
+    // 1–3: substitute :params, resolve {{ }} in the base URL, build the query.
+    let (resolved_base, mut query_parts) = resolve_url_and_query(&req.url, &req.parameters, vars);
 
     // 4: resolve headers in-place.
     for h in req.headers.iter_mut() {
@@ -149,36 +158,7 @@ pub fn apply_to_connection(
     conn: &WsConnection,
     vars: &HashMap<String, String>,
 ) -> (String, Vec<(String, String)>) {
-    let path_param_names = extract_path_params(&conn.url);
-
-    // Substitute :params, then resolve {{ }} in the base URL.
-    let base_url = strip_query(&conn.url);
-    let mut resolved_base = base_url.to_string();
-    for param in conn
-        .parameters
-        .iter()
-        .filter(|p| p.enabled && path_param_names.contains(&p.name))
-    {
-        let val = url_encode(&resolve_str(&param.value, vars));
-        resolved_base = replace_path_param(&resolved_base, &param.name, &val);
-    }
-    resolved_base = resolve_str(&resolved_base, vars);
-
-    // Build query string from non-path enabled parameters.
-    let mut query_parts: Vec<String> = conn
-        .parameters
-        .iter()
-        .filter(|p| p.enabled && !p.name.trim().is_empty() && !path_param_names.contains(&p.name))
-        .map(|p| {
-            let k = url_encode(&resolve_str(&p.name, vars));
-            let v = resolve_str(&p.value, vars);
-            if v.is_empty() {
-                k
-            } else {
-                format!("{k}={}", url_encode(&v))
-            }
-        })
-        .collect();
+    let (resolved_base, mut query_parts) = resolve_url_and_query(&conn.url, &conn.parameters, vars);
 
     let mut headers: Vec<(String, String)> = conn
         .headers

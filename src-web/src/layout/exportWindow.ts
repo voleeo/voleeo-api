@@ -1,12 +1,8 @@
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow"
+import { focusExistingWindow } from "./windowFocus"
 
 export async function openExportWindow(workspaceId?: string | null) {
-  const existing = await WebviewWindow.getByLabel("export").catch(() => null)
-  if (existing) {
-    await existing.show().catch(() => {})
-    await existing.setFocus().catch(() => {})
-    return
-  }
+  if (await focusExistingWindow("export")) return
 
   const url = workspaceId
     ? `/?workspaceId=${encodeURIComponent(workspaceId)}`

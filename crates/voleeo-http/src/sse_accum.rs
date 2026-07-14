@@ -3,10 +3,6 @@ use voleeo_core::{
     HttpResponse, HttpResponseHeader, HttpTiming, SseFrame, StoredCookie, TimelineEvent,
 };
 
-/// Most kept SSE frames / per-frame timeline rows per run — caps live memory and
-/// history-YAML size so an endless stream can't grow unboundedly.
-const FRAME_CAP: usize = 2000;
-
 /// Accumulates an SSE stream (status / headers / timeline / frames) as it is
 /// read, so a run cancelled mid-flight — the normal way to end an endless
 /// `text/event-stream` — can still be rebuilt into a real response instead of an
@@ -30,9 +26,10 @@ pub struct SseAccum {
 }
 
 impl SseAccum {
-    /// Frame/row cap — the no-sink SSE read in `executor.rs` stops here so an
-    /// endless stream terminates.
-    pub const FRAME_CAP: usize = FRAME_CAP;
+    /// Most kept SSE frames / per-frame timeline rows per run — caps live memory
+    /// and history-YAML size so an endless stream can't grow unboundedly. The
+    /// no-sink SSE read in `executor.rs` stops here so an endless stream terminates.
+    pub const FRAME_CAP: usize = 2000;
 
     /// Record the response line + headers + connection-setup timeline (once,
     /// before the first frame).
@@ -53,11 +50,11 @@ impl SseAccum {
     pub fn frame(&mut self, frame: SseFrame, timeline: TimelineEvent) {
         self.bytes = self.bytes.saturating_add(frame.data.len() as u32);
         self.frame_events.push_back(timeline);
-        if self.frame_events.len() > FRAME_CAP {
+        if self.frame_events.len() > Self::FRAME_CAP {
             self.frame_events.pop_front();
         }
         self.frames.push_back(frame);
-        if self.frames.len() > FRAME_CAP {
+        if self.frames.len() > Self::FRAME_CAP {
             self.frames.pop_front();
         }
     }
@@ -189,17 +186,17 @@ mod tests {
             vec![],
             vec![setup("config"), setup("send")],
         );
-        for i in 0..(FRAME_CAP as u32 + 50) {
+        for i in 0..(SseAccum::FRAME_CAP as u32 + 50) {
             let (f, t) = frame(i);
             a.frame(f, t);
         }
         let resp = a.into_cancelled_response("req");
         assert_eq!(resp.status, 200);
-        assert_eq!(resp.sse_frames.len(), FRAME_CAP, "frames capped");
+        assert_eq!(resp.sse_frames.len(), SseAccum::FRAME_CAP, "frames capped");
         // oldest frames dropped: the first kept frame is #50.
         assert_eq!(resp.sse_frames[0].seq, 50);
-        // timeline = 2 setup rows + FRAME_CAP per-frame rows + "Stream cancelled".
-        assert_eq!(resp.events.len(), 2 + FRAME_CAP + 1);
+        // timeline = 2 setup rows + SseAccum::FRAME_CAP per-frame rows + "Stream cancelled".
+        assert_eq!(resp.events.len(), 2 + SseAccum::FRAME_CAP + 1);
         assert_eq!(resp.events.last().unwrap().text, "Stream cancelled");
     }
 

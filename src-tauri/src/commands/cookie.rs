@@ -4,6 +4,7 @@ use voleeo_cookies::crypto as cookie_crypto;
 use voleeo_core::{CookieJar, StoredCookie, VoleeoError};
 use voleeo_storage::{CookieJarStore, SelectionStore, WorkspaceStore, DEFAULT_JAR_ID};
 
+use crate::commands::request::run_blocking;
 use crate::state::AppState;
 
 /// Direction of the cookie-value transform — mirrors `transform_auth_secrets`
@@ -34,17 +35,6 @@ impl Stores {
             app_data_dir: state.app_data_dir.clone(),
         }
     }
-}
-
-/// Bridge sync work into the tokio runtime. Any closure that touches YAML,
-/// the keyring, or AES round-trips goes through here so we never block the
-/// async executor (CLAUDE.md rule #17).
-async fn run_blocking<T: Send + 'static>(
-    f: impl FnOnce() -> Result<T, VoleeoError> + Send + 'static,
-) -> Result<T, VoleeoError> {
-    tokio::task::spawn_blocking(f)
-        .await
-        .map_err(|e| VoleeoError::Storage(e.to_string()))?
 }
 
 fn transform_cookie_values(

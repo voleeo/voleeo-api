@@ -43,23 +43,11 @@ function splitUrlAndQuery(url: string): {
   const base = url.slice(0, qIdx)
   const qs = url.slice(qIdx + 1).split("#")[0]
   const params: RequestParameter[] = []
-  for (const part of qs.split("&")) {
-    if (!part) continue
-    const eq = part.indexOf("=")
-    const name = eq < 0 ? safeDecode(part) : safeDecode(part.slice(0, eq))
-    const value = eq < 0 ? "" : safeDecode(part.slice(eq + 1))
+  for (const [name, value] of new URLSearchParams(qs)) {
     if (!name) continue
     params.push({ id: genId(name), name, value, enabled: true })
   }
   return { base, params }
-}
-
-function safeDecode(s: string): string {
-  try {
-    return decodeURIComponent(s.replace(/\+/g, " "))
-  } catch {
-    return s
-  }
 }
 
 /** Parse a `curl …` command line into a Voleeo request shape.

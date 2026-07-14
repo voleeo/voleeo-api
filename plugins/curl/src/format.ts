@@ -1,3 +1,5 @@
+import { shellQuote } from "@voleeo/plugin-api/request"
+
 /** A cURL request with concrete values — templates resolved, query folded into
  *  `url`, auth applied. Built by the plugin's `serializeAsCurl` and by the
  *  app's post-send inspector, so both render identically via `formatCurl`. */
@@ -23,10 +25,6 @@ export interface CurlHeader {
 export interface CurlCookie {
   name: string
   value: string
-}
-
-function shellQuote(s: string): string {
-  return `'${s.replace(/'/g, "'\\''")}'`
 }
 
 function contentTypeFor(kind: string): string | null {

@@ -1,20 +1,12 @@
-import { errorMessage } from "@/lib/error"
 import type { GitIdentity } from "../../../packages/types/bindings"
 import { commands } from "../../../packages/types/bindings"
+import { unwrap } from "./gitStoreUtil"
 
 export type { GitIdentity }
 
 export interface GitSettingsState {
   identity: GitIdentity | null
   credentialsUser: string | null
-}
-
-async function unwrap<T>(
-  p: Promise<{ status: "ok"; data: T } | { status: "error"; error: unknown }>,
-): Promise<T> {
-  const res = await p
-  if (res.status === "ok") return res.data
-  throw new Error(errorMessage(res.error as never))
 }
 
 export async function loadGitSettings(

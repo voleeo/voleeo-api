@@ -2,7 +2,6 @@ import { emit } from "@tauri-apps/api/event"
 import { EVENTS } from "@/config/events"
 import type { ResolutionEvent } from "@/lib/template"
 import { resolveTemplate } from "@/lib/template"
-import { useEnvironmentStore } from "@/store/environment"
 import { sendRequestCommand } from "@/store/http"
 import type { AuthConfig } from "@/store/requests"
 import { useRequestStore } from "@/store/requests"
@@ -13,6 +12,7 @@ import {
   resolveBody,
   resolveInheritedAuthAnnotated,
 } from "@/views/ApiWorkspace/sendResolution"
+import { envVars } from "../shared/envVars"
 import { markResolving, type RequestSender, unmarkResolving } from "./strategy"
 
 export const pendingPreflightEvents: ResolutionEvent[] = []
@@ -29,21 +29,7 @@ export function buildSender(callerName: string): RequestSender {
         .requests.find((r) => r.id === requestId)
       if (!req) throw new Error(`Pre-flight request failed: request not found`)
 
-      const { environments, activeEnvId } = useEnvironmentStore.getState()
-      const globalVars =
-        environments
-          .find((e) => e.kind === "global")
-          ?.variables.filter((v) => v.enabled) ?? []
-      const activeVars =
-        environments
-          .find((e) => e.id === activeEnvId)
-          ?.variables.filter((v) => v.enabled) ?? []
-
-      const activeKeys = new Set(activeVars.map((v) => v.key))
-      const vars = [
-        ...activeVars,
-        ...globalVars.filter((v) => !activeKeys.has(v.key)),
-      ]
+      const vars = envVars()
 
       // Template functions are resolved lazily via the registry to avoid a circular dep.
       const { registry } = await import("@/plugins/registry")

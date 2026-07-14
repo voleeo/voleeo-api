@@ -3,6 +3,7 @@ import { WebviewWindow } from "@tauri-apps/api/webviewWindow"
 import { EVENTS } from "@/config/events"
 import { checkoutBranch } from "@/store/gitBranches"
 import { useToastStore } from "@/store/toast"
+import { focusExistingWindow } from "./windowFocus"
 
 /** Shared className for top-bar dropdown items — source control, cookies, and
  * environments — so all three menus match. Layers over the base DropdownMenuItem
@@ -25,10 +26,7 @@ export async function openGitWindow(
   name?: string,
 ) {
   const label = `git-${workspaceId}`
-  const existing = await WebviewWindow.getByLabel(label).catch(() => null)
-  if (existing) {
-    await existing.show().catch(() => {})
-    await existing.setFocus().catch(() => {})
+  if (await focusExistingWindow(label)) {
     await emit(EVENTS.gitView, {
       workspaceId,
       view,

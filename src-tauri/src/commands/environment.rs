@@ -3,6 +3,7 @@ use tauri::State;
 use voleeo_core::{Environment, EnvironmentKind, VoleeoError};
 use voleeo_storage::{EnvironmentStore, WorkspaceStore, GLOBAL_ENV_ID};
 
+use crate::commands::request::run_blocking;
 use crate::state::AppState;
 use voleeo_crypto as workspace_key;
 
@@ -31,16 +32,6 @@ impl Stores {
             app_data_dir: state.app_data_dir.clone(),
         }
     }
-}
-
-/// Bridge sync work into the tokio runtime — YAML, keyring, and AES round-trips
-/// all run here so they never block the async executor (CLAUDE.md rule #17).
-async fn run_blocking<T: Send + 'static>(
-    f: impl FnOnce() -> Result<T, VoleeoError> + Send + 'static,
-) -> Result<T, VoleeoError> {
-    tokio::task::spawn_blocking(f)
-        .await
-        .map_err(|e| VoleeoError::Storage(e.to_string()))?
 }
 
 /// If `env` has any variables with `encrypted = true`, transform their `value`

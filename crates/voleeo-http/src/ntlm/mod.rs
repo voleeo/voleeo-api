@@ -92,10 +92,7 @@ pub async fn send_ntlm(
     let port = url
         .port_or_known_default()
         .unwrap_or(if https { 443 } else { 80 });
-    let host_header = match url.port() {
-        Some(p) => format!("{host}:{p}"),
-        None => host.clone(),
-    };
+    let host_header = crate::auth::host_header(&url);
     let target = {
         let mut p = url.path().to_string();
         if let Some(q) = url.query() {

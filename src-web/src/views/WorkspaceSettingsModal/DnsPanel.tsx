@@ -18,12 +18,8 @@ function isValidIp(value: string): boolean {
   return URL.canParse(`http://${candidate}`)
 }
 
-function rowId(): string {
-  return crypto.randomUUID()
-}
-
 function emptyDraft(): DnsOverride {
-  return { id: rowId(), enabled: true, hostname: "", address: "" }
+  return { id: crypto.randomUUID(), enabled: true, hostname: "", address: "" }
 }
 
 function isBlank(r: DnsOverride): boolean {

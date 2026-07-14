@@ -1,6 +1,6 @@
 import type { ProtoMessageSchema } from "../../../../../packages/types/bindings"
 import { type DescribeMessage, MessageFields } from "./fields"
-import { type FormValue, parseMessage } from "./formValue"
+import type { FormValue } from "./formValue"
 import { VarClickContext } from "./varClick"
 
 export type { DescribeMessage } from "./fields"
@@ -40,4 +40,3 @@ export function ProtoMessageForm({
 }
 
 export type { FormValue }
-export { parseMessage as parseFormValue }

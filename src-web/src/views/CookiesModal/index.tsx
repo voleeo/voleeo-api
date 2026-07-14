@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { useShallow } from "zustand/react/shallow"
 import { Glyph } from "@/components/Glyph"
+import { InlineNewNavItem } from "@/components/InlineNewNavItem"
 import { ManagementModal } from "@/components/ManagementModal"
 import { DEFAULT_JAR_ID, useCookiesStore } from "@/store/cookies"
 import { CookieEditor } from "./CookieEditor"
@@ -143,36 +144,17 @@ function InlineNewJar({
   onCancel: () => void
   createJar: (workspaceId: string, name: string) => Promise<{ id: string }>
 }) {
-  const [name, setName] = useState("")
-
-  async function commit() {
-    const trimmed = name.trim()
-    if (!trimmed) {
-      onCancel()
-      return
-    }
-    const jar = await createJar(workspaceId, trimmed).catch(() => null)
-    if (jar) onCreated(jar.id)
-    else onCancel()
-  }
-
   return (
-    <div className="flex items-center gap-2 mx-2 px-2 py-[6px] rounded-md bg-accent/10 w-[calc(100%-16px)]">
-      <span className="w-3 h-3 rounded-full bg-accent shrink-0 ring-1 ring-border" />
-      <input
-        autoFocus
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") commit()
-          if (e.key === "Escape") onCancel()
-        }}
-        onBlur={commit}
-        autoComplete="off"
-        spellCheck={false}
-        placeholder="Jar name"
-        className="text-[0.929rem] text-fg bg-transparent border-0 outline-none flex-1 min-w-0 placeholder:text-muted/50 select-text"
-      />
-    </div>
+    <InlineNewNavItem
+      placeholder="Jar name"
+      dotClassName="bg-accent"
+      onCancel={onCancel}
+      onCommit={async (name) => {
+        const jar = await createJar(workspaceId, name).catch(() => null)
+        if (!jar) return false
+        onCreated(jar.id)
+        return true
+      }}
+    />
   )
 }

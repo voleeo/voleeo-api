@@ -17,6 +17,28 @@ export { clearResponseCycleCache, pendingPreflightEvents }
 const STRATEGY_DEFAULT: ResponseStrategy = "cache"
 const TTL_DEFAULT = 60
 
+/** Shared setup for the response.* functions: validate requestId + active
+ *  workspace, then run/reuse the source request's response per strategy. */
+async function resolveResponseFor(
+  fnName: string,
+  args: { requestId?: string; strategy?: string; ttl?: string },
+) {
+  const { requestId, strategy, ttl } = args
+  if (!requestId) throw new Error(`${fnName}: requestId is required`)
+  const workspaceId = useUiStore.getState().activeWorkspaceId
+  if (!workspaceId) throw new Error(`${fnName}: no active workspace`)
+  const { activeRequestId, requests } = useRequestStore.getState()
+  const callerName =
+    requests.find((r) => r.id === activeRequestId)?.name ?? "Unknown request"
+  return ensureResponse(
+    workspaceId,
+    requestId,
+    (strategy as ResponseStrategy) ?? STRATEGY_DEFAULT,
+    ttl ? Number(ttl) : TTL_DEFAULT,
+    buildSender(callerName),
+  )
+}
+
 const templateFunctions: TemplateFunctionContribution[] = [
   {
     name: "response.body",
@@ -50,24 +72,8 @@ const templateFunctions: TemplateFunctionContribution[] = [
       { name: "selector", label: "Selector", type: "text", defaultValue: "" },
     ],
     onRender: async (_ctx, args) => {
-      const { requestId, strategy, ttl, selector } = args
-      if (!requestId) throw new Error("response.body: requestId is required")
-
-      const workspaceId = useUiStore.getState().activeWorkspaceId
-      if (!workspaceId) throw new Error("response.body: no active workspace")
-      const { activeRequestId, requests } = useRequestStore.getState()
-      const callerName =
-        requests.find((r) => r.id === activeRequestId)?.name ??
-        "Unknown request"
-
-      const stored = await ensureResponse(
-        workspaceId,
-        requestId,
-        (strategy as ResponseStrategy) ?? STRATEGY_DEFAULT,
-        ttl ? Number(ttl) : TTL_DEFAULT,
-        buildSender(callerName),
-      )
-      return extractBody(stored.response.body, selector ?? "")
+      const stored = await resolveResponseFor("response.body", args)
+      return extractBody(stored.response.body, args.selector ?? "")
     },
   },
   {
@@ -101,25 +107,9 @@ const templateFunctions: TemplateFunctionContribution[] = [
       { name: "name", label: "Header name", type: "text", required: true },
     ],
     onRender: async (_ctx, args) => {
-      const { requestId, strategy, ttl, name } = args
-      if (!requestId) throw new Error("response.header: requestId is required")
-      if (!name) throw new Error("response.header: name is required")
-
-      const workspaceId = useUiStore.getState().activeWorkspaceId
-      if (!workspaceId) throw new Error("response.header: no active workspace")
-      const { activeRequestId, requests } = useRequestStore.getState()
-      const callerName =
-        requests.find((r) => r.id === activeRequestId)?.name ??
-        "Unknown request"
-
-      const stored = await ensureResponse(
-        workspaceId,
-        requestId,
-        (strategy as ResponseStrategy) ?? STRATEGY_DEFAULT,
-        ttl ? Number(ttl) : TTL_DEFAULT,
-        buildSender(callerName),
-      )
-      return extractHeader(stored.response.headers, name)
+      if (!args.name) throw new Error("response.header: name is required")
+      const stored = await resolveResponseFor("response.header", args)
+      return extractHeader(stored.response.headers, args.name)
     },
   },
 ]

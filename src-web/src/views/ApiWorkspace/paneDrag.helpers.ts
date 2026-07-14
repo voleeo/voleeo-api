@@ -7,17 +7,6 @@ export const TREE_COLLAPSE_PX = 80
 // collapses that pane to a strip.
 export const PANE_COLLAPSE_PX = 75
 
-// Pixel minimums for each pane. All are unconstrained (0) so separators drag
-// freely; the tree instead collapses entirely once it shrinks past
-// `TREE_COLLAPSE_PX` (handled in the drag hook).
-const TREE_MIN = 0
-const REQUEST_MIN = 0
-const RESPONSE_MIN = 0
-const ROW_TREE_MIN = 0
-const ROW_RIGHT_MIN = 0
-const ROW_REQUEST_MIN = 0
-const ROW_RESPONSE_MIN = 0
-
 // Internal type with non-nullable numbers (PanelSizes fields are number|null from specta)
 export type Sizes = {
   colPane1: number
@@ -85,40 +74,15 @@ export function paneCollapseSide(
 }
 
 /** New sizes for an in-progress resize drag (no collapse). */
-export function resizeSizes(
-  d: Drag,
-  delta: number,
-  cw: number,
-  prev: Sizes,
-): Sizes {
+export function resizeSizes(d: Drag, delta: number, prev: Sizes): Sizes {
   if (d.sep === "colSep1") {
-    const p1 = clamp(
-      d.startPct + delta,
-      (TREE_MIN / cw) * 100,
-      100 - d.fixedPct - (REQUEST_MIN / cw) * 100,
-    )
-    return { ...prev, colPane1: p1 }
+    return { ...prev, colPane1: clamp(d.startPct + delta, 0, 100 - d.fixedPct) }
   }
   if (d.sep === "colSep2") {
-    const p3 = clamp(
-      d.startPct - delta,
-      (RESPONSE_MIN / cw) * 100,
-      100 - d.fixedPct - (REQUEST_MIN / cw) * 100,
-    )
-    return { ...prev, colPane3: p3 }
+    return { ...prev, colPane3: clamp(d.startPct - delta, 0, 100 - d.fixedPct) }
   }
   if (d.sep === "rowOuter") {
-    const pt = clamp(
-      d.startPct + delta,
-      (ROW_TREE_MIN / cw) * 100,
-      100 - (ROW_RIGHT_MIN / cw) * 100,
-    )
-    return { ...prev, rowTree: pt }
+    return { ...prev, rowTree: clamp(d.startPct + delta, 0, 100) }
   }
-  const pi = clamp(
-    d.startPct + delta,
-    (ROW_REQUEST_MIN / cw) * 100,
-    100 - (ROW_RESPONSE_MIN / cw) * 100,
-  )
-  return { ...prev, rowInner: pi }
+  return { ...prev, rowInner: clamp(d.startPct + delta, 0, 100) }
 }

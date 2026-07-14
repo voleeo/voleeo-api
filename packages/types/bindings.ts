@@ -529,7 +529,8 @@ params_location?: OAuth1Location; callback?: string; verifier?: string; timestam
 	gitEntityConflicts: (workspaceId: string) => typedError<GitEntityConflict_Serialize[], VoleeoError>(__TAURI_INVOKE("git_entity_conflicts", { workspaceId })),
 	/**
 	 *  Write a user-merged entity back to its file (re-encrypting at rest when the
-	 *  workspace is encrypted) and stage it, clearing the conflict in the index.
+	 *  workspace is encrypted). Conflicted paths are staged, clearing the conflict;
+	 *  non-conflict callers (the per-field revert) only touch the worktree.
 	 */
 	gitResolveEntity: (workspaceId: string, path: string, entity: GitEntity_Deserialize) => typedError<null, VoleeoError>(__TAURI_INVOKE("git_resolve_entity", { workspaceId, path, entity })),
 	/**

@@ -8,7 +8,6 @@ import type {
 } from "@voleeo/plugin-api"
 import { extractBody, extractHeader } from "@/lib/extract"
 import { resolveTemplate } from "@/lib/template"
-import { useEnvironmentStore } from "@/store/environment"
 import { useRequestStore } from "@/store/requests"
 import {
   extractPathParams,
@@ -16,6 +15,7 @@ import {
 } from "@/views/ApiWorkspace/paramUtils"
 import type { HttpRequest } from "../../../../packages/types/bindings"
 import { markResolving, unmarkResolving } from "../shared/cycleGuard"
+import { envVars } from "../shared/envVars"
 
 export function loadRequest(requestId: string): HttpRequest {
   const req = useRequestStore
@@ -23,20 +23,6 @@ export function loadRequest(requestId: string): HttpRequest {
     .requests.find((r) => r.id === requestId)
   if (!req) throw new Error(`Request not found: ${requestId}`)
   return req
-}
-
-function envVars() {
-  const { environments, activeEnvId } = useEnvironmentStore.getState()
-  const globalVars =
-    environments
-      .find((e) => e.kind === "global")
-      ?.variables.filter((v) => v.enabled) ?? []
-  const activeVars =
-    environments
-      .find((e) => e.id === activeEnvId)
-      ?.variables.filter((v) => v.enabled) ?? []
-  const activeKeys = new Set(activeVars.map((v) => v.key))
-  return [...activeVars, ...globalVars.filter((v) => !activeKeys.has(v.key))]
 }
 
 export async function resolveValue(

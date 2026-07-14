@@ -7,6 +7,7 @@ import CodeMirror, {
 import { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { useShallow } from "zustand/react/shallow"
+import { EditorFunctionModal } from "@/components/EditorFunctionModal"
 import {
   Autocomplete,
   type VarSuggestion,
@@ -24,7 +25,6 @@ import { useBodyOverlay } from "@/views/ApiWorkspace/BodyTab/useBodyOverlay"
 import { cmEditorTheme } from "@/views/ApiWorkspace/cmEditorTheme"
 import { commands } from "../../../../../packages/types/bindings"
 import type { FormValue } from "../ProtoMessageForm"
-import { MessageFuncModal } from "./MessageFuncModal"
 
 interface FuncEdit {
   fnName: string
@@ -211,7 +211,7 @@ export function MessageEditor({
         )}
 
       {funcEdit && (
-        <MessageFuncModal
+        <EditorFunctionModal
           fnName={funcEdit.fnName}
           initialArgs={funcEdit.initialArgs}
           onInsert={replaceFuncToken}

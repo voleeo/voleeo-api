@@ -264,50 +264,7 @@ impl AuthConfig {
     /// (e.g. the MCP bridge) use this before encrypting at rest on an encrypted
     /// workspace, matching what the desktop sends for encrypted scopes.
     pub fn mark_secrets_encrypted(&mut self) {
-        match self {
-            AuthConfig::Bearer {
-                token_encrypted, ..
-            } => *token_encrypted = true,
-            AuthConfig::Basic {
-                password_encrypted, ..
-            }
-            | AuthConfig::Digest {
-                password_encrypted, ..
-            }
-            | AuthConfig::Ntlm {
-                password_encrypted, ..
-            } => *password_encrypted = true,
-            AuthConfig::ApiKey {
-                value_encrypted, ..
-            } => *value_encrypted = true,
-            AuthConfig::AwsSigV4 {
-                secret_key_encrypted,
-                session_token_encrypted,
-                ..
-            } => {
-                *secret_key_encrypted = true;
-                *session_token_encrypted = true;
-            }
-            AuthConfig::OAuth1 {
-                consumer_secret_encrypted,
-                token_secret_encrypted,
-                private_key_encrypted,
-                ..
-            } => {
-                *consumer_secret_encrypted = true;
-                *token_secret_encrypted = true;
-                *private_key_encrypted = true;
-            }
-            AuthConfig::OAuth2 {
-                client_secret_encrypted,
-                password_encrypted,
-                ..
-            } => {
-                *client_secret_encrypted = true;
-                *password_encrypted = true;
-            }
-            AuthConfig::None | AuthConfig::Inherit { .. } => {}
-        }
+        self.set_secrets_encrypted(true);
     }
 
     /// Clear every secret field's `*_encrypted` flag — the inverse of
@@ -315,10 +272,14 @@ impl AuthConfig {
     /// the flags match the now-plaintext values; otherwise an unencrypted import
     /// would trip the `workspace_encryption_required` guard on load.
     pub fn mark_secrets_plaintext(&mut self) {
+        self.set_secrets_encrypted(false);
+    }
+
+    fn set_secrets_encrypted(&mut self, v: bool) {
         match self {
             AuthConfig::Bearer {
                 token_encrypted, ..
-            } => *token_encrypted = false,
+            } => *token_encrypted = v,
             AuthConfig::Basic {
                 password_encrypted, ..
             }
@@ -327,17 +288,17 @@ impl AuthConfig {
             }
             | AuthConfig::Ntlm {
                 password_encrypted, ..
-            } => *password_encrypted = false,
+            } => *password_encrypted = v,
             AuthConfig::ApiKey {
                 value_encrypted, ..
-            } => *value_encrypted = false,
+            } => *value_encrypted = v,
             AuthConfig::AwsSigV4 {
                 secret_key_encrypted,
                 session_token_encrypted,
                 ..
             } => {
-                *secret_key_encrypted = false;
-                *session_token_encrypted = false;
+                *secret_key_encrypted = v;
+                *session_token_encrypted = v;
             }
             AuthConfig::OAuth1 {
                 consumer_secret_encrypted,
@@ -345,17 +306,17 @@ impl AuthConfig {
                 private_key_encrypted,
                 ..
             } => {
-                *consumer_secret_encrypted = false;
-                *token_secret_encrypted = false;
-                *private_key_encrypted = false;
+                *consumer_secret_encrypted = v;
+                *token_secret_encrypted = v;
+                *private_key_encrypted = v;
             }
             AuthConfig::OAuth2 {
                 client_secret_encrypted,
                 password_encrypted,
                 ..
             } => {
-                *client_secret_encrypted = false;
-                *password_encrypted = false;
+                *client_secret_encrypted = v;
+                *password_encrypted = v;
             }
             AuthConfig::None | AuthConfig::Inherit { .. } => {}
         }

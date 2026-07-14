@@ -13,17 +13,9 @@ use voleeo_storage::{StoredWsSession, StoredWsSessionSummary};
 use voleeo_ws::{WsEvent, WsEventSink};
 
 use crate::commands::request::{
-    preserve_unchanged_secrets, transform_auth_secrets, Direction, Stores,
+    preserve_unchanged_secrets, run_blocking, transform_auth_secrets, Direction, Stores,
 };
 use crate::state::AppState;
-
-async fn run_blocking<T: Send + 'static>(
-    f: impl FnOnce() -> Result<T, VoleeoError> + Send + 'static,
-) -> Result<T, VoleeoError> {
-    tokio::task::spawn_blocking(f)
-        .await
-        .map_err(|e| VoleeoError::Storage(e.to_string()))?
-}
 
 #[tauri::command]
 #[specta::specta]

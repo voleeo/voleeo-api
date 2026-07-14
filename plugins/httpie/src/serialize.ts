@@ -1,35 +1,14 @@
 import type { Context } from "@voleeo/plugin-api"
-import type {
-  AuthConfig,
-  HttpRequest,
-  RequestParameter,
-} from "@voleeo/types/bindings"
-
-/** POSIX-safe single-quote. Same scheme as the cURL plugin. */
-function shellQuote(s: string): string {
-  return `'${s.replace(/'/g, "'\\''")}'`
-}
-
-function extractPathParamNames(url: string): string[] {
-  let path = url
-  try {
-    path = new URL(url).pathname
-  } catch {
-    path = url.split("?")[0].split("#")[0]
-  }
-  return [...path.matchAll(/:([a-zA-Z_][a-zA-Z0-9_]*)/g)].map((m) => m[1])
-}
-
-function substitutePathParams(
-  url: string,
-  pathParams: Map<string, { value: string; enabled: boolean }>,
-): string {
-  return url.replace(/:([a-zA-Z_][a-zA-Z0-9_]*)/g, (_full, name: string) => {
-    const param = pathParams.get(name)
-    if (!param || !param.enabled) return ""
-    return encodeURIComponent(param.value)
-  })
-}
+import {
+  authDisabled,
+  extractPathParamNames,
+  isSignedScheme,
+  resolveParams,
+  resolveStr,
+  shellQuote,
+  substitutePathParams,
+} from "@voleeo/plugin-api/request"
+import type { AuthConfig, HttpRequest } from "@voleeo/types/bindings"
 
 function contentTypeFor(kind: string): string | null {
   switch (kind) {
@@ -40,43 +19,6 @@ function contentTypeFor(kind: string): string | null {
     default:
       return null
   }
-}
-
-async function resolveStr(ctx: Context, value: string): Promise<string> {
-  return ctx.templates.render(value)
-}
-
-async function resolveParams(
-  ctx: Context,
-  params: RequestParameter[],
-): Promise<Array<{ name: string; value: string; enabled: boolean }>> {
-  // Disabled rows skip template resolution entirely — matches Send behavior
-  // and avoids firing side-effecting templates (ask(), prompts) for rows the
-  // user has deliberately turned off.
-  return Promise.all(
-    params.map(async (p) =>
-      p.enabled
-        ? {
-            name: await resolveStr(ctx, p.name),
-            value: await resolveStr(ctx, p.value),
-            enabled: true,
-          }
-        : { name: p.name, value: p.value, enabled: false },
-    ),
-  )
-}
-
-function authDisabled(auth: AuthConfig | undefined): boolean {
-  return !!auth && "enabled" in auth && auth.enabled === false
-}
-
-/** Dynamic schemes the host signs over the final request (SigV4, OAuth 1.0). */
-function isSignedScheme(auth: AuthConfig | undefined): boolean {
-  return (
-    !!auth &&
-    (auth.kind === "aws_sig_v4" || auth.kind === "oauth1") &&
-    !authDisabled(auth)
-  )
 }
 
 async function buildAuthParts(

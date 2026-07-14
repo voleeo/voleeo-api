@@ -1,18 +1,10 @@
-import { errorMessage } from "@/lib/error"
 import type { GitBranch } from "../../../packages/types/bindings"
 import { commands } from "../../../packages/types/bindings"
 import { useGitStore } from "./git"
 import { reloadEverywhere } from "./gitReview"
+import { unwrap } from "./gitStoreUtil"
 
 export type { GitBranch }
-
-async function unwrap<T>(
-  p: Promise<{ status: "ok"; data: T } | { status: "error"; error: unknown }>,
-): Promise<T> {
-  const res = await p
-  if (res.status === "ok") return res.data
-  throw new Error(errorMessage(res.error as never))
-}
 
 export function listBranches(workspaceId: string): Promise<GitBranch[]> {
   return unwrap(commands.gitBranches(workspaceId))

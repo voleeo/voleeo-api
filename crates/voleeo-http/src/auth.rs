@@ -86,20 +86,11 @@ fn payload_sha256(body: Option<&RequestBody>) -> (String, bool) {
 
 /// Signed headers and/or query params for a dynamic scheme, plus human-readable
 /// timeline notes. The executor surfaces the notes as `auth` events.
+#[derive(Default)]
 pub struct DynamicAuth {
     pub headers: Vec<(String, String)>,
     pub query: Vec<(String, String)>,
     pub notes: Vec<String>,
-}
-
-impl DynamicAuth {
-    fn empty() -> Self {
-        DynamicAuth {
-            headers: Vec::new(),
-            query: Vec::new(),
-            notes: Vec::new(),
-        }
-    }
 }
 
 /// Sign a dynamic scheme (AWS SigV4) over the final request. Pure — no side
@@ -114,7 +105,7 @@ pub fn sign_dynamic_auth(
     // A disabled (toggled-off) scheme contributes nothing — the single home for
     // dynamic-auth gating, so every caller (send/preview/copy-as) agrees.
     if !auth.is_active() {
-        return Ok(DynamicAuth::empty());
+        return Ok(DynamicAuth::default());
     }
     match auth {
         AuthConfig::AwsSigV4 {
@@ -247,7 +238,7 @@ pub fn sign_dynamic_auth(
             })
         }
         // Static schemes resolve to headers upstream; nothing to do here.
-        _ => Ok(DynamicAuth::empty()),
+        _ => Ok(DynamicAuth::default()),
     }
 }
 
@@ -270,7 +261,9 @@ pub fn sign_dynamic_auth_url(
 
 /// The `Host` header value reqwest will send: host plus `:port` only when the
 /// port is non-default for the scheme (matches what SigV4 must canonicalize).
-fn host_header(url: &reqwest::Url) -> String {
+/// `host[:port]` for a URL, omitting the port only when it's the scheme default —
+/// the Host-header / SigV4 / OAuth1 base-string form.
+pub(crate) fn host_header(url: &reqwest::Url) -> String {
     let host = url.host_str().unwrap_or("");
     match url.port() {
         Some(p) => format!("{host}:{p}"),
