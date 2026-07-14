@@ -392,3 +392,39 @@ fn revert_commit_scoped_to_one_file() {
         "id: b\nname: B2\n"
     );
 }
+
+#[test]
+fn resolve_without_conflict_does_not_stage() {
+    let (_d, path) = setup();
+    write(&path, "req_a.yaml", "id: a\nname: A\n");
+    stage(&path, &["req_a.yaml".into()]).unwrap();
+    commit(&path, "add a", None).unwrap();
+
+    // Per-field revert path: resolve() on a non-conflicted file must only
+    // write the worktree, never stage.
+    resolve(&path, "req_a.yaml", "id: a\nname: B\n").unwrap();
+
+    let st = status(&path).unwrap();
+    let f = st.files.iter().find(|f| f.path == "req_a.yaml").unwrap();
+    assert!(!f.staged, "non-conflict resolve must not stage");
+}
+
+#[test]
+fn status_hides_stale_index_when_worktree_matches_head() {
+    let (_d, path) = setup();
+    write(&path, "req_a.yaml", "id: a\nname: A\n");
+    stage(&path, &["req_a.yaml".into()]).unwrap();
+    commit(&path, "add a", None).unwrap();
+
+    // Stage an edit, then bring the worktree back to HEAD content — the stale
+    // index blob alone must not surface a change the entity review can't show.
+    write(&path, "req_a.yaml", "id: a\nname: B\n");
+    stage(&path, &["req_a.yaml".into()]).unwrap();
+    write(&path, "req_a.yaml", "id: a\nname: A\n");
+
+    assert!(
+        status(&path).unwrap().files.is_empty(),
+        "byte-identical worktree must be hidden"
+    );
+    assert!(changed_blobs(&path).unwrap().is_empty());
+}

@@ -87,16 +87,20 @@ pub fn status(path: &Path) -> Result<GitStatus, VoleeoError> {
     Ok(GitStatus { files, conflicted })
 }
 
+/// The HEAD blob for a repo-relative path, if it exists in the current tree.
+pub(crate) fn head_blob<'r>(repo: &'r Repository, rel: &str) -> Option<git2::Blob<'r>> {
+    repo.head()
+        .ok()
+        .and_then(|h| h.peel_to_tree().ok())
+        .and_then(|t| t.get_path(Path::new(rel)).ok())
+        .and_then(|e| repo.find_blob(e.id()).ok())
+}
+
 /// Parent folder id of a deleted entity, read from its HEAD blob (the working
 /// file no longer exists). `folderId` is plaintext structural data — never
 /// encrypted — so this works without the crypto layer.
 fn head_parent_id(repo: &Repository, rel: &str) -> Option<String> {
-    let blob = repo
-        .head()
-        .ok()
-        .and_then(|h| h.peel_to_tree().ok())
-        .and_then(|t| t.get_path(Path::new(rel)).ok())
-        .and_then(|e| repo.find_blob(e.id()).ok())?;
+    let blob = head_blob(repo, rel)?;
     let text = std::str::from_utf8(blob.content()).ok()?;
     parse_folder_id(text)
 }
@@ -133,13 +137,7 @@ pub fn discard_volatile_changes(path: &Path) -> Result<(), VoleeoError> {
         if !only_volatile_change(&repo, rel) {
             continue;
         }
-        let head_blob = repo
-            .head()
-            .ok()
-            .and_then(|h| h.peel_to_tree().ok())
-            .and_then(|t| t.get_path(Path::new(rel)).ok())
-            .and_then(|e| repo.find_blob(e.id()).ok());
-        if let Some(blob) = head_blob {
+        if let Some(blob) = head_blob(&repo, rel) {
             std::fs::write(workdir.join(rel), blob.content())
                 .map_err(|e| VoleeoError::Git(format!("Failed to reset {rel}: {e}")))?;
         }
@@ -159,7 +157,9 @@ fn strip_volatile(content: &str) -> String {
 }
 
 /// True when the working file and its HEAD version are identical once volatile
-/// lines are removed — i.e. the file changed only in `updatedAt`.
+/// lines are removed — changed only in `updatedAt`, or byte-identical outright
+/// (a stale index entry can keep such a path in git status; the entity review
+/// has nothing to show for it).
 pub(crate) fn only_volatile_change(repo: &Repository, rel: &str) -> bool {
     let Some(workdir) = repo.workdir() else {
         return false;
@@ -167,19 +167,13 @@ pub(crate) fn only_volatile_change(repo: &Repository, rel: &str) -> bool {
     let Ok(working) = std::fs::read_to_string(workdir.join(rel)) else {
         return false;
     };
-    let head = repo
-        .head()
-        .ok()
-        .and_then(|h| h.peel_to_tree().ok())
-        .and_then(|t| t.get_path(Path::new(rel)).ok())
-        .and_then(|e| repo.find_blob(e.id()).ok());
-    let Some(blob) = head else {
+    let Some(blob) = head_blob(repo, rel) else {
         return false;
     };
     let Ok(head_content) = std::str::from_utf8(blob.content()) else {
         return false;
     };
-    working != head_content && strip_volatile(&working) == strip_volatile(head_content)
+    strip_volatile(&working) == strip_volatile(head_content)
 }
 
 fn index_change(st: Status) -> Option<GitChange> {

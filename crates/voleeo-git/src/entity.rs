@@ -147,14 +147,7 @@ fn blob_text(repo: &Repository, oid: Oid) -> Option<String> {
 }
 
 fn head_text(repo: &Repository, rel: &str) -> Option<String> {
-    let blob = repo
-        .head()
-        .ok()?
-        .peel_to_tree()
-        .ok()?
-        .get_path(Path::new(rel))
-        .ok()
-        .and_then(|e| repo.find_blob(e.id()).ok())?;
+    let blob = crate::status::head_blob(repo, rel)?;
     Some(String::from_utf8_lossy(blob.content()).into_owned())
 }
 

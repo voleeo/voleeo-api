@@ -36,7 +36,8 @@ pub async fn git_entity_conflicts(
 }
 
 /// Write a user-merged entity back to its file (re-encrypting at rest when the
-/// workspace is encrypted) and stage it, clearing the conflict in the index.
+/// workspace is encrypted). Conflicted paths are staged, clearing the conflict;
+/// non-conflict callers (the per-field revert) only touch the worktree.
 #[tauri::command]
 #[specta::specta]
 pub async fn git_resolve_entity(

@@ -142,15 +142,21 @@ fn safe_rel(file: &str) -> Result<&Path, VoleeoError> {
     Ok(rel)
 }
 
-/// Write the resolved file content, then stage it — staging a conflicted path
-/// clears its conflict in the index.
+/// Write the resolved file content. When the path is conflicted, stage it —
+/// that clears the conflict in the index. When it isn't (the per-field revert
+/// in Review changes reuses this command), leave the index alone: staging would
+/// park a blob that later matches neither HEAD nor the worktree, and status
+/// then reports a phantom change the entity diff can't show.
 pub fn resolve(path: &Path, file: &str, merged: &str) -> Result<(), VoleeoError> {
     let rel = safe_rel(file)?;
     let repo = open_repo(path)?;
     std::fs::write(path.join(rel), merged).map_err(io_err)?;
     let mut index = repo.index().map_err(git_err)?;
-    index.add_path(rel).map_err(git_err)?;
-    index.write().map_err(git_err)?;
+    // Conflict entries live at index stages 1-3 (ancestor/ours/theirs).
+    if (1..=3).any(|s| index.get_path(rel, s).is_some()) {
+        index.add_path(rel).map_err(git_err)?;
+        index.write().map_err(git_err)?;
+    }
     Ok(())
 }
 

@@ -1,20 +1,21 @@
 use git2::{Cred, CredentialType, Error, RemoteCallbacks, Repository};
 use std::cell::Cell;
 
-/// Auth callbacks shared by fetch/pull/push.
+/// Install the credential callback shared by clone/fetch/pull/push.
 ///
 /// For HTTPS we use the caller-supplied `creds` (username + token) when present,
-/// otherwise the system credential helper. For SSH we use the agent. We never
-/// fall back to `Cred::default()`: libgit2 treats it as a passthrough (the
-/// callback declining), which it then reports as the confusing "authentication
-/// required but no callback set". Explicit errors surface actionable messages.
-/// The attempt counter stops libgit2 looping forever on a rejected credential.
-pub(crate) fn remote_callbacks(
-    repo: &Repository,
+/// otherwise `config` (the repo's, or the global default for a clone with no repo
+/// yet). For SSH we use the agent. We never fall back to `Cred::default()`:
+/// libgit2 treats it as a passthrough (the callback declining), which it then
+/// reports as the confusing "authentication required but no callback set".
+/// Explicit errors surface actionable messages. The attempt counter stops
+/// libgit2 looping forever on a rejected credential.
+fn install_credentials(
+    cb: &mut RemoteCallbacks<'static>,
     creds: Option<(String, String)>,
-) -> RemoteCallbacks<'_> {
+    config: Option<git2::Config>,
+) {
     let attempts = Cell::new(0u32);
-    let mut cb = RemoteCallbacks::new();
     cb.credentials(move |url, username, allowed| {
         if attempts.get() >= 4 {
             return Err(Error::from_str(
@@ -27,15 +28,15 @@ pub(crate) fn remote_callbacks(
             if let Some((user, pass)) = &creds {
                 return Cred::userpass_plaintext(user, pass);
             }
-            let config = repo
-                .config()
-                .map_err(|_| Error::from_str("could not read git config"))?;
-            return Cred::credential_helper(&config, url, username).map_err(|_| {
-                Error::from_str(
-                    "No credentials for this HTTPS remote — add a username and token in Git \
-                     settings, or use the SSH remote URL",
-                )
-            });
+            if let Some(config) = &config {
+                if let Ok(cred) = Cred::credential_helper(config, url, username) {
+                    return Ok(cred);
+                }
+            }
+            return Err(Error::from_str(
+                "No credentials for this HTTPS remote — add a username and token in Git \
+                 settings, or use the SSH remote URL",
+            ));
         }
         if allowed.contains(CredentialType::SSH_KEY) {
             return Cred::ssh_key_from_agent(username.unwrap_or("git")).map_err(|_| {
@@ -47,6 +48,15 @@ pub(crate) fn remote_callbacks(
         }
         Err(Error::from_str("Unsupported authentication method"))
     });
+}
+
+/// Auth callbacks for fetch/pull/push, plus push-rejection reporting.
+pub(crate) fn remote_callbacks(
+    repo: &Repository,
+    creds: Option<(String, String)>,
+) -> RemoteCallbacks<'static> {
+    let mut cb = RemoteCallbacks::new();
+    install_credentials(&mut cb, creds, repo.config().ok());
     // Per-ref push rejection (e.g. non-fast-forward) is reported ONLY here —
     // without this callback libgit2 can return Ok from `push` on a rejected ref,
     // so the push silently no-ops. Turn it into an actionable error.
@@ -70,44 +80,10 @@ pub(crate) fn remote_callbacks(
     cb
 }
 
-/// Like `remote_callbacks` but with no repo yet (clone). Uses caller-supplied
-/// `creds` (username + token) for HTTPS, else the global credential helper; SSH
-/// uses the agent.
+/// Like `remote_callbacks` but with no repo yet (clone) — resolves credentials
+/// against the global git config.
 pub(crate) fn clone_callbacks(creds: Option<(String, String)>) -> RemoteCallbacks<'static> {
-    let attempts = Cell::new(0u32);
     let mut cb = RemoteCallbacks::new();
-    cb.credentials(move |url, username, allowed| {
-        if attempts.get() >= 4 {
-            return Err(Error::from_str(
-                "Authentication failed — add your SSH key to ssh-agent, or enter a username and token",
-            ));
-        }
-        attempts.set(attempts.get() + 1);
-
-        if allowed.contains(CredentialType::USER_PASS_PLAINTEXT) {
-            if let Some((user, pass)) = &creds {
-                return Cred::userpass_plaintext(user, pass);
-            }
-            if let Ok(config) = git2::Config::open_default() {
-                if let Ok(cred) = Cred::credential_helper(&config, url, username) {
-                    return Ok(cred);
-                }
-            }
-            return Err(Error::from_str(
-                "No credentials for this HTTPS remote — enter a username and token, or clone via SSH",
-            ));
-        }
-        if allowed.contains(CredentialType::SSH_KEY) {
-            return Cred::ssh_key_from_agent(username.unwrap_or("git")).map_err(|_| {
-                Error::from_str(
-                    "SSH key not available — add it to ssh-agent (ssh-add), or enter a username + token to clone over HTTPS",
-                )
-            });
-        }
-        if allowed.contains(CredentialType::USERNAME) {
-            return Cred::username(username.unwrap_or("git"));
-        }
-        Err(Error::from_str("Unsupported authentication method"))
-    });
+    install_credentials(&mut cb, creds, git2::Config::open_default().ok());
     cb
 }
