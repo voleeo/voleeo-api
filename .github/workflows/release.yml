@@ -85,7 +85,6 @@ jobs:
     needs: [version, create-release]
     strategy:
       fail-fast: false
-      max-parallel: 1
       matrix:
         include:
           - platform: macos-latest
