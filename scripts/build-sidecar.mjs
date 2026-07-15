@@ -47,6 +47,7 @@ const bunTargets = {
   "aarch64-apple-darwin": "bun-darwin-arm64",
   "x86_64-apple-darwin": "bun-darwin-x64",
   "x86_64-pc-windows-msvc": "bun-windows-x64",
+  "aarch64-pc-windows-msvc": "bun-windows-x64",
   "x86_64-unknown-linux-gnu": "bun-linux-x64",
   "aarch64-unknown-linux-gnu": "bun-linux-arm64",
 }
