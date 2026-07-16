@@ -63,7 +63,6 @@ export const VarRow = memo(function VarRow({
   const flashRef = useRowFlash<HTMLDivElement>(
     !isTrailing && !!v.key && focusKey === v.key,
     flashNonce,
-    true, // grid row is flush to the edge — pad the ring off the checkbox
   )
 
   return (
@@ -73,7 +72,7 @@ export const VarRow = memo(function VarRow({
       <div
         ref={flashRef}
         className={cn(
-          "group/row grid gap-x-1 py-[3px] items-center border-b border-border/40 transition-opacity",
+          "group/row grid gap-x-1 px-2.5 py-[3px] items-center border-b border-border/40 transition-opacity",
           isDragging && "opacity-40",
         )}
         style={COL_STYLE}
