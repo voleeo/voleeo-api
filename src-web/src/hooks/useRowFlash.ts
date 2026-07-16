@@ -13,28 +13,24 @@ let lastConsumedNonce = -1
 export function useRowFlash<T extends HTMLElement>(
   active: boolean,
   nonce: number | undefined,
-  padded = false,
 ) {
   const ref = useRef<T>(null)
   useEffect(() => {
     if (!active || nonce === undefined) return
     const el = ref.current
     if (!el) return
-    const classes = padded
-      ? ["env-row-flash", "env-row-flash-pad"]
-      : ["env-row-flash"]
     if (nonce > lastConsumedNonce) {
       lastConsumedNonce = nonce
-      el.classList.remove(...classes)
+      el.classList.remove("env-row-flash")
       void el.offsetWidth // reflow so the animation restarts from 0
-      el.classList.add(...classes)
+      el.classList.add("env-row-flash")
       el.scrollIntoView({ block: "nearest" })
     }
     // (Re-)attach outside the consume guard: StrictMode re-runs the effect
-    // after cleanup detached the listener — without this the classes linger.
-    const done = () => el.classList.remove(...classes)
+    // after cleanup detached the listener — without this the class lingers.
+    const done = () => el.classList.remove("env-row-flash")
     el.addEventListener("animationend", done, { once: true })
     return () => el.removeEventListener("animationend", done)
-  }, [active, nonce, padded])
+  }, [active, nonce])
   return ref
 }

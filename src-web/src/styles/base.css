@@ -158,8 +158,10 @@ body {
 }
 
 /* One-shot double pulse for a chip-navigated env-var row. Constant colour with
-   a spread that pulses 0→2px→0→2px→0 — inset so it never shifts layout and is
-   never clipped by the System block's overflow-hidden. */
+   a spread that pulses 0→2px→0→2px→0 — inset so it never shifts layout and
+   stays inside the row's own box. Anything that widens the row past its
+   scroller (negative margins) loses the ring's left/right edges: EnvPane's
+   overflow-y-auto computes overflow-x to auto, so it clips horizontally too. */
 @keyframes env-row-flash {
   0%,
   40%,
@@ -178,16 +180,6 @@ body {
 .env-row-flash {
   animation: env-row-flash 1.15s ease-in-out;
   border-radius: 6px;
-}
-
-/* Variant for grid rows whose content is flush to the edge (the checkbox
-   column). Padding pushes the ring out for breathing room; the equal negative
-   margin keeps the content-box — and therefore the grid — exactly in place. */
-.env-row-flash-pad {
-  padding-left: 8px;
-  padding-right: 8px;
-  margin-left: -8px;
-  margin-right: -8px;
 }
 
 /* The system-var marker prefix on chips (SYSTEM_VAR_PREFIX) — breathing room
