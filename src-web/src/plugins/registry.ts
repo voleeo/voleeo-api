@@ -4,8 +4,13 @@ import type {
   Theme,
   VoleeoPlugin,
 } from "@voleeo/plugin-api"
+import { withInheritedGrpcData } from "@/store/grpc/shared"
 import { withInheritedData } from "@/views/ApiWorkspace/sendResolution/effectiveRequest"
-import type { BoundRequestAction, BoundTemplateFunction } from "./types"
+import type {
+  BoundGrpcRequestAction,
+  BoundRequestAction,
+  BoundTemplateFunction,
+} from "./types"
 
 interface LoadedPlugin {
   plugin: VoleeoPlugin
@@ -74,6 +79,25 @@ class PluginRegistry {
             isEnabled: action.isEnabled,
             onInvoke: (request) =>
               action.onInvoke(ctx, withInheritedData(request)),
+          })
+        }
+      }
+      return out
+    })
+  }
+
+  grpcRequestActions(): BoundGrpcRequestAction[] {
+    return this.cached("grpcRequestActions", () => {
+      const out: BoundGrpcRequestAction[] = []
+      for (const { plugin, ctx } of this.plugins.values()) {
+        for (const action of plugin.grpcRequestActions ?? []) {
+          out.push({
+            id: action.id,
+            label: action.label,
+            glyph: action.glyph,
+            isEnabled: action.isEnabled,
+            onInvoke: (request) =>
+              action.onInvoke(ctx, withInheritedGrpcData(request)),
           })
         }
       }

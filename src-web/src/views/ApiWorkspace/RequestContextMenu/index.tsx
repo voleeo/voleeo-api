@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState } from "react"
 import { Glyph } from "@/components/Glyph"
 import { cn } from "@/lib/utils"
-import { useRequestActions } from "@/plugins/hooks"
-import type { BoundRequestAction } from "@/plugins/types"
+import { useGrpcRequestActions, useRequestActions } from "@/plugins/hooks"
+import type {
+  BoundGrpcRequestAction,
+  BoundRequestAction,
+} from "@/plugins/types"
 import { useGitStore } from "@/store/git"
 import { useRequestStore } from "@/store/requests"
+import { CopyAsSubmenu } from "./CopyAsSubmenu"
 import { CreateItems } from "./CreateItems"
 import { ITEM_CLASSES, SEP } from "./contextMenuStyles"
 import { RollbackSection } from "./RollbackSection"
@@ -42,7 +46,9 @@ export function RequestContextMenu({
   onShowHistory,
 }: Props) {
   const requests = useRequestStore((s) => s.requests)
+  const grpcRequests = useRequestStore((s) => s.grpcRequests)
   const requestActions = useRequestActions()
+  const grpcRequestActions = useGrpcRequestActions()
   const changeByNode = useGitStore((s) => s.changeByNode)
   const ownChangeByNode = useGitStore((s) => s.ownChangeByNode)
   const descendantChangedFolders = useGitStore((s) => s.folderDescendantChanged)
@@ -57,7 +63,6 @@ export function RequestContextMenu({
   const [rollbackSubOpen, setRollbackSubOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
-  // Close on outside pointerdown or Escape.
   useEffect(() => {
     function onPointerDown(e: PointerEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node))
@@ -77,6 +82,13 @@ export function RequestContextMenu({
   function handleRequestAction(action: BoundRequestAction, id: string) {
     onClose()
     const req = useRequestStore.getState().requests.find((r) => r.id === id)
+    if (!req) return
+    void action.onInvoke(req)
+  }
+
+  function handleGrpcAction(action: BoundGrpcRequestAction, id: string) {
+    onClose()
+    const req = useRequestStore.getState().grpcRequests.find((r) => r.id === id)
     if (!req) return
     void action.onInvoke(req)
   }
@@ -147,46 +159,15 @@ export function RequestContextMenu({
           const other = enabled.filter((a) => !a.id.startsWith("copy-as-"))
           return (
             <>
-              {copyAs.length > 0 && (
-                <div className="relative">
-                  <button
-                    type="button"
-                    className={ITEM_CLASSES}
-                    onMouseEnter={() => setCopyAsSubOpen(true)}
-                    onFocus={() => setCopyAsSubOpen(true)}
-                    onClick={() => setCopyAsSubOpen((v) => !v)}
-                  >
-                    <Glyph kind="copy" size={13} color="var(--base04)" />
-                    <span className="flex-1 text-left">Copy as ...</span>
-                    <Glyph kind="chevron" size={11} color="var(--base04)" />
-                  </button>
-                  {copyAsSubOpen && (
-                    <div
-                      className="absolute left-full top-0 -ml-px z-[301] min-w-[150px] rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10"
-                      onMouseEnter={() => setCopyAsSubOpen(true)}
-                    >
-                      {copyAs.map((a) => {
-                        const short = a.label.replace(/^Copy as\s+/i, "")
-                        return (
-                          <button
-                            key={a.id}
-                            type="button"
-                            className={ITEM_CLASSES}
-                            onClick={() => handleRequestAction(a, state.id)}
-                          >
-                            <Glyph
-                              kind={a.glyph ?? "copy"}
-                              size={13}
-                              color="var(--base04)"
-                            />
-                            <span>{short}</span>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
+              <CopyAsSubmenu
+                open={copyAsSubOpen}
+                onOpenChange={setCopyAsSubOpen}
+                actions={copyAs}
+                onPick={(id) => {
+                  const a = copyAs.find((x) => x.id === id)
+                  if (a) handleRequestAction(a, state.id)
+                }}
+              />
               {other.map((a) => (
                 <button
                   key={a.id}
@@ -204,6 +185,26 @@ export function RequestContextMenu({
                 </button>
               ))}
             </>
+          )
+        })()}
+      {state.kind === "grpc" &&
+        (() => {
+          const req = grpcRequests.find((r) => r.id === state.id)
+          if (!req) return null
+          const enabled = grpcRequestActions.filter(
+            (a) => a.isEnabled?.(req) ?? true,
+          )
+          const copyAs = enabled.filter((a) => a.id.startsWith("copy-as-"))
+          return (
+            <CopyAsSubmenu
+              open={copyAsSubOpen}
+              onOpenChange={setCopyAsSubOpen}
+              actions={copyAs}
+              onPick={(id) => {
+                const a = copyAs.find((x) => x.id === id)
+                if (a) handleGrpcAction(a, state.id)
+              }}
+            />
           )
         })()}
       {state.kind !== "workspace" && (
