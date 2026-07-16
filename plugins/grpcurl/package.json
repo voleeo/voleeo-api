@@ -1,0 +1,14 @@
+{
+  "name": "@voleeo/grpcurl",
+  "displayName": "Copy as grpcurl",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@voleeo/plugin-api": "workspace:*",
+    "@voleeo/types": "workspace:*"
+  }
+}
