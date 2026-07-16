@@ -1,4 +1,5 @@
 import type { Context } from "./context"
+import type { GrpcRequestActionContribution } from "./contributions/grpc-request-action"
 import type { RequestActionContribution } from "./contributions/request-action"
 import type { TemplateFunctionContribution } from "./contributions/template-function"
 import type { Theme } from "./contributions/theme"
@@ -29,7 +30,10 @@ export interface VoleeoPlugin {
    *  via {{ name(arg1, arg2) }} syntax. */
   templateFunctions?: TemplateFunctionContribution[]
 
-  /** Actions that operate on a single request. Surface in the request-tree
+  /** Actions that operate on a single HTTP request. Surface in the request-tree
    *  context menu; may optionally bind a keyboard shortcut. */
   requestActions?: RequestActionContribution[]
+
+  /** Actions that operate on a single gRPC request. Surface on gRPC tree nodes. */
+  grpcRequestActions?: GrpcRequestActionContribution[]
 }
