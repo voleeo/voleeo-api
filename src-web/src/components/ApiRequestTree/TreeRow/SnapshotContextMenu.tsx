@@ -8,7 +8,9 @@ import { useToastStore } from "@/store/toast"
 import {
   ITEM_CLASSES,
   SEP,
+  subMenuClasses,
 } from "@/views/ApiWorkspace/RequestContextMenu/contextMenuStyles"
+import { useMenuPosition } from "@/views/ApiWorkspace/RequestContextMenu/useMenuPosition"
 import { commands } from "../../../../../packages/types/bindings"
 
 export function SnapshotContextMenu({
@@ -29,6 +31,7 @@ export function SnapshotContextMenu({
   onClose: () => void
 }) {
   const menuRef = useRef<HTMLDivElement>(null)
+  const { style, subFlipLeft } = useMenuPosition(pos.x, pos.y, menuRef)
   const [copyAsOpen, setCopyAsOpen] = useState(false)
   const copyAs = useRequestActions().filter((a) => a.id.startsWith("copy-as-"))
 
@@ -64,7 +67,7 @@ export function SnapshotContextMenu({
     <div
       ref={menuRef}
       className="fixed z-[300] min-w-[180px] rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10"
-      style={{ top: pos.y, left: pos.x }}
+      style={style}
     >
       <button
         type="button"
@@ -105,7 +108,7 @@ export function SnapshotContextMenu({
           </button>
           {copyAsOpen && (
             <div
-              className="absolute left-full top-0 -ml-px z-[301] min-w-[150px] rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10"
+              className={subMenuClasses(subFlipLeft)}
               onMouseEnter={() => setCopyAsOpen(true)}
             >
               {copyAs.map((a) => (

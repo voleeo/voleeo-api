@@ -1,6 +1,6 @@
 import type { Dispatch, ReactNode, SetStateAction } from "react"
 import { Glyph } from "@/components/Glyph"
-import { ITEM_CLASSES, SEP } from "./contextMenuStyles"
+import { ITEM_CLASSES, SEP, subMenuClasses } from "./contextMenuStyles"
 import type { CtxMenuState, RollbackTarget } from "./types"
 
 interface Props {
@@ -11,6 +11,7 @@ interface Props {
   folderDescendantChanged: boolean
   rollbackSubOpen: boolean
   setRollbackSubOpen: Dispatch<SetStateAction<boolean>>
+  subFlipLeft: boolean
   collapseSub: () => void
   onRollback: (target: RollbackTarget, id: string) => void
   onShowHistory: (kind: "request" | "folder", id: string) => void
@@ -24,6 +25,7 @@ export function RollbackSection({
   folderDescendantChanged,
   rollbackSubOpen,
   setRollbackSubOpen,
+  subFlipLeft,
   collapseSub,
   onRollback,
   onShowHistory,
@@ -75,7 +77,7 @@ export function RollbackSection({
             </button>
             {rollbackSubOpen && (
               <div
-                className="absolute left-full top-0 -ml-px z-[301] min-w-[150px] rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10"
+                className={subMenuClasses(subFlipLeft)}
                 onMouseEnter={() => setRollbackSubOpen(true)}
               >
                 <button
