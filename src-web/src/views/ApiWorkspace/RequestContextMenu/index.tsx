@@ -197,19 +197,20 @@ export function RequestContextMenu({
           const enabled = grpcRequestActions.filter(
             (a) => a.isEnabled?.(req) ?? true,
           )
-          const copyAs = enabled.filter((a) => a.id.startsWith("copy-as-"))
-          return (
-            <CopyAsSubmenu
-              open={copyAsSubOpen}
-              onOpenChange={setCopyAsSubOpen}
-              actions={copyAs}
-              subFlipLeft={subFlipLeft}
-              onPick={(id) => {
-                const a = copyAs.find((x) => x.id === id)
-                if (a) handleGrpcAction(a, state.id)
-              }}
-            />
-          )
+          // Flat items, no "Copy as ..." submenu — grpcurl is the only target,
+          // so a submenu would be one click to reveal one child.
+          return enabled.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              className={ITEM_CLASSES}
+              onMouseEnter={collapseSub}
+              onClick={() => handleGrpcAction(a, state.id)}
+            >
+              <Glyph kind={a.glyph ?? "copy"} size={13} color="var(--base04)" />
+              <span>{a.label}</span>
+            </button>
+          ))
         })()}
       {state.kind !== "workspace" && (
         <>

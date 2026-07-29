@@ -1,5 +1,6 @@
 import { useRef } from "react"
 import { Glyph } from "@/components/Glyph"
+import type { ParsedGrpcRequest } from "@/lib/grpcurlParser"
 import type { GrpcStatus } from "@/store/grpc"
 import { UrlInput } from "@/views/ApiWorkspace/UrlInput"
 import type {
@@ -14,6 +15,7 @@ interface Props {
   target: string
   onTargetChange: (v: string) => void
   onTargetCommit: () => void
+  onImportGrpc: (parsed: ParsedGrpcRequest) => void
   onVarClick: (varName: string) => void
   tls: boolean
   onTlsChange: (tls: boolean) => void
@@ -79,6 +81,7 @@ export function GrpcHeader(props: Props) {
           onChange={props.onTargetChange}
           onCommit={props.onTargetCommit}
           onSend={onPrimary}
+          onImportGrpc={props.onImportGrpc}
           onVarClick={props.onVarClick}
         />
         <ServiceMethodPicker

@@ -1,0 +1,90 @@
+[
+  {
+    "name": "own > folder > workspace, deduped case-insensitively",
+    "own": [{ "name": "X-A", "value": "own", "enabled": true }],
+    "folders": [
+      {
+        "id": "f1",
+        "parentId": null,
+        "headers": [
+          { "name": "x-a", "value": "folder", "enabled": true },
+          { "name": "X-B", "value": "folder", "enabled": true }
+        ]
+      }
+    ],
+    "folderId": "f1",
+    "workspaceHeaders": [
+      { "name": "x-a", "value": "ws", "enabled": true },
+      { "name": "X-C", "value": "ws", "enabled": true }
+    ],
+    "expected": [
+      { "name": "X-A", "value": "own" },
+      { "name": "X-B", "value": "folder" },
+      { "name": "X-C", "value": "ws" }
+    ]
+  },
+  {
+    "name": "nearest folder wins over its ancestors",
+    "own": [],
+    "folders": [
+      {
+        "id": "root",
+        "parentId": null,
+        "headers": [
+          { "name": "x-scope", "value": "root", "enabled": true },
+          { "name": "x-root-only", "value": "root", "enabled": true }
+        ]
+      },
+      {
+        "id": "mid",
+        "parentId": "root",
+        "headers": [{ "name": "x-scope", "value": "mid", "enabled": true }]
+      },
+      {
+        "id": "leaf",
+        "parentId": "mid",
+        "headers": [{ "name": "X-Scope", "value": "leaf", "enabled": true }]
+      }
+    ],
+    "folderId": "leaf",
+    "workspaceHeaders": [{ "name": "x-scope", "value": "ws", "enabled": true }],
+    "expected": [
+      { "name": "X-Scope", "value": "leaf" },
+      { "name": "x-root-only", "value": "root" }
+    ]
+  },
+  {
+    "name": "disabled and blank-name rows drop without claiming the name",
+    "own": [
+      { "name": "x-a", "value": "own-disabled", "enabled": false },
+      { "name": "   ", "value": "blank", "enabled": true }
+    ],
+    "folders": [
+      {
+        "id": "f1",
+        "parentId": null,
+        "headers": [{ "name": "x-a", "value": "folder", "enabled": true }]
+      }
+    ],
+    "folderId": "f1",
+    "workspaceHeaders": [],
+    "expected": [{ "name": "x-a", "value": "folder" }]
+  },
+  {
+    "name": "no folder: own then workspace",
+    "own": [{ "name": "x-a", "value": "own", "enabled": true }],
+    "folders": [
+      {
+        "id": "unrelated",
+        "parentId": null,
+        "headers": [{ "name": "x-z", "value": "nope", "enabled": true }]
+      }
+    ],
+    "folderId": null,
+    "workspaceHeaders": [{ "name": "x-b", "value": "ws", "enabled": true }],
+    "expected": [
+      { "name": "x-a", "value": "own" },
+      { "name": "x-b", "value": "ws" }
+    ]
+  }
+]

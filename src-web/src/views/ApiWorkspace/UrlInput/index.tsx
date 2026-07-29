@@ -6,6 +6,7 @@ import {
   setCaretOffset,
 } from "@/lib/caret"
 import type { CommandImportResult } from "@/lib/commandImport"
+import type { ParsedGrpcRequest } from "@/lib/grpcurlParser"
 import { cn } from "@/lib/utils"
 import { UrlInputModals } from "./UrlInputModals"
 import { toHtml } from "./urlTokenizer"
@@ -26,6 +27,8 @@ interface Props {
   onQueryParams?: (params: Array<{ key: string; value: string }>) => void
   /** Called when the user pastes a curl/httpie command into an empty URL bar. */
   onImportCommand?: (result: CommandImportResult) => void
+  /** Same, for a `grpcurl …` command pasted into an empty gRPC target bar. */
+  onImportGrpc?: (parsed: ParsedGrpcRequest) => void
   onFocus?: () => void
   onBlur?: () => void
   /** Render the value (with chips) but non-editable and at full opacity — for
@@ -43,6 +46,7 @@ export function UrlInput({
   onVarClick,
   onQueryParams,
   onImportCommand,
+  onImportGrpc,
   onFocus,
   onBlur,
   readOnly = false,
@@ -126,6 +130,7 @@ export function UrlInput({
     onSend,
     onQueryParams,
     onImportCommand,
+    onImportGrpc,
     acOpen,
     acItems,
     acIdx,

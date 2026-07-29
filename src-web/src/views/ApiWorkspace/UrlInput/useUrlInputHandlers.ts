@@ -8,6 +8,10 @@ import {
   setCaretOffset,
 } from "@/lib/caret"
 import { type CommandImportResult, tryParseCommand } from "@/lib/commandImport"
+import {
+  type ParsedGrpcRequest,
+  parseGrpcurlCommand,
+} from "@/lib/grpcurlParser"
 import { parseQueryString } from "../paramUtils"
 import type { AutocompleteItem } from "./useUrlAutocomplete"
 import { getUrlPartialExpr } from "./useUrlAutocomplete"
@@ -19,6 +23,7 @@ interface UseUrlInputHandlersOptions {
   onSend: () => void
   onQueryParams?: (params: Array<{ key: string; value: string }>) => void
   onImportCommand?: (result: CommandImportResult) => void
+  onImportGrpc?: (parsed: ParsedGrpcRequest) => void
   acOpen: boolean
   acItems: AutocompleteItem[]
   acIdx: number
@@ -40,6 +45,7 @@ export function useUrlInputHandlers({
   onSend,
   onQueryParams,
   onImportCommand,
+  onImportGrpc,
   acOpen,
   acItems,
   acIdx,
@@ -118,14 +124,23 @@ export function useUrlInputHandlers({
     const el = e.currentTarget
     const text = e.clipboardData.getData("text/plain")
     if (!text) return
-    // When the input is empty and the paste looks like a curl/httpie command,
-    // hand it up to the parent for full request import instead of inserting
-    // it as plain text. Disabled commands (no onImportCommand) fall through.
-    if (onImportCommand && read(el) === "") {
-      const result = tryParseCommand(text)
-      if (result) {
-        onImportCommand(result)
-        return
+    // When the input is empty and the paste looks like a curl/httpie/grpcurl
+    // command, hand it up to the parent for full request import instead of
+    // inserting it as plain text. Panes that opt out fall through to text.
+    if (read(el) === "") {
+      if (onImportCommand) {
+        const result = tryParseCommand(text)
+        if (result) {
+          onImportCommand(result)
+          return
+        }
+      }
+      if (onImportGrpc) {
+        const parsed = parseGrpcurlCommand(text)
+        if (parsed) {
+          onImportGrpc(parsed)
+          return
+        }
       }
     }
     pushUndo(el)

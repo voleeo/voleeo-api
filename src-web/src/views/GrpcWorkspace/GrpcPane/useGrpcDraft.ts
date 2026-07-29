@@ -36,7 +36,13 @@ export interface GrpcDraft {
   setProtoSource: (v: ProtoSource) => void
   service: string | null
   method: string | null
-  selectMethod: (service: string, method: string) => void
+  /** `reseedMessage: false` keeps the current message — an imported command
+   *  carries its own body, which the schema-resolved empty form would clobber. */
+  selectMethod: (
+    service: string,
+    method: string,
+    reseedMessage?: boolean,
+  ) => void
   clearMethod: () => void
   schema: ProtoMethodInfo | null
   message: FormValue
@@ -179,10 +185,10 @@ export function useGrpcDraft(
     setProtoSource,
     service,
     method,
-    selectMethod: (svc, m) => {
+    selectMethod: (svc, m, reseedMessage = true) => {
       setService(svc)
       setMethod(m)
-      blankMessage.current = true
+      blankMessage.current = reseedMessage
     },
     clearMethod: () => {
       setService(null)
