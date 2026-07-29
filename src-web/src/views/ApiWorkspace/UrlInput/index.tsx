@@ -201,7 +201,8 @@ export function UrlInput({
         onCut={handleCut}
         onPaste={handlePaste}
         onFocus={onFocus}
-        onBlur={() => {
+        onBlur={(e) => {
+          e.currentTarget.scrollLeft = 0
           onCommit()
           onBlur?.()
         }}
@@ -210,12 +211,7 @@ export function UrlInput({
         data-placeholder={disabled ? "Select a request" : "https://..."}
         style={{ fontSize: "0.786rem" }}
         className={cn(
-          // `min-w-[90px]` keeps the URL legible when the request pane is
-          // dragged narrow (instead of collapsing to nothing); `text-ellipsis`
-          // trails a … when the text overflows that width.
-          "ce-placeholder editor-font flex-1 min-w-[90px] px-2.5 py-[6px] outline-none leading-[1.5] whitespace-nowrap text-ellipsis",
-          // Frozen snapshot URL reads muted (like a snapshot's tree-row name);
-          // the live editor stays full-contrast.
+          "ce-placeholder editor-font flex-1 min-w-[90px] px-2.5 py-[6px] outline-none leading-[1.5] whitespace-nowrap text-ellipsis focus:text-clip",
           readOnly
             ? "overflow-x-auto selectable-text text-muted"
             : "overflow-hidden text-fg",
