@@ -5,6 +5,7 @@ import { plugin as curlPlugin } from "@voleeo/curl"
 import { plugin as encryptPlugin } from "@voleeo/encrypt"
 import { plugin as fakerPlugin } from "@voleeo/faker"
 import { plugin as fetchPlugin } from "@voleeo/fetch"
+import { plugin as grpcurlPlugin } from "@voleeo/grpcurl"
 import { plugin as httpiePlugin } from "@voleeo/httpie"
 import { plugin as themesPlugin } from "@voleeo/themes"
 import { plugin as timestampPlugin } from "@voleeo/timestamp"
@@ -37,6 +38,7 @@ export async function loadBundledPlugins(): Promise<void> {
   )
   await registry.register(curlPlugin, createContext(curlPlugin.meta))
   await registry.register(fetchPlugin, createContext(fetchPlugin.meta))
+  await registry.register(grpcurlPlugin, createContext(grpcurlPlugin.meta))
   await registry.register(httpiePlugin, createContext(httpiePlugin.meta))
   await registry.register(responseBuiltin, createContext(responseBuiltin.meta))
   await registry.register(requestBuiltin, createContext(requestBuiltin.meta))

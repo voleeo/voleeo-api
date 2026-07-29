@@ -1,5 +1,5 @@
 import type { PreviewResult, TemplateFunctionArg } from "@voleeo/plugin-api"
-import type { HttpRequest } from "../../../packages/types/bindings"
+import type { GrpcRequest, HttpRequest } from "../../../packages/types/bindings"
 
 /** Host-facing shape of a template function returned by the registry.
  *
@@ -32,4 +32,13 @@ export interface BoundRequestAction {
   glyph?: string
   isEnabled?(request: HttpRequest): boolean
   onInvoke(request: HttpRequest): Promise<void> | void
+}
+
+/** Host-facing gRPC request action — ctx bound at registry time. */
+export interface BoundGrpcRequestAction {
+  id: string
+  label: string
+  glyph?: string
+  isEnabled?(request: GrpcRequest): boolean
+  onInvoke(request: GrpcRequest): Promise<void> | void
 }

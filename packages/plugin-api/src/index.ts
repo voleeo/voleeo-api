@@ -11,4 +11,5 @@ export type {
   TemplateFunctionArg,
   TemplateFunctionContribution,
 } from "./contributions/template-function"
+export type { GrpcRequestActionContribution } from "./contributions/grpc-request-action"
 export type { RequestActionContribution } from "./contributions/request-action"

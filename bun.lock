@@ -77,6 +77,14 @@
         "@voleeo/types": "workspace:*",
       },
     },
+    "plugins/grpcurl": {
+      "name": "@voleeo/grpcurl",
+      "version": "0.1.0",
+      "dependencies": {
+        "@voleeo/plugin-api": "workspace:*",
+        "@voleeo/types": "workspace:*",
+      },
+    },
     "plugins/httpie": {
       "name": "@voleeo/httpie",
       "version": "0.1.0",
@@ -151,6 +159,7 @@
         "@voleeo/encrypt": "workspace:*",
         "@voleeo/faker": "workspace:*",
         "@voleeo/fetch": "workspace:*",
+        "@voleeo/grpcurl": "workspace:*",
         "@voleeo/httpie": "workspace:*",
         "@voleeo/plugin-api": "workspace:*",
         "@voleeo/themes": "workspace:*",
@@ -681,6 +690,8 @@
     "@voleeo/faker": ["@voleeo/faker@workspace:plugins/faker"],
 
     "@voleeo/fetch": ["@voleeo/fetch@workspace:plugins/fetch"],
+
+    "@voleeo/grpcurl": ["@voleeo/grpcurl@workspace:plugins/grpcurl"],
 
     "@voleeo/httpie": ["@voleeo/httpie@workspace:plugins/httpie"],
 

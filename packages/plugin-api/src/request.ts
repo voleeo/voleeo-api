@@ -1,7 +1,6 @@
 // Shared request-serialization helpers for "copy as <tool>" plugins (cURL,
-// HTTPie, fetch). Each generator resolves the same stored `HttpRequest` — render
-// templates, split path-params from query, read auth state — then formats its
-// own output, so only these model-level helpers are shared.
+// HTTPie, fetch, grpcurl). Generators resolve templates / params / auth state,
+// then format their own output — only these model-level helpers are shared.
 
 import type { AuthConfig, RequestParameter } from "@voleeo/types/bindings"
 import type { Context } from "./context"

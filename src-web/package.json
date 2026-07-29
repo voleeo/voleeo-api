@@ -42,6 +42,7 @@
     "@voleeo/encrypt": "workspace:*",
     "@voleeo/faker": "workspace:*",
     "@voleeo/fetch": "workspace:*",
+    "@voleeo/grpcurl": "workspace:*",
     "@voleeo/httpie": "workspace:*",
     "@voleeo/plugin-api": "workspace:*",
     "@voleeo/themes": "workspace:*",
