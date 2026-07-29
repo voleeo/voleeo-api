@@ -6,9 +6,10 @@ import type { BoundRequestAction } from "@/plugins/types"
 import { useGitStore } from "@/store/git"
 import { useRequestStore } from "@/store/requests"
 import { CreateItems } from "./CreateItems"
-import { ITEM_CLASSES, SEP } from "./contextMenuStyles"
+import { ITEM_CLASSES, SEP, subMenuClasses } from "./contextMenuStyles"
 import { RollbackSection } from "./RollbackSection"
 import type { CtxMenuState, ItemKindUi, RollbackTarget } from "./types"
+import { useMenuPosition } from "./useMenuPosition"
 
 export type { CtxMenuState, RollbackTarget } from "./types"
 
@@ -56,6 +57,7 @@ export function RequestContextMenu({
   const [copyAsSubOpen, setCopyAsSubOpen] = useState(false)
   const [rollbackSubOpen, setRollbackSubOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+  const { style, subFlipLeft } = useMenuPosition(state.x, state.y, menuRef)
 
   // Close on outside pointerdown or Escape.
   useEffect(() => {
@@ -90,7 +92,7 @@ export function RequestContextMenu({
     <div
       ref={menuRef}
       className="fixed z-[300] min-w-[180px] rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10"
-      style={{ top: state.y, left: state.x }}
+      style={style}
     >
       {state.kind === "workspace" && (
         <CreateItems
@@ -162,7 +164,7 @@ export function RequestContextMenu({
                   </button>
                   {copyAsSubOpen && (
                     <div
-                      className="absolute left-full top-0 -ml-px z-[301] min-w-[150px] rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10"
+                      className={subMenuClasses(subFlipLeft)}
                       onMouseEnter={() => setCopyAsSubOpen(true)}
                     >
                       {copyAs.map((a) => {
@@ -216,6 +218,7 @@ export function RequestContextMenu({
             folderDescendantChanged={folderDescendantChanged}
             rollbackSubOpen={rollbackSubOpen}
             setRollbackSubOpen={setRollbackSubOpen}
+            subFlipLeft={subFlipLeft}
             collapseSub={collapseSub}
             onRollback={onRollback}
             onShowHistory={onShowHistory}
