@@ -1,5 +1,5 @@
 import { Glyph } from "@/components/Glyph"
-import { ITEM_CLASSES } from "./contextMenuStyles"
+import { ITEM_CLASSES, subMenuClasses } from "./contextMenuStyles"
 
 export interface CopyAsAction {
   id: string
@@ -12,9 +12,17 @@ interface Props {
   onOpenChange: (open: boolean) => void
   actions: CopyAsAction[]
   onPick: (actionId: string) => void
+  /** From useMenuPosition — open left when there's no room to the right. */
+  subFlipLeft?: boolean
 }
 
-export function CopyAsSubmenu({ open, onOpenChange, actions, onPick }: Props) {
+export function CopyAsSubmenu({
+  open,
+  onOpenChange,
+  actions,
+  onPick,
+  subFlipLeft = false,
+}: Props) {
   if (actions.length === 0) return null
   return (
     <div className="relative">
@@ -31,7 +39,7 @@ export function CopyAsSubmenu({ open, onOpenChange, actions, onPick }: Props) {
       </button>
       {open && (
         <div
-          className="absolute left-full top-0 -ml-px z-[301] min-w-[150px] rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10"
+          className={subMenuClasses(subFlipLeft)}
           onMouseEnter={() => onOpenChange(true)}
         >
           {actions.map((a) => {
