@@ -254,6 +254,14 @@ pub fn run() {
             mcp_server::spawn(&app.handle().clone(), &state, socket_path);
 
             app.manage(state);
+
+            // A relaunch (auto-update, titlebar-style change) spawns the new
+            // process without a user gesture, so macOS starts it inactive: the
+            // window is up but sits behind whatever was in front, and only a
+            // dock click brings it forward. Claim focus explicitly.
+            if let Some(main) = app.get_webview_window("main") {
+                let _ = main.set_focus();
+            }
             Ok(())
         })
         .on_menu_event(|app, event| {
