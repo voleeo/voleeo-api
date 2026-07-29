@@ -10,7 +10,6 @@ import {
   selectActiveGrpc,
   useRequestStore,
 } from "@/store/requests"
-import { useToastStore } from "@/store/toast"
 import { useUiStore } from "@/store/workspace"
 import { AuthTab } from "@/views/ApiWorkspace/AuthTab"
 import { useAuthEditor } from "@/views/ApiWorkspace/AuthTab/useAuthEditor"
@@ -29,6 +28,7 @@ import type {
   ProtoSource,
 } from "../../../../../packages/types/bindings"
 import { ProtoMessageForm } from "../ProtoMessageForm"
+import { applyGrpcImport } from "./applyGrpcImport"
 import { GrpcHeader } from "./GrpcHeader"
 import { type GrpcTab, GrpcTabBar, type MsgMode } from "./GrpcTabBar"
 import { MessageEditor } from "./MessageEditor"
@@ -92,33 +92,13 @@ function GrpcPaneInner({ request }: { request: GrpcRequest }) {
     draft.commitConn({ protoSource: next, service: null, method: null })
   }
 
-  // Pasting a grpcurl command into an empty target bar replaces the whole
-  // connection. Draft state is set alongside the store write because `tls`,
-  // `protoSource`, `service` and `method` are seeded once from `request` and
-  // don't re-sync on external change (unlike target/message/metadata).
-  const onImportGrpc = (p: ParsedGrpcRequest) => {
-    draft.setTarget(p.target)
-    draft.setTls(p.tls)
-    draft.setProtoSource(p.protoSource)
-    // Don't reseed an empty form over the body we just parsed out of `-d`.
-    if (p.service && p.method)
-      draft.selectMethod(p.service, p.method, !p.message.trim())
-    else draft.clearMethod()
-    draft.setMetadata(p.metadata)
-    void useRequestStore.getState().updateGrpc(workspaceId, request.id, {
-      target: p.target,
-      tls: p.tls,
-      protoSource: p.protoSource,
-      service: p.service,
-      method: p.method,
-      metadata: p.metadata,
-      message: p.message,
+  const onImportGrpc = (p: ParsedGrpcRequest) =>
+    applyGrpcImport(p, {
+      workspaceId,
+      requestId: request.id,
+      draft,
       auth: authRef.current,
     })
-    useToastStore
-      .getState()
-      .show("Pasted grpcurl command", undefined, "success")
-  }
 
   const folders = useRequestStore(useShallow((s) => s.folders))
   const workspaces = useUiStore((s) => s.workspaces)
