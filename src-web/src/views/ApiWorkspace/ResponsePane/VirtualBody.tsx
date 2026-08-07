@@ -1,12 +1,13 @@
 import { useVirtualizer } from "@tanstack/react-virtual"
-import { Fragment, useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Glyph } from "@/components/Glyph"
 import { cn } from "@/lib/utils"
 import { useInterfaceStore } from "@/store/interface"
 import type { HttpResponse } from "../../../../../packages/types/bindings"
 import { FindBar } from "./FindBar"
-import { jsonLineTokens } from "./jsonLineTokens"
+import { useLineFolds } from "./useLineFolds"
 import { useWindowedBody } from "./useWindowedBody"
+import { VirtualBodyLines } from "./VirtualBodyLines"
 
 // CodeMirror's effective line-height ≈ 1.5× its font size; match it so the
 // virtual rows and the editor look consistent at any font setting.
@@ -19,23 +20,14 @@ function isJsonResponse(response: HttpResponse): boolean {
   return !!ct && /json/i.test(ct)
 }
 
-/** Inline content of a line: JSON gets token coloring, anything else is plain. */
-function renderLine(text: string, json: boolean) {
-  if (!json) return text
-  return jsonLineTokens(text).map((t, i) => (
-    // biome-ignore lint/suspicious/noArrayIndexKey: tokens are positional within a stable line
-    <span key={i} style={t.color ? { color: t.color } : undefined}>
-      {t.text}
-    </span>
-  ))
-}
-
 /** Virtualized viewer for large (windowed) response bodies: renders only the
  *  visible lines, fetches them on demand, and searches backend-side. */
 export function VirtualBody({ response }: { response: HttpResponse }) {
   const {
+    activeKey,
     total,
     getLine,
+    getFoldEnd,
     ensureRange,
     search,
     runSearch,
@@ -43,6 +35,8 @@ export function VirtualBody({ response }: { response: HttpResponse }) {
     filter,
     applyFilter,
   } = useWindowedBody(response)
+  const { collapsed, visibleCount, toReal, toVisual, toggle, reveal } =
+    useLineFolds(total, getFoldEnd, activeKey)
   const parentRef = useRef<HTMLDivElement>(null)
   const [findOpen, setFindOpen] = useState(false)
   const [query, setQuery] = useState("")
@@ -55,16 +49,17 @@ export function VirtualBody({ response }: { response: HttpResponse }) {
   const lineH = Math.round(fontSize * LINE_RATIO)
 
   const virt = useVirtualizer({
-    count: total,
+    count: visibleCount,
     getScrollElement: () => parentRef.current,
     estimateSize: () => lineH,
     overscan: 30,
   })
   const items = virt.getVirtualItems()
 
-  // Keep the visible range's blocks loaded.
-  const first = items[0]?.index ?? 0
-  const last = items[items.length - 1]?.index ?? 0
+  // Keep the visible range's blocks loaded — in real line coords, since a
+  // collapsed block makes the visual rows skip ahead.
+  const first = toReal(items[0]?.index ?? 0)
+  const last = toReal(items[items.length - 1]?.index ?? 0)
   useEffect(() => {
     if (total > 0) ensureRange(first, last)
   }, [first, last, total, ensureRange])
@@ -92,8 +87,10 @@ export function VirtualBody({ response }: { response: HttpResponse }) {
 
   const activeMatch = search.active >= 0 ? search.matches[search.active] : null
   useEffect(() => {
-    if (activeMatch) virt.scrollToIndex(activeMatch.line, { align: "center" })
-  }, [activeMatch, virt])
+    if (!activeMatch) return
+    reveal(activeMatch.line)
+    virt.scrollToIndex(toVisual(activeMatch.line), { align: "center" })
+  }, [activeMatch, virt, reveal, toVisual])
 
   // Re-measure rows when the font setting (and thus row height) changes.
   // biome-ignore lint/correctness/useExhaustiveDependencies: re-measure on lineH change
@@ -201,46 +198,19 @@ export function VirtualBody({ response }: { response: HttpResponse }) {
           lineHeight: `${lineH}px`,
         }}
       >
-        <div style={{ height: virt.getTotalSize(), position: "relative" }}>
-          <div
-            className="flex"
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              width: "100%",
-              transform: `translateY(${items[0]?.start ?? 0}px)`,
-            }}
-          >
-            {/* Line-number gutter — unselectable so copies exclude it. */}
-            <div
-              className="select-none text-right text-muted pr-3 shrink-0"
-              style={{ width: gutter }}
-            >
-              {items.map((vi) => (
-                <div key={vi.key} style={{ height: lineH }}>
-                  {vi.index + 1}
-                </div>
-              ))}
-            </div>
-            {/* The lines render as ONE contiguous block (separated by newlines)
-                so native selection spans them with no inter-line gaps. */}
-            <div className="selectable-text whitespace-pre flex-1 min-w-0">
-              {items.map((vi, idx) => (
-                <Fragment key={vi.key}>
-                  <span
-                    className={cn(
-                      activeMatch?.line === vi.index && "bg-accent/15",
-                    )}
-                  >
-                    {renderLine(getLine(vi.index) ?? "", json)}
-                  </span>
-                  {idx < items.length - 1 ? "\n" : ""}
-                </Fragment>
-              ))}
-            </div>
-          </div>
-        </div>
+        <VirtualBodyLines
+          items={items}
+          totalSize={virt.getTotalSize()}
+          lineH={lineH}
+          gutterWidth={gutter}
+          json={json}
+          getLine={getLine}
+          getFoldEnd={getFoldEnd}
+          toReal={toReal}
+          collapsed={collapsed}
+          onToggle={toggle}
+          activeLine={activeMatch?.line ?? null}
+        />
       </div>
     </div>
   )
