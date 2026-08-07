@@ -19,6 +19,10 @@ const CACHE_CAP: usize = 4;
 pub struct BodyWindow {
     pub lines: Vec<String>,
     pub total_lines: u32,
+    /// Parallel to `lines`: where the block opened on that line closes, or `0`
+    /// when it opens none. The windowed viewer only holds a slice of the body,
+    /// so it can't find a block's end itself.
+    pub fold_ends: Vec<u32>,
 }
 
 #[derive(Type, Serialize, Deserialize, Debug, Clone)]
@@ -84,17 +88,42 @@ pub struct SearchOpts {
 
 const MATCH_CAP: usize = 5000;
 
-/// Pretty-print JSON so a minified one-line payload becomes scrollable; any
-/// other text is stored verbatim. Returns the text and its line ranges.
+/// A body indexed for windowing: the stored text plus everything derived from
+/// one pass over it, so scroll and search never re-scan.
 struct Parsed {
     text: String,
     /// `(start, end)` byte range per line, excluding the trailing `\n`.
     lines: Vec<(usize, usize)>,
+    /// See `BodyWindow::fold_ends`. `0` is a safe sentinel — a block always
+    /// closes after it opens, so line 0 is never an end.
+    folds: Vec<u32>,
 }
 
 fn parse(text: String) -> Parsed {
     let lines = line_ranges(&text);
-    Parsed { text, lines }
+    let folds = fold_ends(&text, &lines);
+    Parsed { text, lines, folds }
+}
+
+/// Match each block-opening line to the line that closes it, by bracket stack.
+/// Bodies reach here pretty-printed (`format_for_storage`), where a trailing
+/// `{`/`[` only ever opens a block: a string value ends in `"` and an inline
+/// `{}` ends in `}` or `,`. Unbalanced text (non-JSON) simply yields no folds.
+fn fold_ends(text: &str, lines: &[(usize, usize)]) -> Vec<u32> {
+    let mut ends = vec![0u32; lines.len()];
+    let mut open: Vec<usize> = Vec::new();
+    for (i, &(s, e)) in lines.iter().enumerate() {
+        let line = text[s..e].trim();
+        if line.starts_with('}') || line.starts_with(']') {
+            if let Some(start) = open.pop() {
+                ends[start] = u32::try_from(i).unwrap_or(0);
+            }
+        }
+        if line.ends_with('{') || line.ends_with('[') {
+            open.push(i);
+        }
+    }
+    ends
 }
 
 /// Matches `str::lines()`: a trailing `\n` does not yield an empty final line.
@@ -186,6 +215,7 @@ pub fn window(
     Ok(BodyWindow {
         lines,
         total_lines: u32::try_from(total).unwrap_or(u32::MAX),
+        fold_ends: parsed.folds[start..end].to_vec(),
     })
 }
 
@@ -257,4 +287,26 @@ fn is_word_bounded(bytes: &[u8], start: usize, len: usize) -> bool {
     let before = start.checked_sub(1).map(|i| bytes[i]);
     let after = bytes.get(start + len).copied();
     before.map(is_word) != Some(true) && after.map(is_word) != Some(true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fold_ends_pairs_each_block_with_its_closing_line() {
+        let text = format_for_storage(r#"{"a":[{"b":1}],"empty":{},"s":"has { brace","z":2}"#);
+        let ends = fold_ends(&text, &line_ranges(&text));
+        let lines: Vec<&str> = text.lines().collect();
+
+        // 0 `{` · 1 `"a": [` · 2 `{` · 3 `"b": 1` · 4 `},` · 5 `],`
+        // 6 `"empty": {},` · 7 `"s": "has { brace",` · 8 `"z": 2` · 9 `}`
+        assert_eq!(lines.len(), 10, "layout changed: {text}");
+        assert_eq!(ends[0], 9, "root object");
+        assert_eq!(ends[1], 5, "array");
+        assert_eq!(ends[2], 4, "object inside the array");
+        assert_eq!(ends[3], 0, "plain value opens nothing");
+        assert_eq!(ends[6], 0, "inline {{}} is not an opener");
+        assert_eq!(ends[7], 0, "a brace inside a string is not an opener");
+    }
 }

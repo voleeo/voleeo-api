@@ -754,6 +754,12 @@ export type BodySearchResult = {
 export type BodyWindow = {
 	lines: string[],
 	totalLines: number,
+	/**
+	 *  Parallel to `lines`: where the block opened on that line closes, or `0`
+	 *  when it opens none. The windowed viewer only holds a slice of the body,
+	 *  so it can't find a block's end itself.
+	 */
+	foldEnds: number[],
 };
 
 export type BundleWorkspacePreview = BundleWorkspacePreview_Serialize | BundleWorkspacePreview_Deserialize;
