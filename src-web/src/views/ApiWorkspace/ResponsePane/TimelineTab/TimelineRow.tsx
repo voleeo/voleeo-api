@@ -56,7 +56,7 @@ export function TimelineRow({
         {fmtElapsed(entry.elapsedMs)}
       </span>
 
-      <span className="shrink-0 pr-2 font-bold select-none" style={{ color }}>
+      <span className="shrink-0 pr-2 font-bold" style={{ color }}>
         {PREFIX[entry.kind]}
       </span>
 
