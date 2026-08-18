@@ -43,7 +43,9 @@ export function SentRequestSummary({
   })()
 
   return (
-    <div className={cn("flex flex-col gap-4 px-4 py-4", className)}>
+    <div
+      className={cn("flex flex-col gap-4 px-4 py-4 selectable-text", className)}
+    >
       <UrlHeadline method={snapshot.method} fullUrl={snapshot.fullUrl} />
 
       <div>
