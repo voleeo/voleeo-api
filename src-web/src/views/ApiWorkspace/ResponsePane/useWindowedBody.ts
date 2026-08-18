@@ -45,6 +45,8 @@ export function useWindowedBody(response: HttpResponse) {
   const total = filtered ? filter.total : baseTotal
 
   const lines = useRef<Map<number, string>>(new Map())
+  /** Line index → line its block closes on. Only block-opening lines are kept. */
+  const foldEnds = useRef<Map<number, number>>(new Map())
   const loaded = useRef<Set<number>>(new Set())
   const pending = useRef<Set<number>>(new Set())
   const [, force] = useState(0)
@@ -54,6 +56,7 @@ export function useWindowedBody(response: HttpResponse) {
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional — fires on activeKey change
   useEffect(() => {
     lines.current.clear()
+    foldEnds.current.clear()
     loaded.current.clear()
     pending.current.clear()
   }, [activeKey])
@@ -80,6 +83,8 @@ export function useWindowedBody(response: HttpResponse) {
             if (res.status !== "ok") return
             res.data.lines.forEach((ln, i) => {
               lines.current.set(from + i, ln)
+              const end = res.data.foldEnds[i]
+              if (end) foldEnds.current.set(from + i, end)
             })
             loaded.current.add(b)
             rerender()
@@ -91,6 +96,7 @@ export function useWindowedBody(response: HttpResponse) {
   )
 
   const getLine = useCallback((i: number) => lines.current.get(i), [])
+  const getFoldEnd = useCallback((i: number) => foldEnds.current.get(i), [])
 
   const [search, setSearch] = useState<SearchState>(EMPTY_SEARCH)
   const runSearch = useCallback(
@@ -150,8 +156,11 @@ export function useWindowedBody(response: HttpResponse) {
   )
 
   return {
+    /** Identifies the body being viewed — changes when the response or filter does. */
+    activeKey,
     total,
     getLine,
+    getFoldEnd,
     ensureRange,
     search,
     runSearch,
