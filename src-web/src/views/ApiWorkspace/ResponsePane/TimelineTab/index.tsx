@@ -156,7 +156,7 @@ export function TimelineTab({
           onWheel={onWheel}
           onPointerDown={onPointerDown}
           onKeyDown={onKeyDown}
-          className="h-full overflow-auto font-mono text-[0.786rem] leading-[1.7]"
+          className="h-full overflow-auto font-mono text-[0.786rem] leading-[1.7] selectable-text"
         >
           {filtered.length === 0 ? (
             <div className="px-3.5 py-3 text-muted">
