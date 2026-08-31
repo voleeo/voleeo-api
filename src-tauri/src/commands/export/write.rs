@@ -13,6 +13,7 @@ pub(super) fn write_output(
     format: ExportFormat,
     bundles: &[Bundle],
     dest: &str,
+    postman_roots: &[(String, String)],
 ) -> Result<(Vec<PathBuf>, Vec<String>), VoleeoError> {
     match format {
         ExportFormat::Voleeo => {
@@ -22,7 +23,7 @@ pub(super) fn write_output(
             Ok((vec![path], r.warnings))
         }
         ExportFormat::Postman => {
-            let r = voleeo_export::to_postman(bundles)?;
+            let r = voleeo_export::to_postman_with_roots(bundles, postman_roots)?;
             let path = PathBuf::from(dest);
             write_file(&path, &r.content)?;
             let mut paths = vec![path.clone()];

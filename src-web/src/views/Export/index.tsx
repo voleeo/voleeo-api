@@ -2,6 +2,7 @@ import { useEffect } from "react"
 import { useShallow } from "zustand/react/shallow"
 import { Glyph } from "@/components/Glyph"
 import { useExportStore } from "@/store/export"
+import { folderSelectionsFor } from "@/store/exportSelection"
 import { useUiStore } from "@/store/workspace"
 import { PostmanIcon, VoleeoIcon } from "./brandIcons"
 import { EnvironmentsSection } from "./EnvironmentsSection"
@@ -18,6 +19,7 @@ export function ExportWindow() {
   const {
     targets,
     selectedIds,
+    selectedFolderIds,
     format,
     includeEnvironments,
     includePrivate,
@@ -31,6 +33,7 @@ export function ExportWindow() {
     loadTargets,
     loadPreview,
     toggle,
+    toggleFolder,
     toggleAll,
     setFormat,
     setIncludeEnvironments,
@@ -43,6 +46,7 @@ export function ExportWindow() {
     useShallow((s) => ({
       targets: s.targets,
       selectedIds: s.selectedIds,
+      selectedFolderIds: s.selectedFolderIds,
       format: s.format,
       includeEnvironments: s.includeEnvironments,
       includePrivate: s.includePrivate,
@@ -56,6 +60,7 @@ export function ExportWindow() {
       loadTargets: s.loadTargets,
       loadPreview: s.loadPreview,
       toggle: s.toggle,
+      toggleFolder: s.toggleFolder,
       toggleAll: s.toggleAll,
       setFormat: s.setFormat,
       setIncludeEnvironments: s.setIncludeEnvironments,
@@ -94,6 +99,7 @@ export function ExportWindow() {
   useEffect(() => {
     void loadPreview(
       [...selectedIds],
+      folderSelectionsFor(selectedIds, selectedFolderIds),
       format,
       includeEnvironments,
       includePrivate,
@@ -102,6 +108,7 @@ export function ExportWindow() {
   }, [
     loadPreview,
     selectedIds,
+    selectedFolderIds,
     format,
     includeEnvironments,
     includePrivate,
@@ -177,6 +184,8 @@ export function ExportWindow() {
           <WorkspacesSection
             targets={targets}
             selectedIds={selectedIds}
+            selectedFolderIds={selectedFolderIds}
+            showFolderSelect={!isVoleeo}
             activeId={activeId}
             envScope={envScope}
             privScope={privScope}
@@ -184,6 +193,7 @@ export function ExportWindow() {
             headerState={headerState}
             loaded={loaded}
             onToggle={toggle}
+            onToggleFolder={toggleFolder}
             onToggleAll={toggleAll}
           />
 

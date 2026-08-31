@@ -29,10 +29,10 @@ export function SecretWarning({
           Secret values are exported as plain text
         </div>
         <div className="mt-0.5 text-[12.5px] leading-relaxed text-muted">
-          {count} encrypted value{count === 1 ? "" : "s"} in this selection{" "}
-          {count === 1 ? "is" : "are"} decrypted and written into the export
-          file as readable text. Anyone with the file can read them — store and
-          share it carefully.
+          The selected workspace data contains {count} encrypted value
+          {count === 1 ? "" : "s"}. Any value included in this export is
+          decrypted and written as readable text. Anyone with the file can read
+          it — store and share it carefully.
         </div>
         <button
           type="button"

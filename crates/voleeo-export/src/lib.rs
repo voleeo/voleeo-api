@@ -14,10 +14,15 @@ mod auth;
 mod postman;
 mod voleeo;
 
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+};
+
 use voleeo_core::{ApiFolder, Environment, GrpcRequest, HttpRequest, Workspace, WsConnection};
 
 pub use asyncapi::to_asyncapi;
-pub use postman::{postman_environments, to_postman};
+pub use postman::{postman_environments, to_postman, to_postman_with_roots};
 pub use voleeo::to_voleeo;
 
 /// A file the caller should write under a derived name (the command layer slugs
@@ -35,6 +40,101 @@ pub struct Bundle {
     pub ws: Vec<WsConnection>,
     pub grpc: Vec<GrpcRequest>,
     pub environments: Vec<Environment>,
+}
+
+impl Bundle {
+    /// Keep selected folder subtrees plus ancestor metadata needed for inheritance.
+    /// Returns `false` when any selected folder is not part of the workspace.
+    pub fn filter_to_folders(&mut self, folder_ids: &[&str]) -> bool {
+        if folder_ids.is_empty() {
+            return true;
+        }
+
+        let parents_by_id: HashMap<&str, Option<&str>> = self
+            .folders
+            .iter()
+            .map(|folder| (folder.id.as_str(), folder.folder_id.as_deref()))
+            .collect();
+        if folder_ids.iter().any(|id| !parents_by_id.contains_key(id)) {
+            return false;
+        }
+
+        let mut children_by_parent: HashMap<&str, Vec<&str>> = HashMap::new();
+        for folder in &self.folders {
+            if let Some(parent) = folder.folder_id.as_deref() {
+                children_by_parent
+                    .entry(parent)
+                    .or_default()
+                    .push(folder.id.as_str());
+            }
+        }
+
+        let mut included: HashSet<String> = folder_ids.iter().map(|id| (*id).to_string()).collect();
+        let mut pending = folder_ids.to_vec();
+        while let Some(parent) = pending.pop() {
+            for &child in children_by_parent.get(parent).into_iter().flatten() {
+                if included.insert(child.to_string()) {
+                    pending.push(child);
+                }
+            }
+        }
+
+        let mut folders_to_keep = included.clone();
+        for root_id in folder_ids {
+            let mut parent = parents_by_id.get(root_id).copied().flatten();
+            let mut seen = HashSet::new();
+            while let Some(parent_id) = parent {
+                if !seen.insert(parent_id) {
+                    break;
+                }
+                folders_to_keep.insert(parent_id.to_string());
+                parent = parents_by_id.get(parent_id).copied().flatten();
+            }
+        }
+
+        self.folders.retain(|f| folders_to_keep.contains(&f.id));
+        self.requests.retain(|r| {
+            r.folder_id
+                .as_deref()
+                .is_some_and(|id| included.contains(id))
+        });
+        self.ws.retain(|w| {
+            w.folder_id
+                .as_deref()
+                .is_some_and(|id| included.contains(id))
+        });
+        self.grpc.retain(|g| {
+            g.folder_id
+                .as_deref()
+                .is_some_and(|id| included.contains(id))
+        });
+        true
+    }
+}
+
+/// Remove whitespace around template expressions for consumers that require the
+/// compact `{{name}}` form. Function arguments inside the expression are kept.
+pub(crate) fn normalize_templates(input: &str) -> Cow<'_, str> {
+    if !input.contains("{{") {
+        return Cow::Borrowed(input);
+    }
+
+    let mut out = String::with_capacity(input.len());
+    let mut rest = input;
+    while let Some(start) = rest.find("{{") {
+        out.push_str(&rest[..start]);
+        let expression = &rest[start + 2..];
+        let Some(end) = expression.find("}}") else {
+            out.push_str(&rest[start..]);
+            return Cow::Owned(out);
+        };
+        out.push_str("{{");
+        out.push_str(expression[..end].trim());
+        out.push_str("}}");
+        rest = &expression[end + 2..];
+    }
+    out.push_str(rest);
+    Cow::Owned(out)
 }
 
 /// Serialized output plus any non-fatal warnings (skipped/lossy items).

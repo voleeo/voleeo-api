@@ -110,8 +110,8 @@ export const commands = {
 	 *  show them before the user commits. Skips decryption (warnings don't depend on
 	 *  secret values) and writes nothing.
 	 */
-	exportPreview: (workspaceIds: string[], format: ExportFormat, includeEnvironments: boolean, includePrivate: boolean, exportProto: boolean) => typedError<string[], VoleeoError>(__TAURI_INVOKE("export_preview", { workspaceIds, format, includeEnvironments, includePrivate, exportProto })),
-	exportWorkspaces: (workspaceIds: string[], format: ExportFormat, includeEnvironments: boolean, includePrivate: boolean, exportProto: boolean, exportAsyncapi: boolean, dest: string) => typedError<ExportOutcome, VoleeoError>(__TAURI_INVOKE("export_workspaces", { workspaceIds, format, includeEnvironments, includePrivate, exportProto, exportAsyncapi, dest })),
+	exportPreview: (workspaceIds: string[], folderSelections: ExportFolderSelection[], format: ExportFormat, includeEnvironments: boolean, includePrivate: boolean, exportProto: boolean) => typedError<string[], VoleeoError>(__TAURI_INVOKE("export_preview", { workspaceIds, folderSelections, format, includeEnvironments, includePrivate, exportProto })),
+	exportWorkspaces: (workspaceIds: string[], folderSelections: ExportFolderSelection[], format: ExportFormat, includeEnvironments: boolean, includePrivate: boolean, exportProto: boolean, exportAsyncapi: boolean, dest: string) => typedError<ExportOutcome, VoleeoError>(__TAURI_INVOKE("export_workspaces", { workspaceIds, folderSelections, format, includeEnvironments, includePrivate, exportProto, exportAsyncapi, dest })),
 	sendRequest: (workspaceId: string, requestId: string, overrides: SendOverrides_Deserialize) => typedError<HttpResponse_Serialize, VoleeoError>(__TAURI_INVOKE("send_request", { workspaceId, requestId, overrides })),
 	cancelRequest: (requestId: string) => typedError<null, VoleeoError>(__TAURI_INVOKE("cancel_request", { requestId })),
 	/**
@@ -868,6 +868,16 @@ export type EnvironmentVariable = {
 	enabled?: boolean,
 };
 
+export type ExportFolder = {
+	id: string,
+	name: string,
+};
+
+export type ExportFolderSelection = {
+	workspaceId: string,
+	folderId: string,
+};
+
 export type ExportFormat = 
 /**  Native, lossless: one self-contained YAML re-importable into Voleeo. */
 "voleeo" | 
@@ -884,6 +894,7 @@ export type ExportOutcome = {
 export type ExportTarget = {
 	id: string,
 	name: string,
+	folders: ExportFolder[],
 	/**  HTTP + WebSocket + gRPC requests. */
 	requests: number,
 	/**  WebSocket connections (drive the AsyncAPI section). */

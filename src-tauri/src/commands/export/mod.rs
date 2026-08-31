@@ -24,6 +24,7 @@ use crate::state::AppState;
 pub struct ExportTarget {
     pub id: String,
     pub name: String,
+    pub folders: Vec<ExportFolder>,
     /// HTTP + WebSocket + gRPC requests.
     pub requests: u32,
     /// WebSocket connections (drive the AsyncAPI section).
@@ -37,6 +38,20 @@ pub struct ExportTarget {
     /// Inline `encrypt()` secret chips in non-env fields (URLs, params, headers,
     /// bodies) — always exported, so always counted toward the warning.
     pub inline_secrets: u32,
+}
+
+#[derive(serde::Serialize, specta::Type, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportFolder {
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(serde::Deserialize, specta::Type, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportFolderSelection {
+    pub workspace_id: String,
+    pub folder_id: String,
 }
 
 #[derive(serde::Serialize, specta::Type)]
@@ -95,6 +110,14 @@ pub async fn export_summary(state: State<'_, AppState>) -> Result<Vec<ExportTarg
             let request_count = requests.len() + connections.len() + grpc.len();
             let inline_secrets =
                 secrets::non_env_inline_count(&ws, &folders, &requests, &connections, &grpc);
+            let folder_summaries = folders
+                .into_iter()
+                .filter(|folder| folder.folder_id.is_none())
+                .map(|folder| ExportFolder {
+                    id: folder.id,
+                    name: folder.name,
+                })
+                .collect();
 
             let (mut shared_envs, mut private_envs) = (0u32, 0u32);
             let (mut shared_secrets, mut private_secrets) = (0u32, 0u32);
@@ -113,6 +136,7 @@ pub async fn export_summary(state: State<'_, AppState>) -> Result<Vec<ExportTarg
             out.push(ExportTarget {
                 id: ws.id,
                 name: ws.name,
+                folders: folder_summaries,
                 requests: request_count as u32,
                 ws_count: connections.len() as u32,
                 grpc_count: grpc.len() as u32,
@@ -134,6 +158,7 @@ pub async fn export_summary(state: State<'_, AppState>) -> Result<Vec<ExportTarg
 pub async fn export_workspaces(
     state: State<'_, AppState>,
     workspace_ids: Vec<String>,
+    folder_selections: Vec<ExportFolderSelection>,
     format: ExportFormat,
     include_environments: bool,
     include_private: bool,
@@ -149,13 +174,24 @@ pub async fn export_workspaces(
     let voleeo = matches!(format, ExportFormat::Voleeo);
     let inc_env = voleeo || include_environments;
     let inc_priv = voleeo || include_private;
+    let postman_roots = folder_roots(&folder_selections);
 
     // Phase 1 — load + decrypt the bundles (off-runtime).
     let s = ExportStores::from(&state);
     let bundles = run_blocking(move || {
+        if !voleeo {
+            validate_folder_selections(&workspace_ids, &folder_selections)?;
+        }
         workspace_ids
             .iter()
-            .map(|id| load_bundle(&s, id, inc_env, inc_priv, true))
+            .map(|id| {
+                let folder_ids = if voleeo {
+                    Vec::new()
+                } else {
+                    folder_selections_for(&folder_selections, id)
+                };
+                load_bundle(&s, id, inc_env, inc_priv, true, &folder_ids)
+            })
             .collect::<Result<Vec<_>, _>>()
     })
     .await?;
@@ -170,7 +206,8 @@ pub async fn export_workspaces(
 
     // Phase 3 — write everything (off-runtime).
     run_blocking(move || {
-        let (mut paths, mut warnings) = write::write_output(format, &bundles, &dest)?;
+        let (mut paths, mut warnings) =
+            write::write_output(format, &bundles, &dest, &postman_roots)?;
         if !voleeo {
             write::write_companions(
                 &bundles,
@@ -205,6 +242,7 @@ pub async fn export_workspaces(
 pub async fn export_preview(
     state: State<'_, AppState>,
     workspace_ids: Vec<String>,
+    folder_selections: Vec<ExportFolderSelection>,
     format: ExportFormat,
     include_environments: bool,
     include_private: bool,
@@ -214,13 +252,25 @@ pub async fn export_preview(
     if workspace_ids.is_empty() || matches!(format, ExportFormat::Voleeo) {
         return Ok(Vec::new());
     }
+    let postman_roots = folder_roots(&folder_selections);
     let s = ExportStores::from(&state);
     run_blocking(move || {
+        validate_folder_selections(&workspace_ids, &folder_selections)?;
         let bundles = workspace_ids
             .iter()
-            .map(|id| load_bundle(&s, id, include_environments, include_private, false))
+            .map(|id| {
+                let folder_ids = folder_selections_for(&folder_selections, id);
+                load_bundle(
+                    &s,
+                    id,
+                    include_environments,
+                    include_private,
+                    false,
+                    &folder_ids,
+                )
+            })
             .collect::<Result<Vec<_>, _>>()?;
-        let mut warnings = voleeo_export::to_postman(&bundles)?.warnings;
+        let mut warnings = voleeo_export::to_postman_with_roots(&bundles, &postman_roots)?.warnings;
         warnings.extend(write::companion_notes(&bundles, export_proto));
         Ok(dedupe(warnings))
     })
@@ -238,13 +288,14 @@ fn load_bundle(
     include_environments: bool,
     include_private: bool,
     decrypt: bool,
+    folder_ids: &[&str],
 ) -> Result<Bundle, VoleeoError> {
-    let mut workspace = s.workspaces.get(id)?;
-    let mut folders = s.requests.list_folders(id)?;
-    let mut requests = s.requests.list_requests(id)?;
-    let mut ws = s.ws.list(id)?;
-    let mut grpc = s.grpc.list(id)?;
-    let mut environments = if include_environments {
+    let workspace = s.workspaces.get(id)?;
+    let folders = s.requests.list_folders(id)?;
+    let requests = s.requests.list_requests(id)?;
+    let ws = s.ws.list(id)?;
+    let grpc = s.grpc.list(id)?;
+    let environments = if include_environments {
         let mut envs = s.environments.list(id)?;
         if !include_private {
             envs.retain(|e| e.shared);
@@ -254,26 +305,6 @@ fn load_bundle(
         Vec::new()
     };
 
-    if decrypt {
-        transform_auth_secrets(&mut workspace.auth, id, &s.base, Direction::Decrypt)?;
-        for f in &mut folders {
-            transform_auth_secrets(&mut f.auth, id, &s.base, Direction::Decrypt)?;
-            transform_var_secrets(&mut f.variables, id, &s.base, Direction::Decrypt)?;
-        }
-        for r in &mut requests {
-            transform_auth_secrets(&mut r.auth, id, &s.base, Direction::Decrypt)?;
-        }
-        for w in &mut ws {
-            transform_auth_secrets(&mut w.auth, id, &s.base, Direction::Decrypt)?;
-        }
-        for g in &mut grpc {
-            transform_auth_secrets(&mut g.auth, id, &s.base, Direction::Decrypt)?;
-        }
-        for env in &mut environments {
-            transform_var_secrets(&mut env.variables, id, &s.base, Direction::Decrypt)?;
-        }
-    }
-
     let mut bundle = Bundle {
         workspace,
         folders,
@@ -282,6 +313,41 @@ fn load_bundle(
         grpc,
         environments,
     };
+    if folder_ids.iter().any(|id| {
+        bundle
+            .folders
+            .iter()
+            .any(|folder| folder.id == *id && folder.folder_id.is_some())
+    }) {
+        return Err(VoleeoError::InvalidConfig(
+            "folder_selection_not_root".into(),
+        ));
+    }
+    if !bundle.filter_to_folders(folder_ids) {
+        return Err(VoleeoError::InvalidConfig(
+            "folder_selection_not_found".into(),
+        ));
+    }
+
+    if decrypt {
+        transform_auth_secrets(&mut bundle.workspace.auth, id, &s.base, Direction::Decrypt)?;
+        for f in &mut bundle.folders {
+            transform_auth_secrets(&mut f.auth, id, &s.base, Direction::Decrypt)?;
+            transform_var_secrets(&mut f.variables, id, &s.base, Direction::Decrypt)?;
+        }
+        for r in &mut bundle.requests {
+            transform_auth_secrets(&mut r.auth, id, &s.base, Direction::Decrypt)?;
+        }
+        for w in &mut bundle.ws {
+            transform_auth_secrets(&mut w.auth, id, &s.base, Direction::Decrypt)?;
+        }
+        for g in &mut bundle.grpc {
+            transform_auth_secrets(&mut g.auth, id, &s.base, Direction::Decrypt)?;
+        }
+        for env in &mut bundle.environments {
+            transform_var_secrets(&mut env.variables, id, &s.base, Direction::Decrypt)?;
+        }
+    }
 
     // Inline `{{ encrypt(value="…") }}` chips can live in ANY text field, not just
     // the dedicated secret fields — flatten them too. They only exist on encrypted
@@ -292,6 +358,39 @@ fn load_bundle(
     }
 
     Ok(bundle)
+}
+
+fn folder_roots(selections: &[ExportFolderSelection]) -> Vec<(String, String)> {
+    selections
+        .iter()
+        .map(|selection| (selection.workspace_id.clone(), selection.folder_id.clone()))
+        .collect()
+}
+
+fn validate_folder_selections(
+    workspace_ids: &[String],
+    selections: &[ExportFolderSelection],
+) -> Result<(), VoleeoError> {
+    if selections
+        .iter()
+        .any(|selection| !workspace_ids.iter().any(|id| id == &selection.workspace_id))
+    {
+        return Err(VoleeoError::InvalidConfig(
+            "folder_selection_workspace_not_selected".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn folder_selections_for<'a>(
+    selections: &'a [ExportFolderSelection],
+    workspace_id: &str,
+) -> Vec<&'a str> {
+    selections
+        .iter()
+        .filter(|selection| selection.workspace_id == workspace_id)
+        .map(|selection| selection.folder_id.as_str())
+        .collect()
 }
 
 fn dedupe(items: Vec<String>) -> Vec<String> {

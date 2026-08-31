@@ -4,9 +4,14 @@ import { save } from "@tauri-apps/plugin-dialog"
 import { create } from "zustand"
 import { EVENTS } from "@/config/events"
 import { errorMessage } from "@/lib/error"
+import {
+  folderSelectionsFor,
+  sameFolderSelections,
+} from "@/store/exportSelection"
 import { useUiStore } from "@/store/workspace"
 import {
   commands,
+  type ExportFolderSelection,
   type ExportFormat,
   type ExportTarget,
 } from "../../../packages/types/bindings"
@@ -14,6 +19,7 @@ import {
 type ExportStore = {
   targets: ExportTarget[]
   selectedIds: Set<string>
+  selectedFolderIds: Record<string, string[]>
   format: ExportFormat
   includeEnvironments: boolean
   includePrivate: boolean
@@ -27,12 +33,14 @@ type ExportStore = {
   loadTargets: () => Promise<void>
   loadPreview: (
     ids: string[],
+    folderSelections: ExportFolderSelection[],
     format: ExportFormat,
     includeEnvironments: boolean,
     includePrivate: boolean,
     exportProto: boolean,
   ) => Promise<void>
   toggle: (id: string) => void
+  toggleFolder: (workspaceId: string, folderId: string) => void
   toggleAll: () => void
   setFormat: (f: ExportFormat) => void
   setIncludeEnvironments: (v: boolean) => void
@@ -46,6 +54,7 @@ type ExportStore = {
 export const useExportStore = create<ExportStore>((set, get) => ({
   targets: [],
   selectedIds: new Set(),
+  selectedFolderIds: {},
   format: "voleeo",
   includeEnvironments: false,
   includePrivate: false,
@@ -69,11 +78,18 @@ export const useExportStore = create<ExportStore>((set, get) => ({
 
     const selectedIds = new Set<string>()
     if (active && res.data.some((t) => t.id === active)) selectedIds.add(active)
-    set({ targets: res.data, selectedIds, loaded: true })
+    const selectedFolderIds = Object.fromEntries(
+      res.data.map((target) => [
+        target.id,
+        target.folders.map((folder) => folder.id),
+      ]),
+    )
+    set({ targets: res.data, selectedIds, selectedFolderIds, loaded: true })
   },
 
   loadPreview: async (
     ids,
+    folderSelections,
     format,
     includeEnvironments,
     includePrivate,
@@ -85,13 +101,12 @@ export const useExportStore = create<ExportStore>((set, get) => ({
     }
     const res = await commands.exportPreview(
       ids,
+      folderSelections,
       format,
       includeEnvironments,
       includePrivate,
       exportProto,
     )
-    if (res.status !== "ok") return
-
     const now = get()
     if (
       now.format !== format ||
@@ -99,24 +114,63 @@ export const useExportStore = create<ExportStore>((set, get) => ({
       now.includePrivate !== includePrivate ||
       now.exportProto !== exportProto ||
       now.selectedIds.size !== ids.length ||
-      !ids.every((id) => now.selectedIds.has(id))
+      !ids.every((id) => now.selectedIds.has(id)) ||
+      !sameFolderSelections(
+        folderSelectionsFor(now.selectedIds, now.selectedFolderIds),
+        folderSelections,
+      )
     )
       return
-    set({ previewWarnings: res.data })
+    set({ previewWarnings: res.status === "ok" ? res.data : [] })
   },
 
   toggle: (id) =>
     set((s) => {
-      const next = new Set(s.selectedIds)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return { selectedIds: next, ack: false }
+      const selectedIds = new Set(s.selectedIds)
+      const selectedFolderIds = { ...s.selectedFolderIds }
+      if (selectedIds.has(id)) {
+        selectedIds.delete(id)
+      } else {
+        selectedIds.add(id)
+        if ((selectedFolderIds[id]?.length ?? 0) === 0) {
+          selectedFolderIds[id] =
+            s.targets
+              .find((target) => target.id === id)
+              ?.folders.map((f) => f.id) ?? []
+        }
+      }
+      return { selectedIds, selectedFolderIds, ack: false }
+    }),
+
+  toggleFolder: (workspaceId, folderId) =>
+    set((s) => {
+      const current = s.selectedFolderIds[workspaceId] ?? []
+      const next = current.includes(folderId)
+        ? current.filter((id) => id !== folderId)
+        : [...current, folderId]
+      const selectedFolderIds = { ...s.selectedFolderIds, [workspaceId]: next }
+      const selectedIds = new Set(s.selectedIds)
+      if (next.length > 0) selectedIds.add(workspaceId)
+      else selectedIds.delete(workspaceId)
+      return { selectedIds, selectedFolderIds, ack: false }
     }),
 
   toggleAll: () =>
     set((s) => {
       const all = s.selectedIds.size === s.targets.length
+      const selectedFolderIds = { ...s.selectedFolderIds }
+      if (!all) {
+        for (const target of s.targets) {
+          if ((selectedFolderIds[target.id]?.length ?? 0) === 0) {
+            selectedFolderIds[target.id] = target.folders.map(
+              (folder) => folder.id,
+            )
+          }
+        }
+      }
       return {
         selectedIds: all ? new Set() : new Set(s.targets.map((t) => t.id)),
+        selectedFolderIds,
         ack: false,
       }
     }),
@@ -132,6 +186,7 @@ export const useExportStore = create<ExportStore>((set, get) => ({
   runExport: async () => {
     const {
       selectedIds,
+      selectedFolderIds,
       format,
       includeEnvironments,
       includePrivate,
@@ -157,6 +212,7 @@ export const useExportStore = create<ExportStore>((set, get) => ({
     set({ exporting: true, error: null })
     const res = await commands.exportWorkspaces(
       [...selectedIds],
+      folderSelectionsFor(selectedIds, selectedFolderIds),
       format,
       includeEnvironments,
       includePrivate,
