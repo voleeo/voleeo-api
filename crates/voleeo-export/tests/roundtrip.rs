@@ -6,10 +6,12 @@
 use serde_json::Value;
 use voleeo_core::{
     ApiFolder, AuthConfig, BodyKind, Environment, EnvironmentKind, EnvironmentVariable,
-    GrpcRequest, HttpRequest, ProtoSource, RequestBody, RequestParameter, VoleeoBundle, Workspace,
-    WsConnection,
+    GrpcRequest, HttpRequest, InheritSource, ProtoSource, RequestBody, RequestParameter,
+    VoleeoBundle, Workspace, WsConnection,
 };
-use voleeo_export::{postman_environments, to_asyncapi, to_postman, to_voleeo, Bundle};
+use voleeo_export::{
+    postman_environments, to_asyncapi, to_postman, to_postman_with_roots, to_voleeo, Bundle,
+};
 use voleeo_import::{ImportFormat, ImportedItem};
 
 fn ts() -> String {
@@ -206,6 +208,175 @@ fn bundle() -> Bundle {
         grpc: vec![grpc],
         environments: vec![env],
     }
+}
+
+#[test]
+fn postman_urls_include_structured_components_and_compact_templates() {
+    let mut b = bundle();
+    let request = b.requests.iter_mut().find(|r| r.name == "Get Pet").unwrap();
+    request.url = "{{ base_url }}/pets/:id".into();
+    b.folders[0].auth = AuthConfig::Bearer {
+        token: "{{ access_token }}".into(),
+        token_encrypted: false,
+        enabled: true,
+    };
+    let login = b.requests.iter_mut().find(|r| r.name == "Login").unwrap();
+    login.body = Some(RequestBody {
+        kind: BodyKind::Graphql,
+        text: "query { viewer }".into(),
+        graphql_variables: Some(r#"{"token":"{{ token }}"}"#.into()),
+        ..Default::default()
+    });
+    let out = to_postman(&[b]).unwrap();
+    let v: Value = serde_json::from_str(&out.content).unwrap();
+    let url = &v["item"][0]["item"][0]["item"][0]["request"]["url"];
+    let login = v["item"][0]["item"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["name"] == "Login")
+        .unwrap();
+
+    assert_eq!(url["raw"], "{{base_url}}/pets/:id?limit=10");
+    assert_eq!(url["host"], serde_json::json!(["{{base_url}}"]));
+    assert_eq!(url["path"], serde_json::json!(["pets", ":id"]));
+    assert_eq!(url["variable"][0]["key"], "id");
+    assert_eq!(url["query"][0]["key"], "limit");
+    assert_eq!(
+        v["item"][0]["item"][0]["auth"]["bearer"][0]["value"],
+        "{{access_token}}",
+    );
+    assert_eq!(
+        login["request"]["body"]["graphql"]["variables"],
+        r#"{"token":"{{token}}"}"#,
+    );
+}
+
+#[test]
+fn postman_urls_keep_suffixes_fragments_and_templated_authority() {
+    let mut b = bundle();
+    let request = b.requests.iter_mut().find(|r| r.name == "Get Pet").unwrap();
+    request.url = "https://{{ subdomain }}.example.com:{{ port }}/pets/:id.json#details".into();
+
+    let out = to_postman(&[b]).unwrap();
+    let v: Value = serde_json::from_str(&out.content).unwrap();
+    let url = &v["item"][0]["item"][0]["item"][0]["request"]["url"];
+
+    assert_eq!(
+        url["raw"],
+        "https://{{subdomain}}.example.com:{{port}}/pets/:id.json?limit=10#details",
+    );
+    assert_eq!(url["protocol"], "https");
+    assert_eq!(
+        url["host"],
+        serde_json::json!(["{{subdomain}}", "example", "com"]),
+    );
+    assert_eq!(url["port"], "{{port}}");
+    assert_eq!(url["path"], serde_json::json!(["pets", ":id.json"]));
+    assert_eq!(url["variable"][0]["key"], "id");
+    assert_eq!(url["query"][0]["key"], "limit");
+}
+
+#[test]
+fn folder_filter_unions_roots_and_deduplicates_overlap() {
+    let mut invalid = bundle();
+    assert!(!invalid.filter_to_folders(&["f-pets", "missing"]));
+    assert_eq!(invalid.requests.len(), 3);
+
+    let mut b = bundle();
+    let mut child = b.folders[0].clone();
+    child.id = "f-child".into();
+    child.folder_id = Some("f-pets".into());
+    child.name = "Details".into();
+    b.folders.push(child);
+    b.requests.push(http(
+        "Child request",
+        "GET",
+        "https://api.example.com/pets/:id/details",
+        AuthConfig::Inherit {
+            from: Default::default(),
+        },
+        None,
+        Some("f-child"),
+    ));
+
+    let mut admin = b.folders[0].clone();
+    admin.id = "f-admin".into();
+    admin.folder_id = None;
+    admin.name = "Admin".into();
+    admin.auth = AuthConfig::None;
+    b.folders.push(admin);
+    b.requests.push(http(
+        "Admin request",
+        "GET",
+        "https://api.example.com/admin",
+        AuthConfig::None,
+        None,
+        Some("f-admin"),
+    ));
+
+    assert!(b.filter_to_folders(&["f-pets", "f-child", "f-admin"]));
+    assert_eq!(b.folders.len(), 3);
+    assert_eq!(b.requests.len(), 3);
+    assert!(b.ws.is_empty());
+    assert!(b.grpc.is_empty());
+
+    let roots = vec![
+        ("ws00000001".into(), "f-pets".into()),
+        ("ws00000001".into(), "f-child".into()),
+        ("ws00000001".into(), "f-admin".into()),
+    ];
+    let out = to_postman_with_roots(&[b], &roots).unwrap();
+    let v: Value = serde_json::from_str(&out.content).unwrap();
+    let items = v["item"].as_array().unwrap();
+    assert_eq!(v["info"]["name"], "Demo API");
+    assert_eq!(items.len(), 2);
+    assert_eq!(out.content.matches("\"name\": \"Details\"").count(), 1);
+    assert_eq!(out.content.matches("Child request").count(), 1);
+    assert!(items.iter().any(|item| item["name"] == "Pets"));
+    assert!(items.iter().any(|item| item["name"] == "Admin"));
+    assert!(!out.content.contains("Login"));
+    assert!(!out.content.contains("Signed"));
+}
+
+#[test]
+fn selected_child_preserves_folder_and_workspace_inheritance() {
+    let mut b = bundle();
+    b.workspace.auth = AuthConfig::Bearer {
+        token: "workspace-token".into(),
+        token_encrypted: false,
+        enabled: true,
+    };
+    let mut child = b.folders[0].clone();
+    child.id = "f-child".into();
+    child.folder_id = Some("f-pets".into());
+    child.name = "Details".into();
+    child.auth = AuthConfig::Inherit {
+        from: Default::default(),
+    };
+    b.folders.push(child);
+    b.requests.push(http(
+        "Child request",
+        "GET",
+        "https://api.example.com/pets/:id/details",
+        AuthConfig::Inherit {
+            from: InheritSource::Workspace,
+        },
+        None,
+        Some("f-child"),
+    ));
+
+    assert!(b.filter_to_folders(&["f-child"]));
+    assert_eq!(b.requests.len(), 1);
+    let roots = vec![("ws00000001".into(), "f-child".into())];
+    let out = to_postman_with_roots(&[b], &roots).unwrap();
+    let v: Value = serde_json::from_str(&out.content).unwrap();
+    assert_eq!(v["item"][0]["name"], "Details");
+    assert_eq!(v["item"][0]["auth"]["bearer"][0]["value"], "folder-token",);
+    assert_eq!(
+        v["item"][0]["item"][0]["request"]["auth"]["bearer"][0]["value"],
+        "workspace-token",
+    );
 }
 
 #[test]

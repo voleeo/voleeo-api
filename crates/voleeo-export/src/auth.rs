@@ -5,6 +5,8 @@
 use serde_json::{json, Value};
 use voleeo_core::{ApiKeyLocation, AuthConfig, OAuth1Location, OAuth1Signature, OAuth2Grant};
 
+use crate::normalize_templates;
+
 /// Postman auth object, or `None` to omit the `auth` key entirely.
 /// `Inherit` omits (so Postman's folder inheritance applies); `None`/disabled emit
 /// explicit `noauth` to override an inherited scheme.
@@ -132,7 +134,7 @@ pub(crate) fn auth_to_postman(a: &AuthConfig) -> Option<Value> {
 fn pm(ty: &str, pairs: &[(&str, &str)]) -> Value {
     let params: Vec<Value> = pairs
         .iter()
-        .map(|(k, v)| json!({ "key": k, "value": v, "type": "string" }))
+        .map(|(k, v)| json!({ "key": k, "value": normalize_templates(v), "type": "string" }))
         .collect();
     json!({ "type": ty, ty: params })
 }

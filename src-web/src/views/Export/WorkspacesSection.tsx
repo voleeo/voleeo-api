@@ -7,6 +7,8 @@ import { WorkspaceRow } from "./WorkspaceRow"
 export function WorkspacesSection({
   targets,
   selectedIds,
+  selectedFolderIds,
+  showFolderSelect,
   activeId,
   envScope,
   privScope,
@@ -14,10 +16,13 @@ export function WorkspacesSection({
   headerState,
   loaded,
   onToggle,
+  onToggleFolder,
   onToggleAll,
 }: {
   targets: ExportTarget[]
   selectedIds: Set<string>
+  selectedFolderIds: Record<string, string[]>
+  showFolderSelect: boolean
   activeId: string | null
   envScope: boolean
   privScope: boolean
@@ -25,6 +30,7 @@ export function WorkspacesSection({
   headerState: boolean | "mixed"
   loaded: boolean
   onToggle: (id: string) => void
+  onToggleFolder: (workspaceId: string, folderId: string) => void
   onToggleAll: () => void
 }) {
   return (
@@ -65,9 +71,12 @@ export function WorkspacesSection({
             target={t}
             active={t.id === activeId}
             checked={selectedIds.has(t.id)}
+            selectedFolderIds={selectedFolderIds[t.id] ?? []}
+            showFolderSelect={showFolderSelect}
             includeEnvironments={envScope}
             includePrivate={privScope}
             onToggle={() => onToggle(t.id)}
+            onToggleFolder={(folderId) => onToggleFolder(t.id, folderId)}
           />
         ))}
         {loaded && targets.length === 0 && (
