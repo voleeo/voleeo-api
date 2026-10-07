@@ -135,6 +135,18 @@ pub(super) fn request_tools() -> Vec<ToolDef> {
             ),
         },
         ToolDef {
+            name: "item.move".into(),
+            description: "Move a request, folder, WebSocket connection, or gRPC request into another folder (or to the workspace root when folderId is omitted). The item lands last in its new folder and keeps its id and history.".into(),
+            input_schema: obj_schema(
+                &[
+                    ("workspaceId", "Workspace ID", str_schema()),
+                    ("id", "ID of the item to move", str_schema()),
+                    ("kind", "Item kind", serde_json::json!({ "type": "string", "enum": ["request", "folder", "webSocket", "grpc"] })),
+                ],
+                &[("folderId", "Destination folder ID; omit to move to the root", str_schema())],
+            ),
+        },
+        ToolDef {
             name: "response.list".into(),
             description: "List saved response history for a request (newest first).".into(),
             input_schema: obj_schema(

@@ -243,7 +243,7 @@ Voleeo is an MCP **server**: AI clients connect over the bridge (stdio ↔ Unix 
     grpc_resp_{rid}.yaml         gRPC unary ring buffer; ws_{cid}.yaml / grpc_{rid}.yaml hold WS/gRPC transcripts
 ```
 
-`syncDir` is **never** in `workspace.yaml` — it's machine-local; `workspaces/{id}/` becomes a symlink. `derive_sync_dir()` reads `read_link` at runtime. Caller-supplied ids pass `validate_id` (`[A-Za-z0-9_-]`, ≤128) before any path construction — new storage paths must do the same.
+`syncDir` is **never** in `workspace.yaml` — it's machine-local; `workspaces/{id}/` becomes a symlink. `derive_sync_dir()` reads `read_link` at runtime. Caller-supplied ids pass `validate_id` (`[A-Za-z0-9_-]`, ≤128) before any path construction — new storage paths must do the same. Every tree item's create/move runs `check_parent` (parent exists, no cycle) — a bad `folder_id` silently drops the subtree from the tree.
 
 **Encryption** (`voleeo-crypto`): per-workspace AES-256-GCM. Key stored in OS keychain and `{app_data_dir}/keys/{workspace_id}.key` as fallback. Display: 32 bytes as 8 dash-separated groups of 8 uppercase hex. `keyCheck` token in `workspace.yaml` verifies imported keys. Secrets travel plaintext over IPC; the backend encrypts at rest via `transform_secrets` (env) / `transform_auth_secrets` (request) in `src-tauri/src/commands/`. Encrypted workspaces also write ciphertext into the YAML. On save, reuse the stored ciphertext for any secret whose value is unchanged (`preserve_unchanged_secrets`) — AES-GCM's fresh nonce otherwise rewrites every secret on each edit, a phantom git diff.
 

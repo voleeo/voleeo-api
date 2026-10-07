@@ -158,19 +158,6 @@ pub async fn delete_ws_connection(
     .await
 }
 
-#[tauri::command]
-#[specta::specta]
-pub async fn ws_update_position(
-    state: State<'_, AppState>,
-    workspace_id: String,
-    id: String,
-    folder_id: Option<String>,
-    order: f64,
-) -> Result<(), VoleeoError> {
-    let ws = state.ws.clone();
-    run_blocking(move || ws.update_position(&workspace_id, &id, folder_id, order)).await
-}
-
 /// Build the sink the manager calls for every inbound frame / lifecycle event:
 /// emit a small `ws:*` event to the frontend and persist to the transcript.
 fn build_sink(

@@ -1,6 +1,6 @@
 //! Request CRUD: the `req_*.yaml` half of `RequestStore`.
 
-use super::{save_request_if_changed, RequestStore};
+use super::{check_parent, save_request_if_changed, RequestStore};
 use chrono::Utc;
 use std::path::PathBuf;
 use voleeo_core::{new_id, AuthConfig, HttpRequest, RequestBody, RequestParameter, VoleeoError};
@@ -68,6 +68,12 @@ impl RequestStore {
         method: String,
         url: String,
     ) -> Result<HttpRequest, VoleeoError> {
+        check_parent(
+            &self.workspaces_dir,
+            &workspace_id,
+            folder_id.as_deref(),
+            None,
+        )?;
         self.workspace_dir(&workspace_id)?;
         let id = new_id();
         let now = Utc::now().format("%Y-%m-%dT%H:%M:%S%.6f").to_string();
@@ -205,11 +211,14 @@ impl RequestStore {
         folder_id: Option<String>,
         order: f64,
     ) -> Result<(), VoleeoError> {
+        check_parent(
+            &self.workspaces_dir,
+            workspace_id,
+            folder_id.as_deref(),
+            None,
+        )?;
+        let req = self.get_request(workspace_id, id)?;
         let path = self.req_path(workspace_id, id)?;
-        let content =
-            std::fs::read_to_string(&path).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-        let req: HttpRequest =
-            serde_yaml::from_str(&content).map_err(|e| VoleeoError::Storage(e.to_string()))?;
         let mut next = req.clone();
         next.folder_id = folder_id;
         next.order = order;

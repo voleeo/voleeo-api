@@ -464,21 +464,7 @@ pub async fn move_items(
     let requests = state.requests.clone();
     let ws = state.ws.clone();
     let grpc = state.grpc.clone();
-    run_blocking(move || {
-        for u in &updates {
-            match u.kind {
-                voleeo_core::ItemKind::WebSocket => {
-                    ws.update_position(&workspace_id, &u.id, u.folder_id.clone(), u.order)?;
-                }
-                voleeo_core::ItemKind::Grpc => {
-                    grpc.update_position(&workspace_id, &u.id, u.folder_id.clone(), u.order)?;
-                }
-                _ => {}
-            }
-        }
-        requests.move_items(&workspace_id, updates)
-    })
-    .await
+    run_blocking(move || requests.move_items(&ws, &grpc, &workspace_id, updates)).await
 }
 
 #[cfg(test)]

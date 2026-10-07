@@ -114,6 +114,7 @@ impl ApiBackend {
             "folder.create" => self.folder_create(&args).await,
             "folder.rename" => self.folder_rename(&args).await,
             "folder.delete" => self.folder_delete(&args).await,
+            "item.move" => self.item_move(&args).await,
             "response.list" => self.response_list(&args).await,
             "response.get" => self.response_get(&args).await,
             "snapshot.save" => self.snapshot_save(&args).await,
@@ -665,6 +666,97 @@ mod tests {
             )
             .await;
         assert!(renamed.is_error.is_none());
+    }
+
+    async fn call(b: &ApiBackend, name: &str, a: Value) -> Result<Value, String> {
+        let r = b.call_tool(name, a).await;
+        let text = r.content[0].text.clone();
+        match r.is_error {
+            Some(true) => Err(text),
+            _ => Ok(serde_json::from_str(&text).unwrap_or(Value::String(text))),
+        }
+    }
+
+    #[tokio::test]
+    async fn item_move_reparents_and_rejects_orphaning_targets() {
+        use serde_json::json;
+        let dir = tempfile::tempdir().unwrap();
+        let b = make_backend(&dir);
+        let ws = call(&b, "workspace.create", json!({ "name": "WS" }))
+            .await
+            .unwrap();
+        let w = ws["id"].as_str().unwrap();
+        let folder = |name: &str, parent: Option<&str>| json!({ "workspaceId": w, "name": name, "folderId": parent });
+        let a = call(&b, "folder.create", folder("A", None)).await.unwrap();
+        let a_id = a["id"].as_str().unwrap();
+        let sub = call(&b, "folder.create", folder("Sub", Some(a_id)))
+            .await
+            .unwrap();
+        let req = call(
+            &b,
+            "request.create",
+            json!({ "workspaceId": w, "name": "R", "method": "GET", "url": "https://x" }),
+        )
+        .await
+        .unwrap();
+        let conn = call(
+            &b,
+            "websocket.create",
+            json!({ "workspaceId": w, "name": "C", "url": "ws://x" }),
+        )
+        .await
+        .unwrap();
+        let mv = |id: &Value, kind: &str, to: Option<&str>| json!({ "workspaceId": w, "id": id, "kind": kind, "folderId": to });
+
+        call(&b, "item.move", mv(&req["id"], "request", Some(a_id)))
+            .await
+            .unwrap();
+        call(&b, "item.move", mv(&conn["id"], "webSocket", Some(a_id)))
+            .await
+            .unwrap();
+        let got = call(
+            &b,
+            "request.get",
+            json!({ "workspaceId": w, "requestId": req["id"] }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(got["folderId"], a_id);
+        assert_eq!(
+            b.ws.get(w, conn["id"].as_str().unwrap())
+                .unwrap()
+                .folder_id
+                .as_deref(),
+            Some(a_id)
+        );
+
+        // Back to root when folderId is omitted.
+        call(&b, "item.move", mv(&req["id"], "request", None))
+            .await
+            .unwrap();
+        let got = call(
+            &b,
+            "request.get",
+            json!({ "workspaceId": w, "requestId": req["id"] }),
+        )
+        .await
+        .unwrap();
+        assert!(got["folderId"].is_null());
+
+        // A folder into its own subfolder, a missing target, and a bad kind all fail.
+        assert!(
+            call(&b, "item.move", mv(&a["id"], "folder", sub["id"].as_str()))
+                .await
+                .is_err()
+        );
+        assert!(
+            call(&b, "item.move", mv(&req["id"], "request", Some("nope")))
+                .await
+                .is_err()
+        );
+        assert!(call(&b, "item.move", mv(&req["id"], "file", None))
+            .await
+            .is_err());
     }
 
     #[tokio::test]

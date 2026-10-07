@@ -165,7 +165,6 @@ export const commands = {
 	renameWsConnection: (workspaceId: string, id: string, name: string) => typedError<null, VoleeoError>(__TAURI_INVOKE("rename_ws_connection", { workspaceId, id, name })),
 	updateWsConnection: (workspaceId: string, id: string, url: string, parameters: RequestParameter[], headers: RequestParameter[], auth: AuthConfig_Deserialize) => typedError<null, VoleeoError>(__TAURI_INVOKE("update_ws_connection", { workspaceId, id, url, parameters, headers, auth })),
 	deleteWsConnection: (workspaceId: string, id: string) => typedError<null, VoleeoError>(__TAURI_INVOKE("delete_ws_connection", { workspaceId, id })),
-	wsUpdatePosition: (workspaceId: string, id: string, folderId: string | null, order: number | null) => typedError<null, VoleeoError>(__TAURI_INVOKE("ws_update_position", { workspaceId, id, folderId, order })),
 	/**
 	 *  Resolves env/folder vars + auth backend-side; `auth_override` short-circuits
 	 *  the stored auth (frontend uses it for already-walked `Inherit`).
@@ -229,7 +228,6 @@ params_location?: OAuth1Location; callback?: string; verifier?: string; timestam
 	renameGrpcRequest: (workspaceId: string, id: string, name: string) => typedError<null, VoleeoError>(__TAURI_INVOKE("rename_grpc_request", { workspaceId, id, name })),
 	updateGrpcRequest: (workspaceId: string, id: string, update: GrpcRequestUpdate_Deserialize) => typedError<null, VoleeoError>(__TAURI_INVOKE("update_grpc_request", { workspaceId, id, update })),
 	deleteGrpcRequest: (workspaceId: string, id: string) => typedError<null, VoleeoError>(__TAURI_INVOKE("delete_grpc_request", { workspaceId, id })),
-	grpcUpdatePosition: (workspaceId: string, id: string, folderId: string | null, order: number | null) => typedError<null, VoleeoError>(__TAURI_INVOKE("grpc_update_position", { workspaceId, id, folderId, order })),
 	grpcListServices: (workspaceId: string, id: string, environmentId: string | null) => typedError<ProtoServiceInfo_Serialize[], VoleeoError>(__TAURI_INVOKE("grpc_list_services", { workspaceId, id, environmentId })),
 	/**  Force a fresh descriptor build (reflection re-query / `.proto` recompile). */
 	grpcRefreshDescriptors: (workspaceId: string, id: string, environmentId: string | null) => typedError<ProtoServiceInfo_Serialize[], VoleeoError>(__TAURI_INVOKE("grpc_refresh_descriptors", { workspaceId, id, environmentId })),

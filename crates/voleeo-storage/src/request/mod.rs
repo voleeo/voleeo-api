@@ -10,6 +10,8 @@ use voleeo_core::{ApiFolder, HttpRequest, ItemKind, MoveItemUpdate, VoleeoError}
 mod folders;
 mod requests;
 
+pub(crate) use folders::check_parent;
+
 fn now_ts() -> String {
     Utc::now().format("%Y-%m-%dT%H:%M:%S%.6f").to_string()
 }
@@ -121,8 +123,12 @@ impl RequestStore {
         Ok(())
     }
 
+    /// Move tree items of any kind; WS/gRPC live in sibling stores, so the
+    /// caller passes them in.
     pub fn move_items(
         &self,
+        ws: &crate::WsStore,
+        grpc: &crate::GrpcStore,
         workspace_id: &str,
         updates: Vec<MoveItemUpdate>,
     ) -> Result<(), VoleeoError> {
@@ -134,10 +140,12 @@ impl RequestStore {
                 ItemKind::Folder => {
                     self.update_folder_position(workspace_id, &u.id, u.folder_id, u.order)?
                 }
-                // WS connections and gRPC requests live in sibling stores; the
-                // `move_items` command dispatches those to their own
-                // `update_position`.
-                ItemKind::WebSocket | ItemKind::Grpc => {}
+                ItemKind::WebSocket => {
+                    ws.update_position(workspace_id, &u.id, u.folder_id, u.order)?
+                }
+                ItemKind::Grpc => {
+                    grpc.update_position(workspace_id, &u.id, u.folder_id, u.order)?
+                }
             }
         }
         Ok(())
@@ -473,22 +481,73 @@ mod tests {
     fn move_items_updates_position_and_folder() {
         let dir = tempfile::tempdir().unwrap();
         let s = store(&dir);
+        let ws = crate::WsStore::new(dir.path()).unwrap();
+        let grpc = crate::GrpcStore::new(dir.path()).unwrap();
         let folder = s
             .create_folder("ws1".into(), None, "Folder".into())
             .unwrap();
         let req = mk_req(&s, "ws1");
+        let conn = ws
+            .create("ws1".into(), None, "C".into(), "ws://x".into())
+            .unwrap();
+        let mv = |id: &str, kind| MoveItemUpdate {
+            id: id.into(),
+            kind,
+            folder_id: Some(folder.id.clone()),
+            order: 42.0,
+        };
         s.move_items(
+            &ws,
+            &grpc,
             "ws1",
-            vec![MoveItemUpdate {
-                id: req.id.clone(),
-                kind: ItemKind::Request,
-                folder_id: Some(folder.id.clone()),
-                order: 42.0,
-            }],
+            vec![
+                mv(&req.id, ItemKind::Request),
+                mv(&conn.id, ItemKind::WebSocket),
+            ],
         )
         .unwrap();
         let loaded = s.get_request("ws1", &req.id).unwrap();
-        assert_eq!(loaded.folder_id, Some(folder.id));
+        assert_eq!(loaded.folder_id, Some(folder.id.clone()));
         assert_eq!(loaded.order, 42.0);
+        assert_eq!(ws.get("ws1", &conn.id).unwrap().folder_id, Some(folder.id));
+    }
+
+    #[test]
+    fn rejects_parent_that_would_orphan_the_item() {
+        let dir = tempfile::tempdir().unwrap();
+        let s = store(&dir);
+        let a = s.create_folder("ws1".into(), None, "A".into()).unwrap();
+        let b = s
+            .create_folder("ws1".into(), Some(a.id.clone()), "B".into())
+            .unwrap();
+        // Into itself, or into its own descendant: a cycle cut off from root.
+        for dst in [&a.id, &b.id] {
+            let err = s
+                .update_folder_position("ws1", &a.id, Some(dst.clone()), 1.0)
+                .unwrap_err();
+            assert!(matches!(err, VoleeoError::InvalidConfig(_)), "{err:?}");
+        }
+        assert_eq!(s.get_folder("ws1", &a.id).unwrap().folder_id, None);
+        // Lifting the child to root, then nesting A under it, stays allowed.
+        s.update_folder_position("ws1", &b.id, None, 1.0).unwrap();
+        s.update_folder_position("ws1", &a.id, Some(b.id.clone()), 1.0)
+            .unwrap();
+
+        let missing = Some("nope".to_string());
+        assert!(matches!(
+            s.create_request(
+                "ws1".into(),
+                missing.clone(),
+                "R".into(),
+                "GET".into(),
+                "/".into()
+            ),
+            Err(VoleeoError::NotFound(_))
+        ));
+        let req = mk_req(&s, "ws1");
+        assert!(matches!(
+            s.update_request_position("ws1", &req.id, missing, 1.0),
+            Err(VoleeoError::NotFound(_))
+        ));
     }
 }

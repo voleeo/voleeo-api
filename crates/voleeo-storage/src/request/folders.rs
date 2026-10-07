@@ -2,10 +2,49 @@
 
 use super::{save_folder_if_changed, RequestStore};
 use chrono::Utc;
-use std::path::PathBuf;
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
 use voleeo_core::{
     new_id, ApiFolder, AuthConfig, EnvironmentVariable, RequestParameter, VoleeoError,
 };
+
+/// Reject a missing `parent`, or one inside `moving` (the folder being moved) —
+/// either leaves the item unreachable from the tree root. Shared by every
+/// tree item's create/move since WS/gRPC live in sibling stores.
+pub(crate) fn check_parent(
+    workspaces_dir: &Path,
+    workspace_id: &str,
+    parent: Option<&str>,
+    moving: Option<&str>,
+) -> Result<(), VoleeoError> {
+    crate::validate_id(workspace_id)?;
+    let mut cur = parent.map(str::to_string);
+    let mut seen = HashSet::new();
+    while let Some(id) = cur {
+        if moving == Some(id.as_str()) {
+            return Err(VoleeoError::InvalidConfig(format!(
+                "cannot move folder {id} into itself or one of its subfolders"
+            )));
+        }
+        // A cycle already on disk would spin forever; stop walking.
+        if !seen.insert(id.clone()) {
+            break;
+        }
+        crate::validate_id(&id)?;
+        let path = workspaces_dir
+            .join(workspace_id)
+            .join(format!("folder_{id}.yaml"));
+        if !path.exists() {
+            return Err(VoleeoError::NotFound(format!("folder {id}")));
+        }
+        let content =
+            std::fs::read_to_string(&path).map_err(|e| VoleeoError::Storage(e.to_string()))?;
+        let folder: ApiFolder =
+            serde_yaml::from_str(&content).map_err(|e| VoleeoError::Storage(e.to_string()))?;
+        cur = folder.folder_id;
+    }
+    Ok(())
+}
 
 impl RequestStore {
     fn folder_path(&self, workspace_id: &str, id: &str) -> Result<PathBuf, VoleeoError> {
@@ -50,6 +89,12 @@ impl RequestStore {
         folder_id: Option<String>,
         name: String,
     ) -> Result<ApiFolder, VoleeoError> {
+        check_parent(
+            &self.workspaces_dir,
+            &workspace_id,
+            folder_id.as_deref(),
+            None,
+        )?;
         self.workspace_dir(&workspace_id)?;
         let id = new_id();
         let now = Utc::now().format("%Y-%m-%dT%H:%M:%S%.6f").to_string();
@@ -280,11 +325,14 @@ impl RequestStore {
         folder_id: Option<String>,
         order: f64,
     ) -> Result<(), VoleeoError> {
+        check_parent(
+            &self.workspaces_dir,
+            workspace_id,
+            folder_id.as_deref(),
+            Some(id),
+        )?;
+        let folder = self.get_folder(workspace_id, id)?;
         let path = self.folder_path(workspace_id, id)?;
-        let content =
-            std::fs::read_to_string(&path).map_err(|e| VoleeoError::Storage(e.to_string()))?;
-        let folder: ApiFolder =
-            serde_yaml::from_str(&content).map_err(|e| VoleeoError::Storage(e.to_string()))?;
         let mut next = folder.clone();
         next.folder_id = folder_id;
         next.order = order;

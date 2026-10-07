@@ -178,16 +178,3 @@ pub async fn delete_grpc_request(
     })
     .await
 }
-
-#[tauri::command]
-#[specta::specta]
-pub async fn grpc_update_position(
-    state: State<'_, AppState>,
-    workspace_id: String,
-    id: String,
-    folder_id: Option<String>,
-    order: f64,
-) -> Result<(), VoleeoError> {
-    let grpc = state.grpc.clone();
-    run_blocking(move || grpc.update_position(&workspace_id, &id, folder_id, order)).await
-}

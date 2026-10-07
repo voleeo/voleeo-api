@@ -119,6 +119,12 @@ impl GrpcStore {
         name: String,
         target: String,
     ) -> Result<GrpcRequest, VoleeoError> {
+        crate::request::check_parent(
+            &self.workspaces_dir,
+            &workspace_id,
+            folder_id.as_deref(),
+            None,
+        )?;
         self.workspace_dir(&workspace_id)?;
         let id = new_id();
         let now = now_ts();
@@ -237,6 +243,12 @@ impl GrpcStore {
         folder_id: Option<String>,
         order: f64,
     ) -> Result<(), VoleeoError> {
+        crate::request::check_parent(
+            &self.workspaces_dir,
+            workspace_id,
+            folder_id.as_deref(),
+            None,
+        )?;
         let current = self.get(workspace_id, id)?;
         let next = GrpcRequest {
             folder_id,
